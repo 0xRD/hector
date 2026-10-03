@@ -20,6 +20,7 @@ struct BlocklistView: View {
                     Banner("Something went wrong", message: error, kind: .danger)
                 }
                 CountriesSection()
+                HostsListsSection()
                 RulesSection()
                 Banner(
                     "Blocking is for the whole Mac",
@@ -132,6 +133,9 @@ private struct HelperCard: View {
             "\(status.geoTableCount.formatted()) country networks",
             "\(status.hostsDomainCount) domains",
         ]
+        if let listDomains = status.listDomainCount, listDomains > 0 {
+            parts.append("\(listDomains.formatted()) list domains")
+        }
         if let date = status.appliedAt {
             parts.append("applied \(date.formatted(date: .omitted, time: .shortened))")
         }

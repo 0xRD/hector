@@ -57,11 +57,21 @@ func serve(dryRunRoot: URL?, socketPath: String) async throws -> Never {
     guard listen(server, 8) == 0 else { throw HelperError("listen") }
     log("hectord \(HectorVersion.current) listening on \(socketPath)\(dryRunRoot.map { " (dry run in \($0.path))" } ?? "")")
 
+    // One request at a time. Between requests, and at least every few minutes when nobody talks to
+    // the helper, subscribed hosts lists that are due are downloaded again.
+    let waitMilliseconds = Int32(HostsListCatalog.checkInterval * 1_000)
     while true {
-        let client = accept(server, nil, nil)
-        guard client >= 0 else { continue }
-        await handle(client: client, enforcer: enforcer, dryRun: dryRunRoot != nil)
-        close(client)
+        var descriptor = pollfd(fd: server, events: Int16(POLLIN), revents: 0)
+        // While a scheduled download runs in the background, wake up often to collect it.
+        let wait: Int32 = enforcer.isRefreshingInBackground ? 1_000 : waitMilliseconds
+        if poll(&descriptor, 1, wait) > 0 {
+            let client = accept(server, nil, nil)
+            if client >= 0 {
+                await handle(client: client, enforcer: enforcer, dryRun: dryRunRoot != nil)
+                close(client)
+            }
+        }
+        enforcer.refreshHostsListsIfDue()
     }
 }
 
@@ -101,6 +111,11 @@ func handle(client: Int32, enforcer: Enforcer, dryRun: Bool) async {
                 try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
                 log("Flush requested by uid \(peer).")
                 response = .status(try enforcer.flush())
+            case .refreshHostsLists(let authorization):
+                // It makes root download and rewrites /etc/hosts: the same approval as apply.
+                try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
+                log("Hosts lists refresh requested by uid \(peer).")
+                response = .status(try enforcer.refreshHostsLists())
             }
         } catch {
             log("Request failed: \(error)")

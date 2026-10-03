@@ -32,11 +32,12 @@ Download the latest `Hector-x.y.z-macOS.zip` from [Releases](../../releases), mo
 
 - **Netbite, live connections**: apps and their destinations, a world map with one line per destination (hover a line to see which app owns it), and a details panel with reverse DNS, country and the last minute of activity. Data comes from libproc, the same source `lsof -i` uses; helper processes are grouped under their app.
 - **Blocking**: "Block this destination", "Block all of <country>", personal rules, and a Blocklists screen with pending changes. The `hectord` helper enforces them with pf and `/etc/hosts`, re-applies them at boot, and lets the app see system processes. Country blocking is opt-in, networks wider than /8 (IPv4) or /16 (IPv6) are refused, and local networks are never blocked.
+- **Hosts lists**: subscribe to StevenBlack Unified (ads and malware) or EasyPrivacy (trackers), about 110,000 domains together, off by default. The helper downloads them from fixed HTTPS addresses, validates every line, keeps them apart from your own rules, and checks for updates weekly.
 - **Country of every destination**, offline, from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database.
 - **Persistence**: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions, each with its code signature and notes on anything odd.
 - **Processes**: tree or flat list with user, arguments, signature, connections, and flags for code running from temporary, Downloads or hidden folders or deleted after launch; downloads show where they came from.
 - **VirusTotal**: hash lookups for one item or all, within the free tier (4 per minute, 500 per day), cached for 7 days. The key stays in your Keychain (Settings, ⌘,).
-- **Command line**: everything above is also in `hector` (`connections`, `geo`, `rules`, `helper`, `persistence`, `processes`, `sign`, `vt`).
+- **Command line**: everything above is also in `hector` (`connections`, `geo`, `rules`, `lists`, `helper`, `persistence`, `processes`, `sign`, `vt`).
 
 ## Requirements
 
@@ -110,7 +111,7 @@ hector geo ranges CN --count
 hector rules example > blocklist.json
 ```
 
-Edit the file: add rules, and list the countries to block in `"blockedCountries"` (for example `["CN", "RU"]`).
+Edit the file: add rules, list the countries to block in `"blockedCountries"` (for example `["CN", "RU"]`), and the hosts lists to subscribe to in `"hostsLists"` (for example `["stevenblack-unified", "easyprivacy"]`; `hector lists` shows the catalog).
 
 ```bash
 hector rules check blocklist.json
@@ -120,7 +121,7 @@ hector rules check blocklist.json
 hector rules render blocklist.json --out ./out
 ```
 
-`rules render` writes the pf ruleset, the two tables and the resulting hosts file into `./out` and prints the commands the helper will run. **It changes nothing on your system.**
+`rules render` writes the pf ruleset, the two tables and the resulting hosts file into `./out` and prints the commands the helper will run. **It changes nothing on your system.** Hosts lists are downloaded by the helper; add `--fetch-lists` to `check` or `render` to download them now and include them.
 
 Once the helper is installed (from the app, or with `sudo hectord install`), the CLI can drive it too:
 
@@ -138,6 +139,16 @@ hector helper flush
 
 `flush` removes every Hector rule and the managed `/etc/hosts` section; the helper stays installed.
 
+```bash
+hector lists
+```
+
+```bash
+hector lists refresh
+```
+
+`lists` shows the catalog, your subscriptions and the helper's copies (domains, last update, errors); `refresh` asks the helper to download them now. `hector lists fetch stevenblack-unified` downloads and validates a list as you, without applying anything.
+
 ## Uninstall
 
 Choose **Hector → Uninstall Hector…** in the menu bar. It removes, after one administrator password:
@@ -154,7 +165,7 @@ To check that nothing is left, without root: `scripts/check-uninstall.sh`.
 
 ## Privacy
 
-Hector has no telemetry, no account and no server. Everything stays on your Mac. It makes only two kinds of network requests: the DB-IP database download, when you start it from the CLI (`hector geo update`) or the app, and reverse DNS lookups of the addresses your apps already contact, through your system resolver. The starting point of the map is the region set in macOS, not a location lookup.
+Hector has no telemetry, no account and no server. Everything stays on your Mac. It makes only these network requests: the DB-IP database download, when you start it from the CLI (`hector geo update`) or the app; the hosts lists you subscribe to, downloaded by the helper from GitHub when you apply them and checked weekly (a conditional request that usually transfers nothing); and reverse DNS lookups of the addresses your apps already contact, through your system resolver. The starting point of the map is the region set in macOS, not a location lookup.
 
 ## Project layout
 
@@ -163,7 +174,8 @@ Sources/HectorCore/   Library shared by the CLI, the app and the helper
   Net/                 IPAddress, CIDR
   Collector/           Socket enumeration per process (libproc)
   GeoIP/               DB-IP loader, country lookups, range → CIDR conversion, updater
-  Rules/               Blocklist model, compiler, pf anchor and /etc/hosts rendering
+  Rules/               Blocklist model, compiler, pf anchor and /etc/hosts rendering, hosts lists
+                       (catalog, parser, downloader)
 Sources/hector/       Command-line tool
 Sources/HectorApp/    SwiftUI app: live monitor, world map, details panel, blocklists
 Sources/hectord/      Privileged helper (root): enforces blocklists with pf and /etc/hosts

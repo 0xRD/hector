@@ -19,9 +19,12 @@ public struct DomainPattern: Hashable, Sendable {
         includesSubdomains = wildcard
     }
 
+    /// Built once: hosts lists validate hundreds of thousands of names.
+    private static let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789-_")
+
     private static func isValidHost(_ host: String) -> Bool {
         guard !host.isEmpty, host.utf8.count <= 253, IPAddress(host) == nil else { return false }
-        let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789-_")
+        let allowed = Self.allowed
         return host.split(separator: ".", omittingEmptySubsequences: false).allSatisfy { label in
             (1...63).contains(label.count)
                 && label.allSatisfy(allowed.contains)
