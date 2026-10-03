@@ -62,7 +62,8 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 - [x] **Processes** (in the spirit of TaskExplorer): process tree, signature, parent, arguments, open connections, VirusTotal score; flags for unsigned code and binaries running from temporary, Downloads or hidden folders, with the quarantine download URL
 - [ ] **Keyboard taps** (in the spirit of ReiKey): apps that intercept keystrokes, through the public event tap list
 - [ ] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined
-- [ ] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it
+- [x] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it (`hector checkup`, Checkup screen)
+- [ ] Check the checkup's parsers and verdicts against real output on macOS 15 and 26/27 (see NEXT_STEPS.md)
 
 ## 0.5: better names and numbers
 

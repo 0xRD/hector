@@ -35,8 +35,9 @@ Download the latest `Hector-x.y.z-macOS.zip` from [Releases](../../releases), mo
 - **Country of every destination**, offline, from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database.
 - **Persistence**: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions, each with its code signature and notes on anything odd.
 - **Processes**: tree or flat list with user, arguments, signature, connections, and flags for code running from temporary, Downloads or hidden folders or deleted after launch; downloads show where they came from.
+- **Security checkup**: SIP, Gatekeeper, XProtect, FileVault, firewall, automatic updates, Remote Login, Screen Sharing and Remote Management, File Sharing, Remote Apple Events, automatic login, guest account and MDM enrollment, each with what was found and how to fix it, and a button to the right System Settings pane. Read-only, without root or a password.
 - **VirusTotal**: hash lookups for one item or all, within the free tier (4 per minute, 500 per day), cached for 7 days. The key stays in your Keychain (Settings, ⌘,).
-- **Command line**: everything above is also in `hector` (`connections`, `geo`, `rules`, `helper`, `persistence`, `processes`, `sign`, `vt`).
+- **Command line**: everything above is also in `hector` (`connections`, `geo`, `rules`, `helper`, `persistence`, `processes`, `checkup`, `sign`, `vt`).
 
 ## Requirements
 
@@ -91,6 +92,12 @@ Example Browser  com.example.browser  (pid 4321)
 ```
 
 As a normal user you see your own processes. Run it with `sudo` to include system daemons. Add `--resolve` for reverse DNS, `--json` for machine-readable output, and `--all` to include listening sockets.
+
+```bash
+hector checkup
+```
+
+Reviews the security settings of this Mac and prints how to fix each one that needs it. It only reads; `--json` for scripts.
 
 ```bash
 hector geo update

@@ -51,6 +51,11 @@ USAGE
                   executable was deleted
       --tree      indent children under their parent
 
+  hector checkup [--json]
+      Review this Mac's security settings: SIP, Gatekeeper, XProtect, FileVault, firewall,
+      automatic updates, sharing services, automatic login, guest account, MDM enrollment.
+      Each finding comes with how to fix it. Read-only: nothing is changed, no password asked.
+
   hector version | help
 
 Default GeoIP database: \(GeoIPUpdater.defaultDatabaseURL.path)
@@ -305,6 +310,7 @@ do {
     case "sign", "vt": try await security(command, args)
     case "persistence": try persistence(Arguments(argv.dropFirst(), valueOptions: ["--category", "--socket"]))
     case "processes", "ps": try processes(Arguments(argv.dropFirst(), valueOptions: ["--socket"]))
+    case "checkup": try checkup(args)
     case "version", "--version": print("hector \(version)")
     case "help", "--help", "-h": print(usage)
     default: throw CLIError("Unknown command: \(command)\n\n\(usage)")
