@@ -90,6 +90,7 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 
 ## Later
 
+- [ ] **Hector in the app, a few small appearances** (detail, for personality): poses of the crested-helmet character drawn in code like the app icon (`HectorMark`, `AppIconArtwork`), no binary assets. Ideas: peering over the edge of the destination map; keeping watch beside Camera & mic (eyes open while monitoring, resting when paused); in the empty states ("All quiet", "Pick a destination"); a shield pose on the "Blocking on" footer. Small and calm, never in the way of the data; follow the tone in `docs/DESIGN.md`
 - [ ] Real-time alerts when a new launch agent, daemon or login item appears (in the spirit of BlockBlock)
 - [ ] Processes listening on the network, not just on this Mac
 - [ ] Exportable report (JSON or HTML) and an event timeline
