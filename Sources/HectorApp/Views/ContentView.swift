@@ -6,6 +6,9 @@ struct ContentView: View {
     @Environment(BlockingController.self) private var blocking
     @Environment(WindowState.self) private var state
     @Environment(SecurityController.self) private var security
+    #if DEBUG
+    @Environment(\.openSettings) private var openSettings
+    #endif
 
     /// The network screens (map and list) as opposed to Blocklists and the security screens.
     private var isNetworkScreen: Bool {
@@ -15,19 +18,17 @@ struct ContentView: View {
         }
     }
 
-    private var selectedAppID: AppGroup.ID? {
-        if case .app(let id) = state.sidebarSelection { return id }
-        return nil
-    }
+    private var selectedAppID: AppGroup.ID? { state.appFilter }
 
     var body: some View {
         @Bindable var monitor = monitor
         @Bindable var state = state
-        let rows = visibleRows
+        let allCountryRows = visibleRows
+        let rows = state.countryFilter.map { country in allCountryRows.filter { $0.destination.country == country } } ?? allCountryRows
         let groups = listGroups(from: rows)
 
         NavigationSplitView {
-            SidebarView(selection: $state.sidebarSelection, highlightedAppID: state.hovered?.appID)
+            SidebarView(selection: $state.sidebarSelection)
                 .navigationSplitViewColumnWidth(min: 230, ideal: 260, max: 340)
         } detail: {
             if state.sidebarSelection == .blocklists {
@@ -47,16 +48,18 @@ struct ContentView: View {
                     GeoBanner()
                     VSplitView {
                         // The map is width-bound (2.5:1); taller would only add empty bands.
-                        mapCard(rows: rows)
-                            .frame(minHeight: 220, idealHeight: 380, maxHeight: 480)
+                        mapCard(rows: rows, allCountryRows: allCountryRows)
+                            .frame(minHeight: 160, idealHeight: 380, maxHeight: 480)
                         DestinationListView(groups: groups, selection: $state.selectedDestination, hovered: $state.hovered)
-                            .frame(minHeight: 200)
+                            .frame(minHeight: 160)
                     }
                     Divider()
                     StatusBar()
                 }
+                .fillsSplitPane()
                 .inspector(isPresented: $state.showInspector) {
                     DestinationDetailView(row: selectedRow, usedBy: usedBySelected)
+                        .fillsSplitPane()
                         .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
                 }
             }
@@ -65,6 +68,11 @@ struct ContentView: View {
         .navigationSubtitle(isNetworkScreen ? "\(monitor.liveConnectionCount) live connections" : "")
         .searchable(text: $state.search, placement: .toolbar, prompt: searchPrompt)
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                if isNetworkScreen {
+                    AppFilterMenu(monitor: monitor, state: state)
+                }
+            }
             ToolbarItem(placement: .principal) {
                 if isNetworkScreen {
                     Picker("Show", selection: $state.filter) {
@@ -96,11 +104,24 @@ struct ContentView: View {
                     Label("Details", systemImage: "sidebar.trailing")
                 }
                 .help("Show or hide the details panel")
+                SettingsLink {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .help("Settings: VirusTotal key, downloaded data, uninstall")
             }
         }
         #if DEBUG
         .task {
-            if DebugSnapshot.opensBlocklists { state.sidebarSelection = .blocklists }
+            if let screen = DebugSnapshot.screen { state.sidebarSelection = screen }
+            if DebugSnapshot.opensSettings { openSettings() }
+            if let country = DebugSnapshot.country {
+                try? await Task.sleep(for: .seconds(4))
+                state.countryFilter = country
+            }
+            if let country = DebugSnapshot.hoverCountry {
+                try? await Task.sleep(for: .seconds(4))
+                state.hoveredCountry = country
+            }
             guard DebugSnapshot.hoverIndex != nil || DebugSnapshot.selectIndex != nil else { return }
             try? await Task.sleep(for: .seconds(4))
             let rows = visibleRows.filter { $0.destination.country != nil }
@@ -109,7 +130,7 @@ struct ContentView: View {
         }
         #endif
         .sheet(isPresented: $state.showUninstall) { UninstallSheet() }
-        .onChange(of: state.sidebarSelection) {
+        .onChange(of: state.appFilter) {
             if let selected = state.selectedDestination, let app = selectedAppID, selected.appID != app {
                 state.selectedDestination = nil
             }
@@ -120,17 +141,16 @@ struct ContentView: View {
 
     // MARK: - Map
 
-    private func mapCard(rows: [DestinationRow]) -> some View {
+    private func mapCard(rows: [DestinationRow], allCountryRows: [DestinationRow]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            MapCardHeader(rows: rows)
+            MapCardHeader(rows: rows, allCountryRows: allCountryRows, state: state)
             WorldMapView(
                 rows: rows,
                 focusAppID: selectedAppID,
                 originCountry: monitor.originCountry,
-                selected: state.selectedDestination,
-                hovered: Bindable(state).hovered,
+                state: state,
                 onSelect: { row in
-                    if selectedAppID != nil { state.sidebarSelection = .app(row.app.id) }
+                    if selectedAppID != nil { state.appFilter = row.app.id }
                     state.selectedDestination = row.id
                     state.showInspector = true
                 }
@@ -165,7 +185,7 @@ struct ContentView: View {
         case .captureDevices: return "Camera & mic"
         default: break
         }
-        guard let id = selectedAppID else { return "All apps" }
+        guard let id = selectedAppID else { return "Connections" }
         return monitor.apps[id]?.name ?? "Hector"
     }
 
@@ -214,21 +234,32 @@ struct ContentView: View {
 }
 
 /// Title, counts and legend above the map. Drops the counts when the column is narrow.
+///
+/// The country count is also the country filter: it lists every country with its destinations.
 private struct MapCardHeader: View {
     let rows: [DestinationRow]
+    /// The rows before the country filter, for the list of countries.
+    let allCountryRows: [DestinationRow]
+    let state: WindowState
 
     var body: some View {
-        let countries = Set(rows.compactMap(\.destination.country)).count
         HStack(alignment: .center, spacing: Spacing.md) {
             // The Netbite module glyph: this is the network part of the app.
             NetbiteLogo(lineWidth: 2)
                 .frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("Destination map")
-                    .font(.sectionTitle)
-                    .fixedSize()
-                    .accessibilityAddTraits(.isHeader)
-                Text("Hover a line to see which app owns it. Click it for details.")
+                HStack(spacing: Spacing.sm) {
+                    Text("Destination map")
+                        .font(.sectionTitle)
+                        .fixedSize()
+                        .accessibilityAddTraits(.isHeader)
+                    if let country = state.countryFilter {
+                        CountryFilterChip(country: country) { state.countryFilter = nil }
+                    }
+                }
+                Text(state.countryFilter == nil
+                     ? "Hover a line to see which apps use it. Click a country to show only it."
+                     : "Hover a line to see which app owns it. Click it for details.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -237,14 +268,79 @@ private struct MapCardHeader: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: Spacing.lg) {
                     Metric("\(rows.count)", label: rows.count == 1 ? "destination" : "destinations")
-                    Metric("\(countries)", label: countries == 1 ? "country" : "countries")
+                    countryMenu
                     Divider().frame(height: 30)
+                    MapLegend()
+                }
+                HStack(spacing: Spacing.lg) {
+                    countryMenu
                     MapLegend()
                 }
                 MapLegend()
             }
             .layoutPriority(1)
         }
+    }
+
+    /// Countries by number of destinations, most first.
+    private var countries: [(code: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for row in allCountryRows { if let country = row.destination.country { counts[country, default: 0] += 1 } }
+        return counts.map { ($0.key, $0.value) }.sorted { $0.count != $1.count ? $0.count > $1.count : $0.code < $1.code }
+    }
+
+    private var countryMenu: some View {
+        let countries = self.countries
+        return Menu {
+            Button {
+                state.countryFilter = nil
+            } label: {
+                if state.countryFilter == nil { Label("All countries", systemImage: "checkmark") } else { Text("All countries") }
+            }
+            Divider()
+            ForEach(countries, id: \.code) { entry in
+                Button {
+                    state.countryFilter = entry.code
+                } label: {
+                    let title = "\(Countries.name(entry.code)) · \(entry.count)"
+                    if state.countryFilter == entry.code { Label(title, systemImage: "checkmark") } else { Text(title) }
+                }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Metric("\(countries.count)", label: countries.count == 1 ? "country" : "countries")
+                Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Show only one country")
+        .disabled(countries.isEmpty)
+    }
+}
+
+/// The country the screen is narrowed to, with a button to show every country again.
+private struct CountryFilterChip: View {
+    let country: String
+    let clear: () -> Void
+
+    var body: some View {
+        Button(action: clear) {
+            HStack(spacing: 5) {
+                Text(country).font(.caption2.weight(.bold).monospaced())
+                Text(Countries.name(country)).font(.caption.weight(.semibold)).lineLimit(1)
+                Image(systemName: "xmark.circle.fill").font(.caption)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .foregroundStyle(Color.hectorOK)
+            .background(Color.hectorOKWash, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Show every country")
+        .accessibilityLabel("Only \(Countries.name(country)). Show every country")
     }
 }
 
@@ -377,5 +473,42 @@ private struct StatusBarLabelStyle: LabelStyle {
             configuration.icon.imageScale(.small)
             configuration.title
         }
+    }
+}
+
+/// Narrows the Connections screen to one app. Replaces the per-app rows the sidebar used to
+/// have. Takes its models as parameters: toolbar items are hosted outside the window's view tree.
+private struct AppFilterMenu: View {
+    let monitor: ConnectionMonitor
+    let state: WindowState
+
+    var body: some View {
+        let apps = monitor.apps.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        Menu {
+            Button("All apps") { state.appFilter = nil }
+            Divider()
+            Section("Apps") {
+                ForEach(apps.filter { $0.kind == .app }) { app in
+                    Button(label(for: app)) { state.appFilter = app.id }
+                }
+            }
+            Section("System & tools") {
+                ForEach(apps.filter { $0.kind == .system }) { app in
+                    Button(label(for: app)) { state.appFilter = app.id }
+                }
+            }
+        } label: {
+            Label(currentName, systemImage: state.appFilter == nil ? "square.grid.2x2" : "app.badge.checkmark")
+        }
+        .help("Show the connections of every app, or of one app")
+    }
+
+    private var currentName: String {
+        guard let id = state.appFilter else { return "All apps" }
+        return monitor.apps[id]?.name ?? "All apps"
+    }
+
+    private func label(for app: AppGroup) -> String {
+        app.liveCount > 0 ? "\(app.name) · \(app.liveCount) live" : app.name
     }
 }

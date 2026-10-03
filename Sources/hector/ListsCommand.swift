@@ -13,13 +13,13 @@ func lists(_ args: Arguments) async throws {
     case "refresh":
         let authorization = geteuid() == 0 ? Data() : try HelperAuthorization.externalForm()
         print("Asking the helper to download the subscribed lists…")
-        switch try HelperClient.send(.refreshHostsLists(authorization: authorization), socketPath: socket, timeout: 300) {
+        switch try HelperClient.sendChecked(.refreshHostsLists(authorization: authorization), socketPath: socket, timeout: 300) {
         case .status(let status):
             printListStates(status)
             status.warnings.forEach { print("warning: \($0)") }
         case .failure(let message):
             throw CLIError(message)
-        case .snapshot, .processes, .toolOutput:
+        case .snapshot, .processes, .toolOutput, .hello:
             throw CLIError("Unexpected reply.")
         }
     case "parse":

@@ -92,14 +92,14 @@ private struct InUseNowSection: View {
     }
 
     private func users(for device: CaptureDevice) -> [ProcessIdentity]? {
-        guard device.kind == .microphone, device.isInUse else { return [] }
-        return privacy.microphoneUsers
+        guard device.isInUse else { return [] }
+        return device.kind == .camera ? privacy.cameraUsers : privacy.microphoneUsers
     }
 }
 
 private struct DeviceRow: View {
     let device: CaptureDevice
-    /// `nil` when unknown; empty for cameras and devices that are off.
+    /// `nil` when unknown; empty for devices that are off.
     let users: [ProcessIdentity]?
 
     var body: some View {
@@ -127,10 +127,10 @@ private struct DeviceRow: View {
             if device.kind == .microphone && device.isRunningSomewhere { return "Microphone · playing sound only" }
             return device.kind.label
         }
-        if device.kind == .camera { return "Camera · the app using it cannot be determined" }
-        guard let users else { return "Microphone · app unknown" }
-        if users.isEmpty { return "Microphone · no app reported yet" }
-        return "Microphone · " + users.map { "\($0.displayName) (\($0.pid))" }.joined(separator: ", ")
+        let kind = device.kind.label
+        guard let users else { return "\(kind) · app unknown" }
+        if users.isEmpty { return "\(kind) · no app reported yet" }
+        return "\(kind) · " + users.map { "\($0.displayName) (\($0.pid))" }.joined(separator: ", ")
     }
 }
 
@@ -182,8 +182,7 @@ private struct CaptureEventRow: View {
     /// The apps on a device line; app events already name them in the summary.
     private var appsLine: String? {
         guard event.deviceID != nil else { return nil }
-        if event.kind == .camera { return event.isOn ? "App not determined" : nil }
-        guard !event.apps.isEmpty else { return nil }
+        guard !event.apps.isEmpty else { return event.kind == .camera && event.isOn ? "App not known yet" : nil }
         return event.apps.map { "\($0.displayName) (\($0.pid))" }.joined(separator: ", ")
     }
 }
@@ -192,7 +191,7 @@ private struct CaptureEventRow: View {
 private struct CaptureLimitsNote: View {
     var body: some View {
         Banner("What Hector can see",
-               message: "On and off come from the devices themselves, so every app is covered. For the microphone, macOS names the processes that record. For cameras it does not: the app is not shown. Hector never opens a camera or a microphone.",
+               message: "On and off come from the devices themselves, so every app is covered. For the microphone, macOS names the processes that record. For cameras, Hector reads which app macOS puts behind the green indicator, from Control Center's log; it can lag a moment behind the camera. Hector never opens a camera or a microphone.",
                kind: .info, systemImage: "info.circle")
     }
 }

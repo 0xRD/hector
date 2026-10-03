@@ -8,6 +8,11 @@ import AppKit
 /// - `HECTOR_DEBUG_HOVER=N` pretends the pointer hovers the N-th line of the map.
 /// - `HECTOR_DEBUG_SELECT=N` selects the N-th line of the map.
 /// - `HECTOR_DEBUG_BLOCKLISTS=1` opens the Blocklists screen.
+/// - `HECTOR_DEBUG_COUNTRY=US` filters the map and the list to one country;
+///   `HECTOR_DEBUG_HOVER_COUNTRY=US` hovers that country's bubble on the world view.
+/// - `HECTOR_DEBUG_SETTINGS=1` opens the Settings window.
+/// - `HECTOR_DEBUG_SCREEN=NAME` opens a screen: blocklists, persistence, processes, checkup,
+///   taps or devices.
 @MainActor
 enum DebugSnapshot {
     static var environment: [String: String] { ProcessInfo.processInfo.environment }
@@ -15,6 +20,23 @@ enum DebugSnapshot {
     static var hoverIndex: Int? { environment["HECTOR_DEBUG_HOVER"].flatMap(Int.init) }
     static var selectIndex: Int? { environment["HECTOR_DEBUG_SELECT"].flatMap(Int.init) }
     static var opensBlocklists: Bool { environment["HECTOR_DEBUG_BLOCKLISTS"] != nil }
+
+    static var screen: SidebarItem? {
+        if opensBlocklists { return .blocklists }
+        switch environment["HECTOR_DEBUG_SCREEN"] {
+        case "blocklists": return .blocklists
+        case "persistence": return .persistence
+        case "processes": return .processes
+        case "checkup": return .checkup
+        case "taps": return .keyboardTaps
+        case "devices": return .captureDevices
+        default: return nil
+        }
+    }
+
+    static var country: String? { environment["HECTOR_DEBUG_COUNTRY"] }
+    static var hoverCountry: String? { environment["HECTOR_DEBUG_HOVER_COUNTRY"] }
+    static var opensSettings: Bool { environment["HECTOR_DEBUG_SETTINGS"] != nil }
 
     static func scheduleIfRequested() {
         guard let path = environment["HECTOR_SNAPSHOT"] else { return }

@@ -75,8 +75,8 @@ USAGE
   hector devices [--json] [--watch]
       Cameras and audio inputs, whether they are in use, and which processes record audio.
       --watch     print each change (on, off, app started or stopped) until Ctrl-C
-      Nothing is opened: no camera or microphone permission is asked. Which app uses a camera
-      cannot be determined.
+      Nothing is opened: no camera or microphone permission is asked. The app using a camera
+      comes from Control Center's indicator log, readable without a permission.
 
   hector version | help
 
@@ -139,8 +139,9 @@ func endpoint(_ address: IPAddress?, _ port: UInt16) -> String {
     return address.isV4 ? "\(address):\(port)" : "[\(address)]:\(port)"
 }
 
+/// Pads a table cell to `width`; a longer value keeps one space so it never runs into the next.
 func pad(_ s: String, _ width: Int) -> String {
-    s.count >= width ? s : s + String(repeating: " ", count: width - s.count)
+    s.count >= width ? s + " " : s + String(repeating: " ", count: width - s.count)
 }
 
 // MARK: - Reverse DNS
@@ -356,7 +357,10 @@ func helper(_ args: Arguments) throws {
             print("Hosts lists: \(subscribed.isEmpty ? "none" : subscribed.joined(separator: ", ")) · \(listDomains.formatted()) domains in /etc/hosts (`hector lists` for details)")
         }
         status.warnings.forEach { print("warning: \($0)") }
-    case .snapshot, .processes, .toolOutput:
+        if let info = try? HelperClient.info(socketPath: socket) {
+            print("Protocol \(info.protocolVersion)" + (info.isOutdated ? " · older than this CLI: update the helper from Hector → Blocklists" : ""))
+        }
+    case .snapshot, .processes, .toolOutput, .hello:
         print("Unexpected reply.")
     case .failure(let message):
         throw CLIError(message)

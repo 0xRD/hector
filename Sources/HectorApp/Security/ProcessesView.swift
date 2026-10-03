@@ -38,8 +38,10 @@ struct ProcessesView: View {
                 table(rows)
             }
         }
+        .fillsSplitPane()
         .inspector(isPresented: $state.showInspector) {
             ProcessDetailView(security: security, row: selectedRow)
+                .fillsSplitPane()
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
         .task {

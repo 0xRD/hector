@@ -80,7 +80,7 @@ final class SecurityController {
     nonisolated private static func backgroundTasksFromHelper() -> (ToolOutput?, String?) {
         guard HelperClient.isInstalled else { return (nil, nil) }
         do {
-            switch try HelperClient.send(.backgroundTasks, timeout: 30) {
+            switch try HelperClient.sendChecked(.backgroundTasks, timeout: 30) {
             case .toolOutput(let text, let truncated):
                 return (ToolOutput(output: text, truncated: truncated), nil)
             case .failure(let message):
@@ -107,7 +107,7 @@ final class SecurityController {
         defer { isLoadingProcesses = false }
         let (snapshot, throughHelper, flags) = await Task.detached(priority: .userInitiated) {
             var snapshot: ProcessSnapshot?
-            if HelperClient.isInstalled, case .processes(let fromHelper)? = try? HelperClient.send(.processes, timeout: 10) {
+            if HelperClient.isInstalled, case .processes(let fromHelper)? = try? HelperClient.sendChecked(.processes, timeout: 10) {
                 snapshot = fromHelper
             }
             let result = snapshot ?? ProcessCollector().snapshot()

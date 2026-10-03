@@ -13,7 +13,7 @@ func taps(_ args: Arguments) throws {
         print("No event tap receives keystrokes.")
         return
     }
-    print(pad("TAP", 7) + pad("PID", 7) + pad("MODE", 13) + pad("SCOPE", 22) + pad("SIGNATURE", 14) + "PROCESS")
+    print(pad("TAP", 11) + pad("PID", 7) + pad("MODE", 13) + pad("SCOPE", 22) + pad("SIGNATURE", 22) + "PROCESS")
     var signatures: [String: String] = [:]
     for tap in taps {
         let process = tap.tapping
@@ -30,13 +30,14 @@ func taps(_ args: Arguments) throws {
             }
         }
         let name = process.displayName + (process.executablePath.map { "  \($0)" } ?? "")
-        print(pad(String(tap.tapID), 7) + pad(String(process.pid), 7) + pad(mode, 13) + pad(LogText.sanitized(scope), 22)
-              + pad(trust, 14) + LogText.sanitized(name))
+        print(pad(String(tap.tapID), 11) + pad(String(process.pid), 7) + pad(mode, 13) + pad(LogText.sanitized(scope), 22)
+              + pad(trust, 22) + LogText.sanitized(name))
         let events = tap.allEvents ? "every event" : tap.keyEvents.map { $0.label.lowercased() }.joined(separator: ", ")
-        print(String(repeating: " ", count: 14) + "\(events) · \(tap.location.label.lowercased())")
+        print(String(repeating: " ", count: 18) + "\(events) · \(tap.location.label.lowercased())")
     }
-    let active = taps.filter(\.isActive).count
-    print("\(taps.count) keyboard taps, \(active) active (can change or drop keystrokes).")
+    let active = taps.filter { $0.isActive && $0.isEnabled }.count
+    let off = taps.filter { !$0.isEnabled }.count
+    print("\(taps.count) keyboard taps, \(active) active (can change or drop keystrokes)" + (off > 0 ? ", \(off) switched off." : "."))
 }
 
 /// `hector devices [--json] [--watch]`
@@ -44,7 +45,10 @@ func taps(_ args: Arguments) throws {
 func devices(_ args: Arguments) async throws {
     let json = args.flags.contains("--json")
     guard args.flags.contains("--watch") else {
-        let snapshot = CaptureDeviceReader.snapshot()
+        var snapshot = CaptureDeviceReader.snapshot()
+        if !snapshot.camerasInUse.isEmpty, let latest = SensorIndicatorLog.latest() {
+            snapshot.cameraUsers = SensorIndicatorLog.processes(forBundleIdentifiers: latest[.camera] ?? [])
+        }
         if json {
             print(String(decoding: try JSONEncoder.hector.encode(snapshot), as: UTF8.self))
         } else {
@@ -94,7 +98,14 @@ private func printDevices(_ snapshot: CaptureSnapshot) {
     } else {
         print("Recording audio: unknown (Core Audio did not list its client processes)")
     }
-    print("Which app uses a camera cannot be determined without private interfaces.")
+    if snapshot.camerasInUse.isEmpty { return }
+    // The indicator's last change in the past ten minutes, from Control Center's log.
+    if let users = snapshot.cameraUsers {
+        let names = users.map { "\($0.displayName) (\($0.pid))" }
+        print("Using a camera: " + (names.isEmpty ? "no app reported" : LogText.sanitized(names.joined(separator: ", "))))
+    } else {
+        print("Using a camera: unknown (Control Center logged no indicator change in the last ten minutes)")
+    }
 }
 
 private func eventLine(_ event: CaptureEvent) -> String {

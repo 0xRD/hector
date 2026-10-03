@@ -147,3 +147,16 @@ enum IconCache {
         return icon
     }
 }
+
+extension View {
+    /// For the content of a split view pane: an inspector's two sides, a `VSplitView`'s panes.
+    ///
+    /// On macOS 26 these panes are hosted by AppKit split views that take the content's ideal
+    /// height as a minimum. A `List` or `Table` has the height of all its rows as ideal height,
+    /// so the split view grew taller than the window and was centered in it: the top of every
+    /// column, sidebar included, was drawn above the window. A small ideal height keeps the
+    /// panes inside the window; they still fill it.
+    func fillsSplitPane() -> some View {
+        frame(minHeight: 0, idealHeight: 400, maxHeight: .infinity)
+    }
+}

@@ -22,7 +22,7 @@ func checkup(_ args: Arguments) throws {
     var counts: [String] = []
     for status in [CheckResult.Status.fail, .warning, .unknown] {
         let count = report.count(status)
-        if count > 0 { counts.append("\(count) \(label(status))") }
+        if count > 0 { counts.append("\(count) \(label(status))" + (status == .warning && count > 1 ? "s" : "")) }
     }
     print("")
     if !counts.isEmpty { print(counts.joined(separator: ", ") + ".") }

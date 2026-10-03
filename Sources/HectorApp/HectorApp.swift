@@ -26,13 +26,18 @@ struct HectorApp: App {
                 .environment(checkup)
                 .environment(privacy)
                 .tint(.hectorOK)
-                .frame(minWidth: 1060, minHeight: 660)
+                // Small enough for a 13-inch screen with the Dock showing.
+                .frame(minWidth: 900, minHeight: 560)
                 .task {
                     monitor.start()
                     await blocking.refresh()
                 }
         }
         .defaultSize(width: 1440, height: 920)
+        // Without it the window could be resized below the content's minimum size; SwiftUI then
+        // centered the oversized content, pushing the top of the sidebar above the window (the
+        // sidebar looked empty or stuck at the bottom) and cutting off the top of the map.
+        .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}

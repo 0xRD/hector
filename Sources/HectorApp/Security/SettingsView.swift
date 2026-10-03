@@ -1,3 +1,4 @@
+import AppKit
 import HectorCore
 import SwiftUI
 
@@ -5,6 +6,8 @@ import SwiftUI
 struct SettingsView: View {
     var body: some View {
         TabView {
+            GeneralSettings()
+                .tabItem { Label("General", systemImage: "gearshape") }
             VirusTotalSettings()
                 .tabItem { Label("VirusTotal", systemImage: "shield.lefthalf.filled") }
             AboutHector()
@@ -66,6 +69,63 @@ private struct VirusTotalSettings: View {
             // Never keep the key in memory longer than needed.
             state.apiKeyDraft = ""
         }
+    }
+}
+
+/// Hector's data on this Mac, and the way out.
+private struct GeneralSettings: View {
+    @Environment(WindowState.self) private var state
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(Self.dataFiles, id: \.name) { file in
+                    LabeledContent(file.label) {
+                        Text(Self.size(of: file.name) ?? "Not downloaded").foregroundStyle(.secondary).monospacedDigit()
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Show in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([LegacyMigration.userDataDirectory])
+                    }
+                    .disabled(!FileManager.default.fileExists(atPath: LegacyMigration.userDataDirectory.path))
+                }
+            } header: {
+                Text("Data on this Mac")
+            } footer: {
+                Text("DB-IP Lite databases (CC BY 4.0), downloaded when you ask and updated monthly. Every lookup stays on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                LabeledContent {
+                    Button("Uninstall Hector…", role: .destructive, action: uninstall)
+                } label: {
+                    Text("Uninstall")
+                    Text("Removes the helper, every rule, the databases, the API key and the app.")
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private static let dataFiles = [
+        (label: "Countries", name: "dbip-country-lite.csv"),
+        (label: "Network names", name: "dbip-asn-lite.csv"),
+    ]
+
+    private static func size(of name: String) -> String? {
+        let url = LegacyMigration.userDataDirectory.appending(path: name)
+        guard let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int64 else { return nil }
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    /// The confirmation sheet belongs to the main window: close Settings and bring that forward.
+    private func uninstall() {
+        NSApp.keyWindow?.close()
+        NSApp.windows.first { $0.identifier?.rawValue == "main" || $0.title == "Hector" }?.makeKeyAndOrderFront(nil)
+        state.showUninstall = true
     }
 }
 

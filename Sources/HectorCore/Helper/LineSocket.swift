@@ -100,4 +100,25 @@ public enum HelperClient {
     public static var isInstalled: Bool {
         FileManager.default.fileExists(atPath: HelperPaths.socket)
     }
+
+    /// The helper's version and capabilities. A helper from before the handshake answers `hello`
+    /// with a failure, which reads as `HelperInfo.legacy`. Throws when the helper cannot be reached.
+    public static func info(socketPath: String = HelperPaths.socket, timeout: TimeInterval = 5) throws -> HelperInfo {
+        switch try send(.hello, socketPath: socketPath, timeout: timeout) {
+        case .hello(let info): info
+        default: .legacy
+        }
+    }
+
+    /// Sends `request` only when the helper supports it, so an outdated helper yields a clear
+    /// message instead of a decoding error.
+    public static func sendChecked(_ request: HelperRequest, socketPath: String = HelperPaths.socket,
+                                   timeout: TimeInterval = 120) throws -> HelperResponse {
+        let info = try info(socketPath: socketPath, timeout: min(timeout, 5))
+        guard info.supports(request.capability) else {
+            return .failure("The installed helper (\(info.version)) is older than this app and cannot do this. "
+                            + "Update it from Blocklists → Update helper.")
+        }
+        return try send(request, socketPath: socketPath, timeout: timeout)
+    }
 }

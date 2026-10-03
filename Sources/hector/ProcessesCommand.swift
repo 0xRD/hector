@@ -8,7 +8,7 @@ func processes(_ args: Arguments) throws {
     var snapshot = ProcessCollector().snapshot()
     var throughHelper = false
     if geteuid() != 0, FileManager.default.fileExists(atPath: socket),
-       case .processes(let fromHelper)? = try? HelperClient.send(.processes, socketPath: socket, timeout: 10) {
+       case .processes(let fromHelper)? = try? HelperClient.sendChecked(.processes, socketPath: socket, timeout: 10) {
         snapshot = fromHelper
         throughHelper = true
     }

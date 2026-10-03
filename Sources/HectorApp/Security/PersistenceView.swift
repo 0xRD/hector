@@ -60,8 +60,10 @@ struct PersistenceView: View {
                 list(items)
             }
         }
+        .fillsSplitPane()
         .inspector(isPresented: $state.showInspector) {
             PersistenceDetailView(security: security, item: selectedItem)
+                .fillsSplitPane()
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
         .task {

@@ -2,8 +2,9 @@ import CoreAudio
 import CoreMediaIO
 import Foundation
 
-/// Watches cameras and microphones and reports when they turn on or off, and which app records
-/// from the microphone when Core Audio says so.
+/// Watches cameras and microphones and reports when they turn on or off, which app records from
+/// the microphone when Core Audio says so, and which app uses a camera when Control Center's
+/// indicator log says so (`SensorIndicatorWatcher`).
 ///
 /// Property listeners (Core Audio and CoreMediaIO, block-based, on a private serial queue) only
 /// signal that something changed; the state is then read again on the main actor and compared
@@ -27,6 +28,9 @@ public final class CaptureDeviceMonitor {
     private var poller: Task<Void, Never>?
     private var audioListeners: [AudioListener] = []
     private var cameraListeners: [CameraListener] = []
+    private var indicators: SensorIndicatorWatcher?
+    /// From the indicator log; `nil` until it has said something.
+    private var indicatorUsers: [CaptureDeviceKind: [ProcessIdentity]]?
 
     private struct AudioListener {
         let object: AudioObjectID
@@ -74,6 +78,18 @@ public final class CaptureDeviceMonitor {
         addAudioListener(system, AudioObjectPropertySelector(kAudioHardwarePropertyDevices))
         addAudioListener(system, AudioObjectPropertySelector(kAudioHardwarePropertyProcessObjectList))
         addCameraListener(CameraHAL.systemObject, CMIOObjectPropertySelector(kCMIOHardwarePropertyDevices))
+        indicatorUsers = nil
+        let indicators = SensorIndicatorWatcher { [weak self] attributions in
+            guard let self, self.isRunning else { return }
+            var resolved: [CaptureDeviceKind: [ProcessIdentity]] = [:]
+            for (kind, identifiers) in attributions {
+                resolved[kind] = SensorIndicatorLog.processes(forBundleIdentifiers: identifiers)
+            }
+            self.indicatorUsers = resolved
+            self.signal?.yield()
+        }
+        indicators.start()
+        self.indicators = indicators
         refresh()
     }
 
@@ -90,6 +106,8 @@ public final class CaptureDeviceMonitor {
         }
         audioListeners = []
         cameraListeners = []
+        indicators?.stop()
+        indicators = nil
         signal?.finish()
         signal = nil
         consumer?.cancel()
@@ -101,7 +119,12 @@ public final class CaptureDeviceMonitor {
     /// Reads every device again, reports the changes and follows devices that appeared.
     public func refresh() {
         guard isRunning else { return }
-        let (snapshot, objects) = CaptureDeviceReader.read()
+        var (snapshot, objects) = CaptureDeviceReader.read()
+        if let indicatorUsers {
+            snapshot.cameraUsers = indicatorUsers[.camera] ?? []
+            // Core Audio is the better source for the microphone; the indicator stands in for it.
+            if snapshot.microphoneUsers == nil { snapshot.microphoneUsers = indicatorUsers[.microphone] }
+        }
         watch(microphones: objects.microphones, cameras: objects.cameras)
         latest = snapshot
         let events = tracker.update(with: snapshot)

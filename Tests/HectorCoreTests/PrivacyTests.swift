@@ -193,3 +193,71 @@ import Testing
         #expect(Set(snapshot.devices.map(\.id)).count == snapshot.devices.count)
     }
 }
+
+@Suite struct SensorIndicatorTests {
+    private let start = Date(timeIntervalSince1970: 1_800_000_000)
+    private let booth = ProcessIdentity(pid: 640, name: "Photo Booth", appName: "Photo Booth", bundleIdentifier: "com.apple.PhotoBooth")
+    private let zoom = ProcessIdentity(pid: 700, name: "zoom.us", appName: "zoom.us", bundleIdentifier: "us.zoom.xos")
+
+    private func camera(_ on: Bool) -> CaptureDevice {
+        CaptureDevice(id: "camera:built-in", kind: .camera, name: "FaceTime HD Camera", isInUse: on)
+    }
+
+    private func snapshot(_ seconds: TimeInterval, on: Bool, cameraUsers: [ProcessIdentity]?) -> CaptureSnapshot {
+        CaptureSnapshot(takenAt: start.addingTimeInterval(seconds), devices: [camera(on)], microphoneUsers: [], cameraUsers: cameraUsers)
+    }
+
+    private func line(_ message: String, path: String = SensorIndicatorLog.controlCenterPath) -> Substring {
+        let object: [String: Any] = ["processImagePath": path, "eventMessage": message, "subsystem": "com.apple.controlcenter"]
+        return Substring(String(decoding: try! JSONSerialization.data(withJSONObject: object), as: UTF8.self))
+    }
+
+    @Test func parsesCameraAndMicrophoneAttributions() {
+        let parsed = SensorIndicatorLog.attributions(
+            fromMessage: #"Active activity attributions changed to ["loc:com.apple.reminders", "cam:com.apple.PhotoBooth", "mic:us.zoom.xos"]"#)
+        #expect(parsed?[.camera] == ["com.apple.PhotoBooth"])
+        #expect(parsed?[.microphone] == ["us.zoom.xos"])
+        let empty = SensorIndicatorLog.attributions(fromMessage: "Active activity attributions changed to []")
+        #expect(empty?[.camera] == [])
+        #expect(SensorIndicatorLog.attributions(fromMessage: #"Recent activity attributions changed to ["cam:x"]"#) == nil)
+    }
+
+    @Test func dropsMalformedIdentifiers() {
+        let parsed = SensorIndicatorLog.attributions(
+            fromMessage: #"Active activity attributions changed to ["cam:../../evil", "cam:", "cam:a b", "cam:-x", "cam:com.ok.App"]"#)
+        #expect(parsed?[.camera] == ["com.ok.App"])
+    }
+
+    @Test func trustsOnlyControlCenterItself() {
+        let message = #"Active activity attributions changed to ["cam:com.apple.PhotoBooth"]"#
+        #expect(SensorIndicatorLog.attributions(fromLogLine: line(message))?[.camera] == ["com.apple.PhotoBooth"])
+        // Any process can log under Control Center's subsystem; the sender's path cannot be faked.
+        #expect(SensorIndicatorLog.attributions(fromLogLine: line(message, path: "/tmp/spoofer")) == nil)
+        #expect(SensorIndicatorLog.attributions(fromLogLine: "Filtering the log data using …") == nil)
+    }
+
+    @Test func namesTheCameraAppOnTheDeviceLine() {
+        var tracker = CaptureActivityTracker()
+        _ = tracker.update(with: snapshot(0, on: false, cameraUsers: []))
+        let on = tracker.update(with: snapshot(1, on: true, cameraUsers: [booth]))
+        #expect(on.map(\.change) == [.turnedOn])
+        #expect(on.first?.apps == [booth])
+        let off = tracker.update(with: snapshot(2, on: false, cameraUsers: [booth]))
+        #expect(off.map(\.change) == [.turnedOff])
+        #expect(off.first?.apps == [booth])
+        // The indicator lagging behind the camera adds no "stopped" line.
+        #expect(tracker.update(with: snapshot(3, on: false, cameraUsers: [])).isEmpty)
+    }
+
+    @Test func lateOrChangingCameraAttributionBecomesAppEvents() {
+        var tracker = CaptureActivityTracker()
+        _ = tracker.update(with: snapshot(0, on: false, cameraUsers: nil))
+        let on = tracker.update(with: snapshot(1, on: true, cameraUsers: nil))
+        #expect(on.first?.apps.isEmpty == true)
+        let named = tracker.update(with: snapshot(2, on: true, cameraUsers: [booth]))
+        #expect(named.map(\.change) == [.appStarted])
+        #expect(named.first?.summary == "Photo Booth started using the camera")
+        let swapped = tracker.update(with: snapshot(3, on: true, cameraUsers: [zoom]))
+        #expect(swapped.map(\.change) == [.appStarted, .appStopped])
+    }
+}

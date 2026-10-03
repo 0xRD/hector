@@ -47,7 +47,10 @@ struct DestinationListView: View {
                             .contextMenu { menu(for: row) }
                     }
                 } header: {
-                    GroupHeader(group: group)
+                    GroupHeader(group: group, isFiltered: state.appFilter == group.app.id) {
+                        // Click a header to show only that app; click again to show every app.
+                        state.appFilter = state.appFilter == group.app.id ? nil : group.app.id
+                    }
                 }
             }
         }
@@ -110,6 +113,8 @@ private struct ColumnHeader: View {
 
 private struct GroupHeader: View {
     let group: DestinationGroup
+    let isFiltered: Bool
+    let toggleFilter: () -> Void
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
@@ -127,9 +132,14 @@ private struct GroupHeader: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+            Button(action: toggleFilter) {
+                Image(systemName: isFiltered ? "xmark.circle.fill" : "line.3.horizontal.decrease.circle")
+            }
+            .buttonStyle(.borderless)
+            .help(isFiltered ? "Show every app" : "Show only \(group.app.name)")
         }
         .padding(.vertical, Spacing.xxs)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }
 
