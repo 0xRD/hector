@@ -48,6 +48,17 @@ The privileged code was reviewed before the first release. Each issue below is f
 
 Already sound and kept: domains are restricted to letters, digits, `-` and `_` so they cannot inject lines into `/etc/hosts`; networks wider than /8 (IPv4) or /16 (IPv6) and local or private ranges are never blocked; the helper recompiles every blocklist instead of trusting compiled output; the app passes paths to `do shell script` quoted for the shell and for AppleScript.
 
+## Privacy monitors
+
+The keyboard tap list and the camera and microphone monitor run in the app and the CLI as the user, never in the helper. They only read:
+
+- the event tap list of the window server (`CGGetEventTapList`), which any process may read; Hector installs no tap and never sees a keystroke;
+- the "running somewhere" flag of each camera (CoreMediaIO) and audio input (Core Audio), and the PIDs of the processes recording audio (Core Audio process objects).
+
+No device is opened, so macOS asks for no camera or microphone permission and its green or orange indicator never turns on because of Hector. The camera and microphone log stays in memory and is never written to disk or sent anywhere.
+
+What these screens cannot promise: a tap list does not cover every way to read keystrokes, the app using a camera is not identified, and a process that records for less than the 2-second read interval may be logged with no app. See [ARCHITECTURE.md](docs/ARCHITECTURE.md#privacy-monitors) for the details.
+
 ## Residual risks
 
 - **The helper is installed from the app bundle.** Without a Developer ID certificate, Hector cannot prove that `Hector.app/Contents/Helpers/hectord` is the one its authors built. A process already running as you could replace it just before you type your password in the install dialog, and it would then run as root. Install Hector only from a release you verified (SHA-256 in the release notes) or that you built yourself, and keep it in /Applications.

@@ -13,6 +13,7 @@ struct HectorApp: App {
     private let windowState = WindowState()
     private let blocking = BlockingController()
     private let security = SecurityController()
+    private let privacy = PrivacyController()
 
     var body: some Scene {
         Window("Hector", id: "main") {
@@ -21,6 +22,7 @@ struct HectorApp: App {
                 .environment(windowState)
                 .environment(blocking)
                 .environment(security)
+                .environment(privacy)
                 .tint(.hectorOK)
                 .frame(minWidth: 1060, minHeight: 660)
                 .task {

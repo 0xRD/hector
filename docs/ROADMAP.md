@@ -60,8 +60,11 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 - [x] **VirusTotal**: personal API key stored in the Keychain; lookups by SHA-256 only, never uploading a file unless the user asks for that file; results cached; the free-tier limit (4 requests per minute, 500 per day) respected
 - [x] **Persistence** (in the spirit of KnockKnock): launch agents and daemons, login items and background tasks, cron and periodic jobs, system extensions, configuration profiles, browser extensions. Each item with its code signature (Apple, Developer ID, ad hoc, unsigned), notarization, path, and VirusTotal score
 - [x] **Processes** (in the spirit of TaskExplorer): process tree, signature, parent, arguments, open connections, VirusTotal score; flags for unsigned code and binaries running from temporary, Downloads or hidden folders, with the quarantine download URL
-- [ ] **Keyboard taps** (in the spirit of ReiKey): apps that intercept keystrokes, through the public event tap list
-- [ ] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined
+- [x] **Keyboard taps** (in the spirit of ReiKey): apps that intercept keystrokes, through the public event tap list (`hector taps`, Privacy → Keyboard taps)
+- [x] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined (`hector devices --watch`, Privacy → Camera & mic)
+  - [ ] Check on a real Mac (see [NEXT_STEPS.md](NEXT_STEPS.md)): built-in and USB cameras, headsets, AirPods, Continuity Camera, virtual devices
+  - [ ] Which app uses a camera: research the unified log (`com.apple.cmio`, Control Center's privacy indicator) and keep it optional if it holds
+  - [ ] Notifications when a device turns on, and a log kept across launches
 - [ ] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it
 
 ## 0.5: better names and numbers

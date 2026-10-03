@@ -6,6 +6,8 @@ enum SidebarItem: Hashable {
     case blocklists
     case persistence
     case processes
+    case keyboardTaps
+    case captureDevices
 }
 
 struct SidebarView: View {
@@ -33,6 +35,9 @@ struct SidebarView: View {
                     .tag(SidebarItem.persistence)
                 SidebarLabel("Processes", subtitle: processesSubtitle, systemImage: "cpu")
                     .tag(SidebarItem.processes)
+            }
+            Section("Privacy") {
+                PrivacySidebarRows()
             }
             Section("Apps") {
                 SidebarLabel("All apps", subtitle: "\(apps.count) apps · \(monitor.liveConnectionCount) live",

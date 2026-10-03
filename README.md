@@ -2,11 +2,12 @@
 
 **A calm guardian for your Mac: see what runs, what starts by itself, and who it talks to, then cut it off.**
 
-Hector is an open-source security app for macOS, in the spirit of Objective-See's tools ([LuLu](https://objective-see.org/products/lulu.html), [KnockKnock](https://objective-see.org/products/knockknock.html), [TaskExplorer](https://objective-see.org/products/taskexplorer.html)) and [Little Snitch](https://www.obdev.at/products/littlesnitch/), built to run **without a paid Apple Developer account**. It gathers three views in one window:
+Hector is an open-source security app for macOS, in the spirit of Objective-See's tools ([LuLu](https://objective-see.org/products/lulu.html), [KnockKnock](https://objective-see.org/products/knockknock.html), [TaskExplorer](https://objective-see.org/products/taskexplorer.html)) and [Little Snitch](https://www.obdev.at/products/littlesnitch/), built to run **without a paid Apple Developer account**. It gathers four views in one window:
 
 - **Netbite**, the network module: which process talks to which server, where that server is, and blocking of domains, addresses and whole countries.
 - **Persistence**: everything configured to start automatically (launch agents and daemons, login items, cron, extensions, profiles).
 - **Processes**: what runs right now, who signed it, where it came from.
+- **Privacy**: which apps read your keystrokes, and when the camera or the microphone turns on.
 
 Code signatures are checked locally; VirusTotal lookups are optional, use your own free key, and send hashes only, never files.
 
@@ -35,8 +36,10 @@ Download the latest `Hector-x.y.z-macOS.zip` from [Releases](../../releases), mo
 - **Country of every destination**, offline, from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database.
 - **Persistence**: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions, each with its code signature and notes on anything odd.
 - **Processes**: tree or flat list with user, arguments, signature, connections, and flags for code running from temporary, Downloads or hidden folders or deleted after launch; downloads show where they came from.
+- **Keyboard taps** (in the spirit of [ReiKey](https://objective-see.org/products/reikey.html)): every app that intercepts keystrokes through an event tap, whether it can change them or only listen, whether it sees every app or one, and who signed it. Read from the public event tap list, with no permission.
+- **Camera and microphone**: a live "in use now" view and a log of every time a camera or an audio input turns on or off, with the app recording from the microphone. Which app uses a camera is not shown: macOS has no public way to tell. Hector never opens a device, so no permission is asked.
 - **VirusTotal**: hash lookups for one item or all, within the free tier (4 per minute, 500 per day), cached for 7 days. The key stays in your Keychain (Settings, ⌘,).
-- **Command line**: everything above is also in `hector` (`connections`, `geo`, `rules`, `helper`, `persistence`, `processes`, `sign`, `vt`).
+- **Command line**: everything above is also in `hector` (`connections`, `geo`, `rules`, `helper`, `persistence`, `processes`, `taps`, `devices`, `sign`, `vt`).
 
 ## Requirements
 
@@ -164,6 +167,7 @@ Sources/HectorCore/   Library shared by the CLI, the app and the helper
   Collector/           Socket enumeration per process (libproc)
   GeoIP/               DB-IP loader, country lookups, range → CIDR conversion, updater
   Rules/               Blocklist model, compiler, pf anchor and /etc/hosts rendering
+  Privacy/             Keyboard event taps, camera and microphone state and log
 Sources/hector/       Command-line tool
 Sources/HectorApp/    SwiftUI app: live monitor, world map, details panel, blocklists
 Sources/hectord/      Privileged helper (root): enforces blocklists with pf and /etc/hosts

@@ -10,7 +10,7 @@ struct ContentView: View {
     /// The network screens (map and list) as opposed to Blocklists and the security screens.
     private var isNetworkScreen: Bool {
         switch state.sidebarSelection {
-        case .blocklists, .persistence, .processes: false
+        case .blocklists, .persistence, .processes, .keyboardTaps, .captureDevices: false
         default: true
         }
     }
@@ -36,6 +36,10 @@ struct ContentView: View {
                 PersistenceView()
             } else if state.sidebarSelection == .processes {
                 ProcessesView()
+            } else if state.sidebarSelection == .keyboardTaps {
+                KeyboardTapsView()
+            } else if state.sidebarSelection == .captureDevices {
+                CaptureDevicesView()
             } else {
                 VStack(spacing: 0) {
                     GeoBanner()
@@ -144,6 +148,7 @@ struct ContentView: View {
         switch state.sidebarSelection {
         case .persistence: "Name, path, team ID"
         case .processes: "Name, PID, path, arguments"
+        case .keyboardTaps: "App, PID, path"
         default: "Host, IP, country, port"
         }
     }
@@ -153,6 +158,8 @@ struct ContentView: View {
         case .blocklists: return "Blocklists"
         case .persistence: return "Persistence"
         case .processes: return "Processes"
+        case .keyboardTaps: return "Keyboard taps"
+        case .captureDevices: return "Camera & mic"
         default: break
         }
         guard let id = selectedAppID else { return "All apps" }
