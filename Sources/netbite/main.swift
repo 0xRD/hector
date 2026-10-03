@@ -38,6 +38,11 @@ USAGE
   netbite vt key set                     Store your VirusTotal API key in the Keychain (read from stdin)
   netbite vt key delete                  Remove it
 
+  netbite persistence [--json] [--include-apple] [--category NAME[,NAME]]
+      List what is configured to run automatically: launch agents and daemons, login items,
+      cron, periodic scripts, system and kernel extensions, profiles, browser extensions.
+      Nothing found is executed. Login items need root (the helper).
+
   netbite version | help
 
 Default GeoIP database: \(GeoIPUpdater.defaultDatabaseURL.path)
@@ -289,6 +294,7 @@ do {
     case "rules": try rules(args)
     case "helper": try helper(args)
     case "sign", "vt": try await security(command, args)
+    case "persistence": try persistence(Arguments(argv.dropFirst(), valueOptions: ["--category"]))
     case "version", "--version": print("netbite \(version)")
     case "help", "--help", "-h": print(usage)
     default: throw CLIError("Unknown command: \(command)\n\n\(usage)")
