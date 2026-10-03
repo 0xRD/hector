@@ -49,17 +49,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 /// The app icon, drawn in code so the repository needs no binary assets.
+///
+/// The Hexorcist icon: a plum squircle on the macOS icon grid (412 pt body in a 512 pt canvas),
+/// a faint hexagon lattice, a lavender glow, and the mark: a friendly ghost in a hexagon seal,
+/// with a honey spark breaking out of it.
 struct AppIconArtwork: View {
+    private static let canvas: CGFloat = 512
+    private static let bodySize: CGFloat = 412
+    private static let corner: CGFloat = 92
+
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 112, style: .continuous)
-                .fill(Color(red: 0.08, green: 0.09, blue: 0.11))
-                .padding(50)
-            NetbiteLogo(lineWidth: 1.6)
-                .padding(120)
+            squircle
+                .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 8)
+            HexorcistMark(
+                lineWidth: 1.5,
+                seal: [.brandLavender, .brandSage],
+                ghost: .brandCream,
+                eyes: .brandPlum,
+                spark: .brandHoney
+            )
+            .frame(width: 272, height: 272)
+            .shadow(color: Color.brandLavender.opacity(0.35), radius: 18, x: 0, y: 0)
         }
-        .frame(width: 512, height: 512)
+        .frame(width: Self.canvas, height: Self.canvas)
         .environment(\.colorScheme, .dark)
+    }
+
+    private var squircle: some View {
+        let shape = RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
+        let fill = LinearGradient(colors: [.brandPlum, .brandNight], startPoint: .top, endPoint: .bottom)
+        let glow = RadialGradient(
+            colors: [Color.brandLavender.opacity(0.30), Color.brandLavender.opacity(0)],
+            center: UnitPoint(x: 0.5, y: 0.42),
+            startRadius: 0,
+            endRadius: 210
+        )
+        return ZStack {
+            shape.fill(fill)
+            HexLattice(cell: 46, color: Color.brandCream.opacity(0.05), lineWidth: 1.5)
+                .clipShape(shape)
+            shape.fill(glow)
+            shape.strokeBorder(Color.white.opacity(0.10), lineWidth: 2)
+        }
+        .frame(width: Self.bodySize, height: Self.bodySize)
     }
 
     @MainActor

@@ -108,7 +108,7 @@ struct WorldMapView: View {
 
         // Dimmed arcs first, emphasized ones on top, the hovered or selected one last.
         // Blocked destinations are red and dashed; recent ones dashed; live ones solid.
-        func color(_ row: DestinationRow) -> Color { row.isBlocked ? .netbiteBlock : .netbiteAccent }
+        func color(_ row: DestinationRow) -> Color { row.isBlocked ? .hexDanger : .hexOK }
         func style(_ row: DestinationRow, width: CGFloat) -> StrokeStyle {
             row.isBlocked || !row.destination.isLive ? StrokeStyle(lineWidth: width, lineCap: .round, dash: [4, 4]) : StrokeStyle(lineWidth: width)
         }
@@ -123,10 +123,12 @@ struct WorldMapView: View {
             let emphasized = focus == nil || item.row.app.id == focus
             let size: CGFloat = emphasized ? 6 : 4
             let dot = CGRect(x: item.arc.end.x - size / 2, y: item.arc.end.y - size / 2, width: size, height: size)
-            let fill: Color = item.row.isBlocked ? .netbiteBlock : (item.row.destination.isLive ? .netbiteAccent : .secondary)
+            let fill: Color = item.row.isBlocked ? .hexDanger : (item.row.destination.isLive ? .hexOK : .secondary)
             context.fill(Path(ellipseIn: dot), with: .color(fill.opacity(emphasized ? 1 : 0.35)))
         }
         if let hot, let item = arcs.first(where: { $0.row.id == hot }) {
+            // A soft halo under the hovered or selected line.
+            context.stroke(Path(item.arc.path), with: .color(color(item.row).opacity(0.18)), style: StrokeStyle(lineWidth: 9, lineCap: .round))
             context.stroke(Path(item.arc.path), with: .color(color(item.row)), style: StrokeStyle(lineWidth: 2.8, lineCap: .round))
             let ring = CGRect(x: item.arc.end.x - 8, y: item.arc.end.y - 8, width: 16, height: 16)
             context.stroke(Path(ellipseIn: ring), with: .color(color(item.row)), lineWidth: 2)
@@ -146,36 +148,37 @@ struct MapTooltip: View {
     let row: DestinationRow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 AppIcon(app: row.app, size: 20)
                 Text(row.app.name).font(.headline).lineLimit(1)
             }
             Text(row.destination.title)
-                .font(.system(.callout, design: .monospaced))
+                .font(.dataMonoCallout)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Text("\(Countries.name(row.destination.country)) · \(row.destination.key.portLabel)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if let reason = row.blockReason {
-                Text("\(reason.label) by pf")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.netbiteBlock)
-            } else if row.destination.isLive {
-                Text(row.destination.liveConnections > 1 ? "Live · \(row.destination.liveConnections) connections" : "Live · 1 connection")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.netbiteAccent)
-            } else {
-                Text("Last seen \(row.destination.lastSeen, format: .relative(presentation: .named))")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
+            status
         }
-        .padding(10)
+        .padding(Spacing.md)
         .frame(width: Self.width, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
-        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+        .cardSurface(cornerRadius: Radius.md)
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        if let reason = row.blockReason {
+            StatusPill("\(reason.label) by pf", kind: .danger, systemImage: "nosign")
+        } else if row.destination.isLive {
+            let count = row.destination.liveConnections
+            StatusPill(count > 1 ? "Live · \(count) connections" : "Live · 1 connection", kind: .ok, systemImage: "circle.fill")
+        } else {
+            Text("Last seen \(row.destination.lastSeen, format: .relative(presentation: .named))")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
     }
 }

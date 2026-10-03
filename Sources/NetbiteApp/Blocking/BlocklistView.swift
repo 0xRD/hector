@@ -7,33 +7,32 @@ struct BlocklistView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Blocklists").font(.largeTitle.bold())
-                    Text("System-wide rules: they apply to every app on this Mac.")
-                        .foregroundStyle(.secondary)
-                }
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                ScreenHeader(
+                    "Blocklists",
+                    subtitle: "System-wide rules: they apply to every app on this Mac.",
+                    systemImage: "nosign",
+                    tint: .hexDanger
+                )
                 HelperCard()
                 if blocking.pendingChanges > 0 { PendingBar() }
                 if let error = blocking.lastError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Color.netbiteBlock)
-                        .textSelection(.enabled)
+                    Banner("Something went wrong", message: error, kind: .danger)
                 }
                 CountriesSection()
                 RulesSection()
-                Label {
-                    Text("Netbite shows traffic per app but blocks **for the whole Mac**. Blocking a destination for a single app, the way LuLu or Little Snitch do, needs a Network Extension signed with a paid Apple Developer account.")
-                } icon: {
-                    Image(systemName: "info.circle")
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                Banner(
+                    "Blocking is for the whole Mac",
+                    message: "Netbite shows traffic per app but blocks for every app. Blocking a destination for a single app, the way LuLu or Little Snitch do, needs a Network Extension signed with a paid Apple Developer account.",
+                    kind: .info,
+                    systemImage: "info.circle"
+                )
             }
-            .padding(28)
+            .padding(Spacing.xl + 4)
             .frame(maxWidth: 1100, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .canvasBackground()
         .task { await blocking.refresh() }
     }
 }
@@ -46,19 +45,16 @@ private struct HelperCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(iconColor)
-                .frame(width: 30)
+            SymbolTile(icon, tint: iconColor, size: 40)
             VStack(alignment: .leading, spacing: 6) {
                 content
             }
             Spacer(minLength: 0)
             if blocking.isWorking { ProgressView().controlSize(.small) }
         }
-        .padding(16)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
+        .padding(Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
     }
 
     private var icon: String {
@@ -72,9 +68,10 @@ private struct HelperCard: View {
     }
 
     private var iconColor: Color {
-        if case .ready(let status) = blocking.helper, status.pfEnabled, status.anchorLoaded { return .netbiteAccent }
-        if case .unreachable = blocking.helper { return .netbiteBlock }
-        return .secondary
+        if case .ready(let status) = blocking.helper, status.pfEnabled, status.anchorLoaded { return .hexOK }
+        if case .unreachable = blocking.helper { return .hexDanger }
+        if case .ready = blocking.helper { return .hexInfo }
+        return .hexNeutral
     }
 
     @ViewBuilder
@@ -135,32 +132,30 @@ private struct HelperCard: View {
 /// Shown while the draft differs from what pf enforces.
 struct PendingBar: View {
     @Environment(BlockingController.self) private var blocking
+    /// Actions under the text, for the narrow details panel.
+    var compact = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(blocking.pendingChanges == 1 ? "1 pending change" : "\(blocking.pendingChanges) pending changes")
-                    .fontWeight(.semibold)
-                Text("Nothing changes until you apply: pf reloads its tables and /etc/hosts is rewritten.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        Banner(
+            blocking.pendingChanges == 1 ? "1 pending change" : "\(blocking.pendingChanges) pending changes",
+            message: "Nothing changes until you apply: pf reloads its tables and /etc/hosts is rewritten.",
+            kind: .warning,
+            systemImage: "clock.badge.exclamationmark",
+            actionsBelow: compact
+        ) {
             Button("Discard") { blocking.discard() }
                 .disabled(blocking.isWorking)
             if blocking.isHelperReady {
                 Button("Apply to pf") { Task { await blocking.apply() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(blocking.isWorking)
+                    .help("Send the blocklist to the helper, which enforces it with pf")
             } else {
-                Button("Install helper…") { Task { await blocking.installHelper() } }
+                Button("Install Helper…") { Task { await blocking.installHelper() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(blocking.isWorking)
             }
         }
-        .padding(12)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -183,17 +178,16 @@ private struct CountriesSection: View {
         let seen = contacted.keys.filter { !Self.commonlyBlocked.contains($0) }.sorted { Countries.name($0) < Countries.name($1) }
         let others = Self.allCountries.filter { !Self.commonlyBlocked.contains($0) && contacted[$0] == nil }
 
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Countries").font(.title2.bold())
-                    Text("Block every IP range of a country (DB-IP Lite, IPv4 and IPv6). All off by default.")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            SectionHeader(
+                "Countries",
+                subtitle: "Block every IP range of a country (DB-IP Lite, IPv4 and IPv6). All off by default.",
+                systemImage: "flag"
+            ) {
                 TextField("Find a country", text: $state.countrySearch)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 200)
+                    .accessibilityLabel("Find a country")
             }
             group("Commonly blocked", Self.commonlyBlocked.filter(match), contacted: contacted)
             group("Contacted this session", seen.filter(match), contacted: contacted)
@@ -210,7 +204,8 @@ private struct CountriesSection: View {
     @ViewBuilder
     private func group(_ title: String, _ codes: [String], contacted: [String: Int]) -> some View {
         if !codes.isEmpty {
-            Text(title).font(.caption.weight(.semibold)).textCase(.uppercase).foregroundStyle(.secondary)
+            SectionHeader(title, style: .eyebrow)
+                .padding(.top, Spacing.xs)
             grid(codes, contacted: contacted)
         }
     }
@@ -251,7 +246,7 @@ private struct CountryTile: View {
                 Text(Countries.name(code)).fontWeight(.medium).lineLimit(1)
                 Text(subtitle(blocked: blocked, pending: pending))
                     .font(.caption)
-                    .foregroundStyle(blocked ? Color.netbiteBlock : .secondary)
+                    .foregroundStyle(pending ? Color.hexWarning : (blocked ? Color.hexDanger : Color.secondary))
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
@@ -260,13 +255,14 @@ private struct CountryTile: View {
                 set: { blocking.setCountry(code, blocked: $0) }
             ))
             .toggleStyle(.switch)
-            .tint(.netbiteBlock)
+            .tint(.hexDangerTint)
             .labelsHidden()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(blocked ? Color.netbiteBlock.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(blocked ? Color.netbiteBlock.opacity(0.6) : Color(nsColor: .separatorColor)))
+        .hoverHighlight("country:\(code)")
+        .cardSurface(cornerRadius: Radius.md, tint: blocked ? Color.hexDanger : nil)
+        .motion(Motion.quick, value: blocked)
     }
 
     private func subtitle(blocked: Bool, pending: Bool) -> String {
@@ -287,39 +283,34 @@ private struct RulesSection: View {
     @Environment(WindowState.self) private var state
 
     var body: some View {
-        @Bindable var state = state
-        VStack(alignment: .leading, spacing: 12) {
-            Text("My rules").font(.title2.bold())
-            Text("Domains go to /etc/hosts; addresses and CIDR ranges go to the pf table. Wildcards (*.example.com) only block the main name.")
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                TextField("Domain, IP or CIDR, e.g. tracker.example.com or 203.0.113.0/24", text: $state.newRule)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-                    .onSubmit(add)
-                TextField("Note (optional)", text: $state.newRuleNote)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 220)
-                    .onSubmit(add)
-                Button("Add rule", action: add)
-                    .disabled(RuleTarget(state.newRule) == nil)
-            }
-            if !state.newRule.isEmpty && RuleTarget(state.newRule) == nil {
-                Text("Not a valid domain, IP address or CIDR range.").font(.caption).foregroundStyle(Color.netbiteBlock)
-            }
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            SectionHeader(
+                "My rules",
+                subtitle: "Domains go to /etc/hosts; addresses and CIDR ranges go to the pf table. Wildcards (*.example.com) only block the main name.",
+                systemImage: "list.bullet.rectangle"
+            )
+            RuleInput(add: { add() })
             if blocking.draft.rules.isEmpty {
-                Text("No rule yet. Use “Block this destination” in the details panel, or add one above.")
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
+                Card {
+                    EmptyStateView(
+                        "No rules yet",
+                        systemImage: "sparkles",
+                        message: "Use “Block This Destination” in the details panel, or add a domain, an IP or a range above.",
+                        tint: .hexNeutral,
+                        compact: true
+                    )
+                }
             } else {
                 VStack(spacing: 0) {
                     ForEach(blocking.draft.rules) { rule in
                         RuleRow(rule: rule)
-                        Divider()
+                        if rule.id != blocking.draft.rules.last?.id {
+                            Divider().padding(.leading, 14)
+                        }
                     }
                 }
-                .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
+                .padding(Spacing.xs)
+                .cardSurface()
             }
         }
     }
@@ -329,6 +320,40 @@ private struct RulesSection: View {
             state.newRule = ""
             state.newRuleNote = ""
         }
+    }
+}
+
+/// The new-rule field, its note and the Add button, with inline validation.
+private struct RuleInput: View {
+    @Environment(WindowState.self) private var state
+    let add: @MainActor () -> Void
+
+    var body: some View {
+        @Bindable var state = state
+        let isInvalid = !state.newRule.isEmpty && RuleTarget(state.newRule) == nil
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                TextField("Domain, IP or CIDR, e.g. tracker.example.com or 203.0.113.0/24", text: $state.newRule)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.dataMono)
+                    .onSubmit { add() }
+                    .accessibilityLabel("New rule")
+                TextField("Note (optional)", text: $state.newRuleNote)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 220)
+                    .onSubmit { add() }
+                    .accessibilityLabel("Note for the new rule")
+                Button("Add Rule") { add() }
+                    .disabled(RuleTarget(state.newRule) == nil)
+            }
+            if isInvalid {
+                Label("Not a valid domain, IP address or CIDR range.", systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(Color.hexDanger)
+            }
+        }
+        .padding(Spacing.md)
+        .cardSurface(cornerRadius: Radius.md)
     }
 }
 
@@ -343,21 +368,20 @@ private struct RuleRow: View {
                 set: { blocking.setRule(rule.id, enabled: $0) }
             ))
             .toggleStyle(.switch)
+            .tint(.hexDangerTint)
             .labelsHidden()
-            Text(kind)
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.separator))
-                .frame(width: 80, alignment: .leading)
+            .help(rule.isEnabled ? "Turn this rule off" : "Turn this rule on")
+            CodeTag(kind)
+                .frame(width: 64, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
                 Text(rule.target.description)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.dataMono)
                     .foregroundStyle(rule.isEnabled ? .primary : .secondary)
+                    .textSelection(.enabled)
                 HStack(spacing: 8) {
                     if let note = rule.note { Text(note).foregroundStyle(.secondary) }
                     if blocking.isPending(rule) {
-                        Text(rule.isEnabled ? "not applied" : "will be removed").foregroundStyle(.orange)
+                        StatusPill(rule.isEnabled ? "Not applied" : "Will be removed", kind: .warning, systemImage: "clock", size: .small)
                     }
                 }
                 .font(.caption)
@@ -378,8 +402,9 @@ private struct RuleRow: View {
             .help("Delete this rule")
             .accessibilityLabel("Delete rule \(rule.target.description)")
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .hoverHighlight("rule:\(rule.id)", cornerRadius: Radius.sm)
     }
 
     private var kind: String {

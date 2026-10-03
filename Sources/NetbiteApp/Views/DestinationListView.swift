@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct DestinationGroup: Identifiable {
@@ -8,6 +9,7 @@ struct DestinationGroup: Identifiable {
 
 /// The process → destination tree. Hovering a row lights up its arc on the map.
 struct DestinationListView: View {
+    @Environment(BlockingController.self) private var blocking
     let groups: [DestinationGroup]
     @Binding var selection: DestinationRef?
     @Binding var hovered: DestinationRef?
@@ -15,46 +17,67 @@ struct DestinationListView: View {
     var body: some View {
         VStack(spacing: 0) {
             ColumnHeader()
-            Divider()
             if groups.isEmpty {
-                ContentUnavailableView("No destination", systemImage: "network.slash",
-                                       description: Text("Nothing matches the current filter."))
+                EmptyStateView(
+                    "No destinations to show",
+                    systemImage: "network.slash",
+                    message: "Nothing matches the filter or the search. Choose “All” in the toolbar, or clear the search.",
+                    tint: .hexNeutral
+                )
+                .canvasBackground()
             } else {
-                List(selection: $selection) {
-                    ForEach(groups) { group in
-                        Section {
-                            ForEach(group.rows) { row in
-                                DestinationRowView(row: row)
-                                    .tag(row.id)
-                                    .listRowBackground(hovered == row.id ? Color.netbiteAccent.opacity(0.10) : nil)
-                                    .onHover { inside in
-                                        if inside {
-                                            hovered = row.id
-                                        } else if hovered == row.id {
-                                            hovered = nil
-                                        }
-                                    }
-                            }
-                        } header: {
-                            HStack(spacing: 8) {
-                                AppIcon(app: group.app, size: 18)
-                                Text(group.app.name).font(.headline)
-                                Text(group.app.identityLabel)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                Spacer()
-                                Text(group.rows.count == 1 ? "1 destination" : "\(group.rows.count) destinations")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                .listStyle(.inset)
+                list
             }
         }
+    }
+
+    private var list: some View {
+        List(selection: $selection) {
+            ForEach(groups) { group in
+                Section {
+                    ForEach(group.rows) { row in
+                        DestinationRowView(row: row)
+                            .tag(row.id)
+                            .listRowBackground(hovered == row.id ? Color.hexOKWash : nil)
+                            .onHover { inside in
+                                if inside {
+                                    hovered = row.id
+                                } else if hovered == row.id {
+                                    hovered = nil
+                                }
+                            }
+                            .contextMenu { menu(for: row) }
+                    }
+                } header: {
+                    GroupHeader(group: group)
+                }
+            }
+        }
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .canvasBackground()
+    }
+
+    @ViewBuilder
+    private func menu(for row: DestinationRow) -> some View {
+        let destination = row.destination
+        let address = destination.key.address
+        if !destination.isLocal {
+            let isRuled = blocking.addressRule(address) != nil
+            Button(isRuled ? "Unblock This Destination" : "Block This Destination") {
+                blocking.toggleAddress(address, note: "\(row.app.name) · \(destination.title)")
+            }
+            Divider()
+        }
+        Button("Copy IP Address") { copy(address.description) }
+        if let hostname = destination.hostname {
+            Button("Copy Host Name") { copy(hostname) }
+        }
+    }
+
+    private func copy(_ string: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(string, forType: .string)
     }
 }
 
@@ -72,11 +95,40 @@ private struct ColumnHeader: View {
             Text("Location").frame(width: Column.location, alignment: .leading)
             Text("Status").frame(width: Column.status, alignment: .leading)
         }
-        .font(.caption.weight(.semibold))
+        .font(.eyebrow)
+        .tracking(0.6)
         .textCase(.uppercase)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 20)
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
+        .background(Color.surfaceCanvas)
+        .overlay(alignment: .bottom) { Divider() }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct GroupHeader: View {
+    let group: DestinationGroup
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            AppIcon(app: group.app, size: 18)
+            Text(group.app.name)
+                .font(.headline)
+                .foregroundStyle(.primary)
+            Text(group.app.identityLabel)
+                .font(.dataMonoCaption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+            Text(group.rows.count == 1 ? "1 destination" : "\(group.rows.count) destinations")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+        .padding(.vertical, Spacing.xxs)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -89,23 +141,26 @@ struct DestinationRowView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(destination.title)
                     .fontWeight(.medium)
-                    .strikethrough(row.isBlocked, color: .netbiteBlock)
+                    .strikethrough(row.isBlocked, color: .hexDanger)
                     .foregroundStyle(row.isBlocked ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(subtitle)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.dataMonoCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text(destination.key.portLabel)
-                .font(.system(.callout, design: .monospaced))
+                .font(.dataMonoCallout)
                 .foregroundStyle(.secondary)
                 .frame(width: Column.port, alignment: .leading)
             Group {
                 if destination.isLocal {
-                    Text("Local network").foregroundStyle(.secondary)
+                    Label("Local network", systemImage: "house")
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 } else {
                     CountryBadge(code: destination.country)
                 }
@@ -114,7 +169,7 @@ struct DestinationRowView: View {
             StatusBadge(destination: destination, blockReason: row.blockReason)
                 .frame(width: Column.status, alignment: .leading)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }
 
