@@ -14,7 +14,7 @@ Hector is meant to run all the time and its helper runs as root, so these come b
   - [ ] A budget, checked before each release: idle helper 0% CPU and under 15 MB; app under 1% CPU with the window closed
 - [ ] **Security of the root helper.** It must not be a way to escalate privileges, even for a malicious process of the logged-in user.
   - [x] Review of what 0.4 added to the helper (2026-10-04): `processes` no longer gives other users' arguments to administrators; see SECURITY.md
-  - [x] Least privilege: hosts lists and the country database are downloaded and parsed by a child that drops to `nobody`; root re-checks the output (to verify as root: update the helper, then refresh the lists)
+  - [x] Least privilege: hosts lists and the country database are downloaded and parsed by a child that drops to `nobody`; root re-checks the output (checked as root on 2026-10-04: EasyPrivacy, 43,112 domains)
   - [ ] A sandbox profile for the helper (`sandbox_init` with the few paths it writes: its data folder, /etc/hosts, the pf anchor)
   - [ ] Authenticate the client beyond `getpeereid`: check the peer's code signature (audit token, designated requirement of Hector's own signature)
   - [x] Fuzz tests for the request decoder and the parsers that see outside data (hosts lists, DB-IP CSV and cache, `sfltool` output, blocklists)
@@ -102,6 +102,18 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
   - [ ] Notifications when a device turns on, and a log kept across launches
 - [x] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it (`hector checkup`, Checkup screen)
 - [ ] Check the checkup's parsers and verdicts against real output on macOS 15 and 26/27 (see NEXT_STEPS.md)
+
+## Next feature: Hector as a local Pi-hole
+
+Hector already blocks ads and trackers for the whole Mac the way a Pi-hole does: by domain, with the same public lists (StevenBlack Unified is Pi-hole's default list), written to /etc/hosts. A local DNS resolver run by the helper would go further:
+
+- [ ] **Wildcard blocking:** block `example.com` and every subdomain, which /etc/hosts cannot express (lists ship each subdomain separately today)
+- [ ] **A query log per app:** which app asked for which name, blocked or allowed, with counts per day (Pi-hole's dashboard, for one Mac)
+- [ ] **Allowlist** that wins over lists, one click from the log ("unblock this")
+- [ ] **More lists from the catalog**, all public and maintained: OISD (big and small), HaGeZi (Light, Normal, Pro, threat intelligence), AdGuard DNS filter, 1Hosts, Peter Lowe's list; each with its license, checked like today's lists
+- [ ] **Design:** the helper listens on 127.0.0.1:53 and `[::1]:53` as an unprivileged child (port 53 bound by root, then handed over), and forwards to the user's DNS servers or to DNS over HTTPS; macOS is pointed at it with a resolver configuration that can be undone in one step. A crash must fall back to the normal DNS, never cut the Mac off
+- [ ] Measure first: lookup latency and memory against /etc/hosts with 100,000+ domains (today: 43,112 list domains, 6 ms for a blocked name, 30 to 50 ms for normal names, no visible cost in mDNSResponder)
+- [ ] Later: serve other devices on the network (a real Pi-hole replacement), off by default
 
 ## 0.5: better names and numbers
 
