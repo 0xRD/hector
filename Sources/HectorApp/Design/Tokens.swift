@@ -55,10 +55,11 @@ extension Color {
 
     // MARK: Map
 
-    /// Land dots of the map.
-    static let mapLand = dynamic(light: (0.85, 0.82, 0.78), dark: (0.27, 0.25, 0.23))
+    /// Land dots of the map. Light values give about the same contrast on `surfaceInset` as the
+    /// dark ones (1.4:1 for land, 2:1 for contacted land, 1.4:1 between the two).
+    static let mapLand = dynamic(light: (0.81, 0.78, 0.73), dark: (0.27, 0.25, 0.23))
     /// Land dots of countries the Mac currently talks to.
-    static let mapLandContacted = dynamic(light: (0.72, 0.80, 0.72), dark: (0.29, 0.38, 0.32))
+    static let mapLandContacted = dynamic(light: (0.56, 0.69, 0.58), dark: (0.29, 0.38, 0.32))
 
     // MARK: Brand (fixed, appearance-independent)
 

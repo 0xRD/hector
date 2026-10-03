@@ -30,6 +30,26 @@ final class WindowState {
     var processesAsTree = true
     // Settings
     var apiKeyDraft = ""
+
+    /// Records that the pointer entered or left a row of the destination list.
+    ///
+    /// The change is applied on the next turn of the main actor, not inside the callback: a
+    /// `List` row's hover handler can run while AppKit's NSTableView is still adding or laying out
+    /// its rows (the pointer is already over the window at launch, and rows arrive every second).
+    /// Writing `hovered` there invalidates the window, and SwiftUI then updates both tables from
+    /// inside their own delegate call, which AppKit reports as "reentrant operation in its
+    /// NSTableView delegate". Redundant writes are skipped too: with the Swift 6.1 toolchain, an
+    /// `@Observable` property can notify its observers even when the value does not change.
+    func hoverListRow(_ ref: DestinationRef, inside: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if inside {
+                if self.hovered != ref { self.hovered = ref }
+            } else if self.hovered == ref {
+                self.hovered = nil
+            }
+        }
+    }
 }
 
 enum UninstallPhase: Equatable {

@@ -43,7 +43,8 @@ struct WorldMapView: View {
                     let nearest = nearestArc(to: location, in: arcs)?.row.id
                     if nearest != hovered { hovered = nearest }
                 case .ended:
-                    hovered = nil
+                    // Only when something was hovered: every write re-renders the window, lists included.
+                    if hovered != nil { hovered = nil }
                 }
             }
             .onTapGesture {
@@ -112,8 +113,10 @@ struct WorldMapView: View {
         func style(_ row: DestinationRow, width: CGFloat) -> StrokeStyle {
             row.isBlocked || !row.destination.isLive ? StrokeStyle(lineWidth: width, lineCap: .round, dash: [4, 4]) : StrokeStyle(lineWidth: width)
         }
+        // Deep inks on the cream plate need a little more opacity than pastel inks on charcoal.
+        let dimmed: Double = context.environment.colorScheme == .light ? 0.2 : 0.12
         for item in arcs where focus != nil && item.row.app.id != focus {
-            context.stroke(Path(item.arc.path), with: .color(color(item.row).opacity(0.12)), style: style(item.row, width: 1))
+            context.stroke(Path(item.arc.path), with: .color(color(item.row).opacity(dimmed)), style: style(item.row, width: 1))
         }
         for item in arcs where focus == nil || item.row.app.id == focus {
             let strong = item.row.destination.isLive || item.row.isBlocked
@@ -160,6 +163,12 @@ struct MapTooltip: View {
             Text("\(Countries.name(row.destination.country)) · \(row.destination.key.portLabel)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if let network = row.destination.network {
+                Text(network.displayName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             status
         }
         .padding(Spacing.md)

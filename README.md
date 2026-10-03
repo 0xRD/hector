@@ -33,6 +33,7 @@ Download the latest `Hector-x.y.z-macOS.zip` from [Releases](../../releases), mo
 - **Netbite, live connections**: apps and their destinations, a world map with one line per destination (hover a line to see which app owns it), and a details panel with reverse DNS, country and the last minute of activity. Data comes from libproc, the same source `lsof -i` uses; helper processes are grouped under their app.
 - **Blocking**: "Block this destination", "Block all of <country>", personal rules, and a Blocklists screen with pending changes. The `hectord` helper enforces them with pf and `/etc/hosts`, re-applies them at boot, and lets the app see system processes. Country blocking is opt-in, networks wider than /8 (IPv4) or /16 (IPv6) are refused, and local networks are never blocked.
 - **Country of every destination**, offline, from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database.
+- **Network name of every destination** ("AS15169 Google LLC"), offline, from the free [DB-IP IP to ASN Lite](https://db-ip.com/db/download/ip-to-asn-lite) database: in the list under each address, in the details panel, on the map's tooltip, and in the search. Optional: download it from the details panel or with `hector geo update --asn`.
 - **Persistence**: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions, each with its code signature and notes on anything odd.
 - **Processes**: tree or flat list with user, arguments, signature, connections, and flags for code running from temporary, Downloads or hidden folders or deleted after launch; downloads show where they came from.
 - **VirusTotal**: hash lookups for one item or all, within the free tier (4 per minute, 500 per day), cached for 7 days. The key stays in your Keychain (Settings, ⌘,).
@@ -90,7 +91,7 @@ Example Browser  com.example.browser  (pid 4321)
   └ tcp [2001:db8::25]:5228                         --   ESTABLISHED
 ```
 
-As a normal user you see your own processes. Run it with `sudo` to include system daemons. Add `--resolve` for reverse DNS, `--json` for machine-readable output, and `--all` to include listening sockets.
+As a normal user you see your own processes. Run it with `sudo` to include system daemons. Add `--resolve` for reverse DNS, `--asn` for the network that owns each address, `--json` for machine-readable output, and `--all` to include listening sockets.
 
 ```bash
 hector geo update
@@ -100,6 +101,16 @@ Downloads the country database to `~/Library/Application Support/Hector/`.
 
 ```bash
 hector geo lookup 140.82.121.4
+```
+
+```bash
+hector geo update --asn
+```
+
+Downloads the network names (ASN) database next to the country one.
+
+```bash
+hector geo asn 140.82.121.4
 ```
 
 ```bash
@@ -154,7 +165,7 @@ To check that nothing is left, without root: `scripts/check-uninstall.sh`.
 
 ## Privacy
 
-Hector has no telemetry, no account and no server. Everything stays on your Mac. It makes only two kinds of network requests: the DB-IP database download, when you start it from the CLI (`hector geo update`) or the app, and reverse DNS lookups of the addresses your apps already contact, through your system resolver. The starting point of the map is the region set in macOS, not a location lookup.
+Hector has no telemetry, no account and no server. Everything stays on your Mac. It makes only two kinds of network requests: the DB-IP database downloads (countries, and network names if you want them), when you start them from the CLI (`hector geo update`, `hector geo update --asn`) or the app, and reverse DNS lookups of the addresses your apps already contact, through your system resolver. The starting point of the map is the region set in macOS, not a location lookup.
 
 ## Project layout
 
@@ -162,7 +173,7 @@ Hector has no telemetry, no account and no server. Everything stays on your Mac.
 Sources/HectorCore/   Library shared by the CLI, the app and the helper
   Net/                 IPAddress, CIDR
   Collector/           Socket enumeration per process (libproc)
-  GeoIP/               DB-IP loader, country lookups, range → CIDR conversion, updater
+  GeoIP/               DB-IP loaders (countries, network names), lookups, range → CIDR conversion, updaters
   Rules/               Blocklist model, compiler, pf anchor and /etc/hosts rendering
 Sources/hector/       Command-line tool
 Sources/HectorApp/    SwiftUI app: live monitor, world map, details panel, blocklists
@@ -191,6 +202,6 @@ Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING
 
 Hector is free software, released under the [GNU General Public License v3.0](LICENSE).
 
-IP geolocation by [DB-IP](https://db-ip.com), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The database is downloaded at runtime and is not redistributed in this repository.
+IP geolocation and network names (IP to ASN Lite) by [DB-IP](https://db-ip.com), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The databases are downloaded at runtime and are not redistributed in this repository.
 
 Map data derived from [Natural Earth](https://www.naturalearthdata.com) (public domain).
