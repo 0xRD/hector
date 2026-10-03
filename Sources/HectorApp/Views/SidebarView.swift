@@ -16,6 +16,7 @@ struct SidebarView: View {
     @Environment(BlockingController.self) private var blocking
     @Environment(SecurityController.self) private var security
     @Environment(CheckupController.self) private var checkup
+    @Environment(PrivacyController.self) private var privacy
     @Binding var selection: SidebarItem?
     /// App owning the line hovered on the map or in the list.
     let highlightedAppID: AppGroup.ID?
@@ -53,7 +54,7 @@ struct SidebarView: View {
                     .tag(SidebarItem.checkup)
             }
             Section("Privacy") {
-                PrivacySidebarRows()
+                PrivacySidebarRows(privacy: privacy)
             }
             Section("Apps") {
                 SidebarLabel("All apps", subtitle: "\(apps.count) apps · \(monitor.liveConnectionCount) live",

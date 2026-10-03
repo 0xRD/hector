@@ -61,7 +61,7 @@ struct PersistenceView: View {
             }
         }
         .inspector(isPresented: $state.showInspector) {
-            PersistenceDetailView(item: selectedItem)
+            PersistenceDetailView(security: security, item: selectedItem)
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
         .task {
@@ -117,7 +117,7 @@ struct PersistenceView: View {
             ForEach(categories, id: \.self) { category in
                 Section {
                     ForEach(items.filter { $0.category == category }) { item in
-                        PersistenceRow(item: item).tag(item.id)
+                        PersistenceRow(security: security, item: item).tag(item.id)
                     }
                 } header: {
                     SectionHeader(category.title, systemImage: category.symbol, style: .eyebrow)
@@ -178,6 +178,7 @@ struct PersistenceView: View {
 }
 
 private struct PersistenceRow: View {
+    let security: SecurityController
     let item: PersistenceItem
 
     var body: some View {
@@ -205,14 +206,15 @@ private struct PersistenceRow: View {
             Spacer(minLength: 8)
             StatusPill(item.scope.label, kind: item.scope == .user ? .info : .neutral, showsIcon: false, size: .small)
                 .frame(width: 64, alignment: .leading)
-            SignatureBadge(path: path).frame(width: 120, alignment: .leading)
-            VirusTotalBadge(path: path).frame(width: 80, alignment: .leading)
+            SignatureBadge(security: security, path: path).frame(width: 120, alignment: .leading)
+            VirusTotalBadge(security: security, path: path).frame(width: 80, alignment: .leading)
         }
         .padding(.vertical, 2)
     }
 }
 
 struct PersistenceDetailView: View {
+    let security: SecurityController
     let item: PersistenceItem?
 
     var body: some View {
@@ -267,7 +269,7 @@ struct PersistenceDetailView: View {
             }
 
             if let path {
-                CodeDetailsSection(path: path)
+                CodeDetailsSection(security: security, path: path)
                 HStack {
                     Button("Reveal in Finder") { revealInFinder(path) }
                     Button("Copy path") { copyToPasteboard(path) }

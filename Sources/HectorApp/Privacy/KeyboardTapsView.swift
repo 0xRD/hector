@@ -33,7 +33,7 @@ struct KeyboardTapsView: View {
             content(taps)
         }
         .inspector(isPresented: $state.showInspector) {
-            KeyboardTapDetailView(tap: selectedTap)
+            KeyboardTapDetailView(security: security, tap: selectedTap)
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
         .task {
@@ -98,7 +98,7 @@ struct KeyboardTapsView: View {
             }
             .width(min: 90, ideal: 160, max: 240)
             TableColumn("Signature") { tap in
-                SignatureBadge(path: PrivacyController.codePath(of: tap.tapping))
+                SignatureBadge(security: security, path: PrivacyController.codePath(of: tap.tapping))
             }
             .width(min: 90, ideal: 120, max: 160)
         }
@@ -164,6 +164,7 @@ private struct TapModePill: View {
 
 /// The inspector of a keyboard tap: what it sees, and the code behind it.
 struct KeyboardTapDetailView: View {
+    let security: SecurityController
     let tap: KeyboardTap?
 
     var body: some View {
@@ -210,7 +211,7 @@ struct KeyboardTapDetailView: View {
                     if let bundle = process.bundleIdentifier { DetailRow("Bundle ID", value: bundle, monospaced: true) }
                 }
                 if let codePath = PrivacyController.codePath(of: process) {
-                    CodeDetailsSection(path: codePath)
+                    CodeDetailsSection(security: security, path: codePath)
                 }
                 HStack {
                     Button("Reveal in Finder") { revealInFinder(path) }

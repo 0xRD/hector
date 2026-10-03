@@ -500,7 +500,7 @@ extension SectionHeader where Trailing == EmptyView {
 /// A label/value line for inspectors: secondary label in a fixed column, value on the right.
 ///
 ///     DetailRow("Team ID", value: info.teamIdentifier ?? "–", monospaced: true)
-///     DetailRow("Trust") { SignatureBadge(path: path) }
+///     DetailRow("Trust") { SignatureBadge(security: security, path: path) }
 struct DetailRow<Value: View>: View {
     let label: String
     let labelWidth: CGFloat

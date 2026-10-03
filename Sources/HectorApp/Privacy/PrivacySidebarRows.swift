@@ -2,8 +2,11 @@ import HectorCore
 import SwiftUI
 
 /// The Privacy entries of the sidebar: keyboard taps, camera and microphone.
+///
+/// Takes the controller as a parameter: sidebar rows live in an AppKit outline view that may
+/// rebuild them before SwiftUI attaches the environment, and a missing environment object crashes.
 struct PrivacySidebarRows: View {
-    @Environment(PrivacyController.self) private var privacy
+    let privacy: PrivacyController
 
     var body: some View {
         SidebarLabel("Keyboard taps", subtitle: tapsSubtitle, systemImage: "keyboard")

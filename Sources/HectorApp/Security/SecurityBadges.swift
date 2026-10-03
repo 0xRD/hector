@@ -44,8 +44,12 @@ extension TrustLevel {
 }
 
 /// The trust level of the code at `path`, or a spinner while it is analyzed.
+///
+/// Takes the controller as a parameter rather than from the environment: it is drawn inside List
+/// rows and Table cells, which AppKit may rebuild before SwiftUI attaches the environment, and a
+/// missing environment object is a crash.
 struct SignatureBadge: View {
-    @Environment(SecurityController.self) private var security
+    let security: SecurityController
     let path: String?
 
     var body: some View {
@@ -80,8 +84,9 @@ extension VirusTotalLookup {
 }
 
 /// The VirusTotal result for the code at `path`, or a button to look it up.
+/// Takes the controller as a parameter, for the same reason as `SignatureBadge`.
 struct VirusTotalBadge: View {
-    @Environment(SecurityController.self) private var security
+    let security: SecurityController
     let path: String?
 
     var body: some View {
@@ -133,7 +138,7 @@ struct PathIcon: View {
 
 /// Signature and VirusTotal details of one piece of code, for the inspectors.
 struct CodeDetailsSection: View {
-    @Environment(SecurityController.self) private var security
+    let security: SecurityController
     let path: String
 
     var body: some View {
@@ -154,7 +159,7 @@ struct CodeDetailsSection: View {
         switch security.signatures[path] {
         case .analyzed(let info)?:
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                DetailRow("Trust") { SignatureBadge(path: path) }
+                DetailRow("Trust") { SignatureBadge(security: security, path: path) }
                 if let problem = info.validationError { DetailRow("Problem", value: problem) }
                 if let signer = info.signerName { DetailRow("Signer", value: signer) }
                 if info.isSigned {
@@ -179,7 +184,7 @@ struct CodeDetailsSection: View {
         case .done(let lookup)?:
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
-                    VirusTotalBadge(path: path)
+                    VirusTotalBadge(security: security, path: path)
                     if let label = lookup.report?.threatLabel { Text(label).font(.callout).foregroundStyle(.secondary) }
                 }
                 Text(lookup.sha256).font(.system(.caption, design: .monospaced)).textSelection(.enabled).foregroundStyle(.secondary)

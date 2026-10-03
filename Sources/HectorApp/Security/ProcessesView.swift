@@ -39,7 +39,7 @@ struct ProcessesView: View {
             }
         }
         .inspector(isPresented: $state.showInspector) {
-            ProcessDetailView(row: selectedRow)
+            ProcessDetailView(security: security, row: selectedRow)
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
         .task {
@@ -95,7 +95,7 @@ struct ProcessesView: View {
             }
             .width(min: 60, ideal: 90, max: 140)
             TableColumn("Signature") { row in
-                SignatureBadge(path: row.process.executablePath)
+                SignatureBadge(security: security, path: row.process.executablePath)
             }
             .width(min: 90, ideal: 120, max: 160)
             TableColumn("Network") { row in
@@ -103,7 +103,7 @@ struct ProcessesView: View {
             }
             .width(min: 50, ideal: 70, max: 90)
             TableColumn("VirusTotal") { row in
-                VirusTotalBadge(path: row.process.executablePath)
+                VirusTotalBadge(security: security, path: row.process.executablePath)
             }
             .width(min: 70, ideal: 90, max: 120)
         }
@@ -187,7 +187,7 @@ private struct ConnectionCountCell: View {
 }
 
 struct ProcessDetailView: View {
-    @Environment(SecurityController.self) private var security
+    let security: SecurityController
     let row: ProcessRow?
 
     var body: some View {
@@ -245,7 +245,7 @@ struct ProcessDetailView: View {
             connections(process.connections)
 
             if let path = process.executablePath {
-                CodeDetailsSection(path: path)
+                CodeDetailsSection(security: security, path: path)
                 HStack {
                     Button("Reveal in Finder") { revealInFinder(path) }
                     Button("Copy path") { copyToPasteboard(path) }
