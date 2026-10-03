@@ -84,6 +84,14 @@ func handle(client: Int32, enforcer: Enforcer, dryRun: Bool) async {
                 response = .status(enforcer.status())
             case .snapshot:
                 response = .snapshot(SocketCollector().snapshot())
+            case .processes:
+                response = .processes(ProcessCollector().snapshot())
+            case .backgroundTasks:
+                // Fixed path and arguments: nothing from the request reaches the command line.
+                guard let output = ToolRunner.live.run("/usr/bin/sfltool", ["dumpbtm"]), output.succeeded else {
+                    throw HelperError("sfltool dumpbtm failed.")
+                }
+                response = .toolOutput(output.output, truncated: output.truncated)
             case .apply(let blocklist, let authorization):
                 try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
                 try HelperLimits.validate(blocklist)

@@ -310,6 +310,18 @@ private final class FakeTools: @unchecked Sendable {
         #expect(report.sources.flatMap(\.notes).contains { $0.hasPrefix("needs the helper") })
         #expect(!tools.invoked.contains { $0.contains("sfltool") })
     }
+
+    @Test func usesSfltoolOutputFromTheHelper() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let tools = FakeTools([:])
+        let options = PersistenceScanner.Options(categories: [.loginItem, .backgroundTask],
+                                                 backgroundTaskOutput: ToolOutput(output: Self.dumpbtm, truncated: true))
+        let report = fixture.scanner(tools: tools.runner).scan(options: options)
+        #expect(report.items.map(\.label).sorted() == ["Example Menu", "example-daemon", "sync-agent"])
+        #expect(report.sources.flatMap(\.notes) == ["sfltool output was truncated"])
+        #expect(!tools.invoked.contains { $0.contains("sfltool") })
+    }
 }
 
 @Suite struct PersistenceParserTests {

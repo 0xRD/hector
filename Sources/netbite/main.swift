@@ -41,7 +41,15 @@ USAGE
   netbite persistence [--json] [--include-apple] [--category NAME[,NAME]]
       List what is configured to run automatically: launch agents and daemons, login items,
       cron, periodic scripts, system and kernel extensions, profiles, browser extensions.
-      Nothing found is executed. Login items need root (the helper).
+      Nothing found is executed. Login items need root: they are read through the helper when it
+      is installed.
+
+  netbite processes [--json] [--flagged] [--tree]
+      Running processes with their parent, user, path and connections. Through the helper when it
+      is installed (arguments of every user), else your own processes in full and the others in part.
+      --flagged   only processes running from a temporary, Downloads or hidden folder, or whose
+                  executable was deleted
+      --tree      indent children under their parent
 
   netbite version | help
 
@@ -275,8 +283,8 @@ func helper(_ args: Arguments) throws {
         Blocked countries: \(status.blocklist.map { $0.blockedCountries.sorted().joined(separator: ", ") }.flatMap { $0.isEmpty ? nil : $0 } ?? "none")
         """)
         status.warnings.forEach { print("warning: \($0)") }
-    case .snapshot:
-        print("Unexpected snapshot reply.")
+    case .snapshot, .processes, .toolOutput:
+        print("Unexpected reply.")
     case .failure(let message):
         throw CLIError(message)
     }
@@ -294,7 +302,8 @@ do {
     case "rules": try rules(args)
     case "helper": try helper(args)
     case "sign", "vt": try await security(command, args)
-    case "persistence": try persistence(Arguments(argv.dropFirst(), valueOptions: ["--category"]))
+    case "persistence": try persistence(Arguments(argv.dropFirst(), valueOptions: ["--category", "--socket"]))
+    case "processes", "ps": try processes(Arguments(argv.dropFirst(), valueOptions: ["--socket"]))
     case "version", "--version": print("netbite \(version)")
     case "help", "--help", "-h": print(usage)
     default: throw CLIError("Unknown command: \(command)\n\n\(usage)")

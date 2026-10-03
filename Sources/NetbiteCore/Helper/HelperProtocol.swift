@@ -28,6 +28,11 @@ public enum HelperRequest: Codable, Sendable {
     case flush(authorization: Data)
     /// A socket snapshot taken as root, which includes system daemons.
     case snapshot
+    /// Every running process as root sees it: arguments and sockets of every user included.
+    case processes
+    /// The output of `sfltool dumpbtm`, the login items and background tasks of every user. The
+    /// tool asks for a password unless it runs as root.
+    case backgroundTasks
 }
 
 /// Bounds the helper enforces on what clients send it.
@@ -87,6 +92,9 @@ public struct HelperStatus: Codable, Sendable, Equatable {
 public enum HelperResponse: Codable, Sendable {
     case status(HelperStatus)
     case snapshot(CollectorSnapshot)
+    case processes(ProcessSnapshot)
+    /// Text printed by a system tool, as the app parses it itself.
+    case toolOutput(String, truncated: Bool)
     case failure(String)
 }
 

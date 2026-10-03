@@ -45,9 +45,15 @@ public struct PersistenceScanner: Sendable {
         /// Limit the scan to these categories; `nil` scans everything.
         public var categories: Set<PersistenceItem.Category>?
 
-        public init(includeApple: Bool = false, categories: Set<PersistenceItem.Category>? = nil) {
+        /// `sfltool dumpbtm` output obtained elsewhere (from the helper, which runs as root). When
+        /// set, the scanner parses it instead of running the tool.
+        public var backgroundTaskOutput: ToolOutput?
+
+        public init(includeApple: Bool = false, categories: Set<PersistenceItem.Category>? = nil,
+                    backgroundTaskOutput: ToolOutput? = nil) {
             self.includeApple = includeApple
             self.categories = categories
+            self.backgroundTaskOutput = backgroundTaskOutput
         }
 
         func wants(_ category: PersistenceItem.Category) -> Bool { categories?.contains(category) ?? true }
@@ -119,7 +125,8 @@ public struct PersistenceScanner: Sendable {
             }
         }
         if options.wants(.loginItem) || options.wants(.backgroundTask) {
-            sources.append(Source(name: "Login items and background tasks") { backgroundTasks() })
+            let provided = options.backgroundTaskOutput
+            sources.append(Source(name: "Login items and background tasks") { backgroundTasks(provided: provided) })
         }
         if options.wants(.cronJob) { sources.append(Source(name: "cron") { cronJobs() }) }
         if options.wants(.periodicScript) { sources.append(Source(name: "periodic") { periodicScripts() }) }
@@ -297,12 +304,12 @@ public struct PersistenceScanner: Sendable {
 
     // MARK: - Login items and background tasks
 
-    func backgroundTasks() -> SourceResult {
+    func backgroundTasks(provided: ToolOutput? = nil) -> SourceResult {
         // sfltool asks for an administrator password when not root; only the helper may run it.
-        guard geteuid() == 0 else {
+        guard provided != nil || geteuid() == 0 else {
             return SourceResult(notes: ["needs the helper: sfltool dumpbtm requires root"])
         }
-        guard let result = tools.run("/usr/bin/sfltool", ["dumpbtm"]), result.succeeded else {
+        guard let result = provided ?? tools.run("/usr/bin/sfltool", ["dumpbtm"]), result.succeeded else {
             return SourceResult(notes: ["sfltool dumpbtm failed"])
         }
         var notes: [String] = []

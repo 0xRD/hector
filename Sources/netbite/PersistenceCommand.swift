@@ -9,7 +9,8 @@ func persistence(_ args: Arguments) throws {
         categories = try Set(names.split(separator: ",").map { try category(named: String($0)) })
     }
     let report = PersistenceScanner().scan(options: .init(includeApple: args.flags.contains("--include-apple"),
-                                                           categories: categories))
+                                                           categories: categories,
+                                                           backgroundTaskOutput: backgroundTasksFromHelper(args)))
 
     if args.flags.contains("--json") {
         print(String(decoding: try JSONEncoder.netbite.encode(report), as: UTF8.self))
@@ -41,6 +42,16 @@ func persistence(_ args: Arguments) throws {
     if !args.flags.contains("--include-apple") {
         print("Apple's own items are hidden; add --include-apple to list them.")
     }
+}
+
+/// Login items need root: ask the helper for `sfltool dumpbtm` when it runs and we do not.
+/// `nil` lets the scanner report that the helper is needed.
+private func backgroundTasksFromHelper(_ args: Arguments) -> ToolOutput? {
+    let socket = args.options["--socket"] ?? HelperPaths.socket
+    guard geteuid() != 0, FileManager.default.fileExists(atPath: socket),
+          case .toolOutput(let text, let truncated)? = try? HelperClient.send(.backgroundTasks, socketPath: socket, timeout: 30)
+    else { return nil }
+    return ToolOutput(output: text, truncated: truncated)
 }
 
 /// "launch-agents", "LaunchAgent" and "launchagent" all name `.launchAgent`.
