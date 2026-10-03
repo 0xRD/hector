@@ -23,7 +23,8 @@ struct ContentView: View {
     var body: some View {
         @Bindable var monitor = monitor
         @Bindable var state = state
-        let rows = visibleRows
+        let allCountryRows = visibleRows
+        let rows = state.countryFilter.map { country in allCountryRows.filter { $0.destination.country == country } } ?? allCountryRows
         let groups = listGroups(from: rows)
 
         NavigationSplitView {
@@ -47,7 +48,7 @@ struct ContentView: View {
                     GeoBanner()
                     VSplitView {
                         // The map is width-bound (2.5:1); taller would only add empty bands.
-                        mapCard(rows: rows)
+                        mapCard(rows: rows, allCountryRows: allCountryRows)
                             .frame(minHeight: 160, idealHeight: 380, maxHeight: 480)
                         DestinationListView(groups: groups, selection: $state.selectedDestination, hovered: $state.hovered)
                             .frame(minHeight: 160)
@@ -113,6 +114,14 @@ struct ContentView: View {
         .task {
             if let screen = DebugSnapshot.screen { state.sidebarSelection = screen }
             if DebugSnapshot.opensSettings { openSettings() }
+            if let country = DebugSnapshot.country {
+                try? await Task.sleep(for: .seconds(4))
+                state.countryFilter = country
+            }
+            if let country = DebugSnapshot.hoverCountry {
+                try? await Task.sleep(for: .seconds(4))
+                state.hoveredCountry = country
+            }
             guard DebugSnapshot.hoverIndex != nil || DebugSnapshot.selectIndex != nil else { return }
             try? await Task.sleep(for: .seconds(4))
             let rows = visibleRows.filter { $0.destination.country != nil }
@@ -132,15 +141,14 @@ struct ContentView: View {
 
     // MARK: - Map
 
-    private func mapCard(rows: [DestinationRow]) -> some View {
+    private func mapCard(rows: [DestinationRow], allCountryRows: [DestinationRow]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            MapCardHeader(rows: rows)
+            MapCardHeader(rows: rows, allCountryRows: allCountryRows, state: state)
             WorldMapView(
                 rows: rows,
                 focusAppID: selectedAppID,
                 originCountry: monitor.originCountry,
-                selected: state.selectedDestination,
-                hovered: Bindable(state).hovered,
+                state: state,
                 onSelect: { row in
                     if selectedAppID != nil { state.appFilter = row.app.id }
                     state.selectedDestination = row.id
@@ -226,21 +234,32 @@ struct ContentView: View {
 }
 
 /// Title, counts and legend above the map. Drops the counts when the column is narrow.
+///
+/// The country count is also the country filter: it lists every country with its destinations.
 private struct MapCardHeader: View {
     let rows: [DestinationRow]
+    /// The rows before the country filter, for the list of countries.
+    let allCountryRows: [DestinationRow]
+    let state: WindowState
 
     var body: some View {
-        let countries = Set(rows.compactMap(\.destination.country)).count
         HStack(alignment: .center, spacing: Spacing.md) {
             // The Netbite module glyph: this is the network part of the app.
             NetbiteLogo(lineWidth: 2)
                 .frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("Destination map")
-                    .font(.sectionTitle)
-                    .fixedSize()
-                    .accessibilityAddTraits(.isHeader)
-                Text("Hover a line to see which app owns it. Click it for details.")
+                HStack(spacing: Spacing.sm) {
+                    Text("Destination map")
+                        .font(.sectionTitle)
+                        .fixedSize()
+                        .accessibilityAddTraits(.isHeader)
+                    if let country = state.countryFilter {
+                        CountryFilterChip(country: country) { state.countryFilter = nil }
+                    }
+                }
+                Text(state.countryFilter == nil
+                     ? "Hover a line to see which apps use it. Click a country to show only it."
+                     : "Hover a line to see which app owns it. Click it for details.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -249,14 +268,79 @@ private struct MapCardHeader: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: Spacing.lg) {
                     Metric("\(rows.count)", label: rows.count == 1 ? "destination" : "destinations")
-                    Metric("\(countries)", label: countries == 1 ? "country" : "countries")
+                    countryMenu
                     Divider().frame(height: 30)
+                    MapLegend()
+                }
+                HStack(spacing: Spacing.lg) {
+                    countryMenu
                     MapLegend()
                 }
                 MapLegend()
             }
             .layoutPriority(1)
         }
+    }
+
+    /// Countries by number of destinations, most first.
+    private var countries: [(code: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for row in allCountryRows { if let country = row.destination.country { counts[country, default: 0] += 1 } }
+        return counts.map { ($0.key, $0.value) }.sorted { $0.count != $1.count ? $0.count > $1.count : $0.code < $1.code }
+    }
+
+    private var countryMenu: some View {
+        let countries = self.countries
+        return Menu {
+            Button {
+                state.countryFilter = nil
+            } label: {
+                if state.countryFilter == nil { Label("All countries", systemImage: "checkmark") } else { Text("All countries") }
+            }
+            Divider()
+            ForEach(countries, id: \.code) { entry in
+                Button {
+                    state.countryFilter = entry.code
+                } label: {
+                    let title = "\(Countries.name(entry.code)) · \(entry.count)"
+                    if state.countryFilter == entry.code { Label(title, systemImage: "checkmark") } else { Text(title) }
+                }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Metric("\(countries.count)", label: countries.count == 1 ? "country" : "countries")
+                Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Show only one country")
+        .disabled(countries.isEmpty)
+    }
+}
+
+/// The country the screen is narrowed to, with a button to show every country again.
+private struct CountryFilterChip: View {
+    let country: String
+    let clear: () -> Void
+
+    var body: some View {
+        Button(action: clear) {
+            HStack(spacing: 5) {
+                Text(country).font(.caption2.weight(.bold).monospaced())
+                Text(Countries.name(country)).font(.caption.weight(.semibold)).lineLimit(1)
+                Image(systemName: "xmark.circle.fill").font(.caption)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .foregroundStyle(Color.hectorOK)
+            .background(Color.hectorOKWash, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Show every country")
+        .accessibilityLabel("Only \(Countries.name(country)). Show every country")
     }
 }
 

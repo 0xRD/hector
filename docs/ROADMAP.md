@@ -55,14 +55,15 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 
 - [x] Helper: connections served concurrently (rule changes serialized), and a `hello` handshake with version, protocol and capabilities so the app and the CLI name an outdated helper instead of failing to decode
 - [x] Layout on macOS 26: the sidebar was drawn above the window and the top of the map cut off (split panes took a list's full height as their minimum; `fillsSplitPane()`)
-- [ ] **High priority: an interactive map.** Today every destination sits on its country's center with a small offset; arcs to nearby countries pile up on "You", and nothing can be filtered by country. Keep the drawn map (MapKit would fetch tiles from Apple and lose the style); everything already goes through `MapGeometry`, so:
-  - [ ] Filter by country: the "N countries" figure opens a list of countries with their counts; picking one (or clicking a country on the map) filters the map and the list, like the app filter, with a removable chip; the search also matches country names
-  - [ ] One node per country, with a count bubble, lines thicker for more destinations, and a hover card listing the apps; individual destinations fan out only when zoomed in
-  - [ ] Zoom and pan: pinch and drag on the trackpad, scroll with ⌘, buttons for Fit (frame what is visible), World and the region around you; dots and lines keep their size on screen
+- [x] **High priority: an interactive map.** Today every destination sits on its country's center with a small offset; arcs to nearby countries pile up on "You", and nothing can be filtered by country. Keep the drawn map (MapKit would fetch tiles from Apple and lose the style); everything already goes through `MapGeometry`, so:
+  - [x] Filter by country: the "N countries" figure opens a list of countries with their counts; picking one (or clicking a country on the map) filters the map and the list, like the app filter, with a removable chip; the search also matches country names
+  - [x] One node per country, with a count bubble, lines thicker for more destinations, and a hover card listing the apps; individual destinations fan out only when zoomed in
+  - [x] Zoom and pan: pinch and drag on the trackpad, buttons to zoom, fit what is shown and show the world (zoom stops at 6×: the land is a 3.6° dot grid)
+  - [ ] Zoom with ⌘ and the scroll wheel; keyboard shortcuts for the map buttons
   - [ ] Later: city-level points would need a city database (DB-IP City Lite is about 130 MB); decide whether the gain is worth the size
 
 - [x] Rename the app, the bundle, the helper, the CLI and the docs to Hector, with migration from Netbite 0.3 (helper, blocklist, data, VirusTotal key)
-- [ ] Rename the GitHub repository to `hector` (owner, in Settings; GitHub redirects the old URL)
+- [x] Rename the GitHub repository to `hector` (GitHub redirects the old URL)
 - [x] Brand identity for Hector: the crested-helmet mark, the "Hector on the walls" app icon, the tone of voice, and a rewritten design brief (`docs/DESIGN.md`)
 - [x] Core library and CLI for code signatures, SHA-256 and VirusTotal hash lookups (`hector sign`, `hector vt`)
 - [x] Core library and CLI for the persistence scan (`hector persistence`)

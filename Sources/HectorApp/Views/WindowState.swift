@@ -1,4 +1,5 @@
 import HectorCore
+import CoreGraphics
 import Observation
 
 /// What the user picked or points at in the main window.
@@ -16,6 +17,13 @@ final class WindowState {
     /// Destination under the pointer, on the map or in the list.
     var hovered: DestinationRef?
     var filter: DestinationFilter = .all
+    /// The country the Connections screen is narrowed to (ISO code); `nil` shows every country.
+    var countryFilter: String?
+    /// Country whose bubble or line is under the pointer, on the world view of the map.
+    var hoveredCountry: String?
+    var mapViewport = MapViewport.world
+    /// The viewport when the current pinch or drag began.
+    var mapGestureStart: MapViewport?
     var search = ""
     var showInspector = true
     // Blocklists screen

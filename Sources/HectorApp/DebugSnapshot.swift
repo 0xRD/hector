@@ -8,6 +8,8 @@ import AppKit
 /// - `HECTOR_DEBUG_HOVER=N` pretends the pointer hovers the N-th line of the map.
 /// - `HECTOR_DEBUG_SELECT=N` selects the N-th line of the map.
 /// - `HECTOR_DEBUG_BLOCKLISTS=1` opens the Blocklists screen.
+/// - `HECTOR_DEBUG_COUNTRY=US` filters the map and the list to one country;
+///   `HECTOR_DEBUG_HOVER_COUNTRY=US` hovers that country's bubble on the world view.
 /// - `HECTOR_DEBUG_SETTINGS=1` opens the Settings window.
 /// - `HECTOR_DEBUG_SCREEN=NAME` opens a screen: blocklists, persistence, processes, checkup,
 ///   taps or devices.
@@ -32,6 +34,8 @@ enum DebugSnapshot {
         }
     }
 
+    static var country: String? { environment["HECTOR_DEBUG_COUNTRY"] }
+    static var hoverCountry: String? { environment["HECTOR_DEBUG_HOVER_COUNTRY"] }
     static var opensSettings: Bool { environment["HECTOR_DEBUG_SETTINGS"] != nil }
 
     static func scheduleIfRequested() {
