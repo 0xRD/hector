@@ -53,6 +53,9 @@ final class SecurityController {
     private(set) var hasAPIKey = false
     private(set) var keyMessage: String?
     private let keyStore = APIKeyStore()
+    /// Read from the Keychain at the first lookup, then kept for the session: each read of the
+    /// key may show a Keychain prompt.
+    @ObservationIgnored private var cachedKey: String?
     private let rateLimiter = VirusTotalClient.defaultRateLimiter()
 
     init() {
@@ -198,7 +201,8 @@ final class SecurityController {
 
     private func makeClient(reportingTo path: String?) -> VirusTotalClient? {
         do {
-            guard let key = try keyStore.read() else {
+            if cachedKey == nil { cachedKey = try keyStore.read() }
+            guard let key = cachedKey else {
                 if let path { virusTotal[path] = .failed("Add your VirusTotal API key in Settings first.") }
                 keyMessage = "Add your VirusTotal API key to look files up."
                 return nil
@@ -237,7 +241,7 @@ final class SecurityController {
 
     func refreshKeyState() {
         do {
-            hasAPIKey = try keyStore.read() != nil
+            hasAPIKey = try keyStore.exists()
         } catch {
             hasAPIKey = false
             keyMessage = String(describing: error)
@@ -249,6 +253,7 @@ final class SecurityController {
     func saveKey(_ key: String) -> Bool {
         do {
             try keyStore.save(key)
+            cachedKey = nil
             keyMessage = nil
             refreshKeyState()
             // Earlier "add your key" failures can now be retried.
@@ -265,6 +270,7 @@ final class SecurityController {
     func deleteKey() {
         do {
             try keyStore.delete()
+            cachedKey = nil
             keyMessage = nil
         } catch {
             keyMessage = String(describing: error)

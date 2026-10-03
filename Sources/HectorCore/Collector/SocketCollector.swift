@@ -16,7 +16,6 @@ public struct SocketCollector: Sendable {
     public func snapshot() -> CollectorSnapshot {
         var processes: [ProcessSockets] = []
         var unreadable = 0
-        var bundleCache: [String: AppBundle] = [:]
 
         for pid in Self.allPIDs() where pid > 0 {
             guard let fds = Self.fileDescriptors(of: pid) else {
@@ -30,15 +29,7 @@ public struct SocketCollector: Sendable {
             guard !sockets.isEmpty else { continue }
 
             let path = Self.executablePath(of: pid)
-            var bundle = AppBundle()
-            if let path {
-                if let cached = bundleCache[path] {
-                    bundle = cached
-                } else {
-                    bundle = Self.appBundle(containing: path)
-                    bundleCache[path] = bundle
-                }
-            }
+            let bundle = path.map(Self.bundleCache.bundle(containing:)) ?? AppBundle()
             let name = Self.name(of: pid) ?? path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "pid \(pid)"
             let process = NetProcess(pid: pid, name: name, executablePath: path,
                                      appBundleIdentifier: bundle.identifier, appName: bundle.name,
@@ -50,6 +41,28 @@ public struct SocketCollector: Sendable {
             $0.process.displayName.localizedCaseInsensitiveCompare($1.process.displayName) == .orderedAscending
         }
         return CollectorSnapshot(takenAt: Date(), processes: processes, unreadableProcessCount: unreadable)
+    }
+
+    /// Bundles read once and kept across snapshots: reading an Info.plist for every networked
+    /// process every second was a good part of a snapshot's cost. Bounded; shared by the
+    /// helper's concurrent clients.
+    static let bundleCache = BundleCache()
+
+    final class BundleCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var bundles: [String: AppBundle] = [:]
+        private let limit = 1_024
+
+        func bundle(containing path: String) -> AppBundle {
+            if let cached = lock.withLock({ bundles[path] }) { return cached }
+            let bundle = SocketCollector.appBundle(containing: path)
+            lock.withLock {
+                // An app updated in place keeps its path: forget everything now and then.
+                if bundles.count >= limit { bundles.removeAll() }
+                bundles[path] = bundle
+            }
+            return bundle
+        }
     }
 
     // MARK: - libproc

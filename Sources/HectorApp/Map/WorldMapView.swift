@@ -242,24 +242,9 @@ struct WorldMapView: View {
 
     private func drawLand(in context: inout GraphicsContext, geometry: MapGeometry) {
         let contacted = Set(rows.compactMap { $0.destination.country }.compactMap { WorldData.countryIndex[$0] })
-        // Dots grow with the zoom, so the land keeps its shape.
-        let radius = WorldData.dotSpacing * geometry.scale * 0.21
-        let visible = CGRect(origin: .zero, size: geometry.size).insetBy(dx: -radius, dy: -radius)
-        var land = Path()
-        var landContacted = Path()
-        let dots = WorldData.dots
-        for i in stride(from: 0, to: dots.count, by: 3) {
-            let center = geometry.point(canvasX: Double(dots[i]), y: Double(dots[i + 1]))
-            guard visible.contains(center) else { continue }
-            let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-            if contacted.contains(Int(dots[i + 2])) {
-                landContacted.addEllipse(in: rect)
-            } else {
-                land.addEllipse(in: rect)
-            }
-        }
-        context.fill(land, with: .color(.mapLand))
-        context.fill(landContacted, with: .color(.mapLandContacted))
+        let paths = LandPaths.shared.paths(for: geometry, contacted: contacted)
+        context.fill(paths.land, with: .color(.mapLand))
+        context.fill(paths.contacted, with: .color(.mapLandContacted))
     }
 
     private func drawOrigin(in context: inout GraphicsContext, geometry: MapGeometry) {
@@ -365,6 +350,54 @@ struct WorldMapView: View {
         return content
             .position(x: centerX, y: min(max(point.y, 70), size.height - 70))
             .allowsHitTesting(false)
+    }
+}
+
+/// The land dots as two paths (plain and contacted countries), rebuilt only when the size, the
+/// viewport or the set of contacted countries changes: about 5,000 dots, and the map redraws every
+/// second while connections come and go.
+private final class LandPaths: @unchecked Sendable {
+    static let shared = LandPaths()
+
+    private struct Key: Equatable {
+        let rect: CGRect
+        let size: CGSize
+        let contacted: Set<Int>
+    }
+
+    private let lock = NSLock()
+    private var key: Key?
+    private var cached = (land: Path(), contacted: Path())
+
+    func paths(for geometry: MapGeometry, contacted: Set<Int>) -> (land: Path, contacted: Path) {
+        let key = Key(rect: geometry.rect, size: geometry.size, contacted: contacted)
+        return lock.withLock {
+            if key != self.key {
+                cached = Self.build(geometry, contacted: contacted)
+                self.key = key
+            }
+            return cached
+        }
+    }
+
+    private static func build(_ geometry: MapGeometry, contacted: Set<Int>) -> (land: Path, contacted: Path) {
+        // Dots grow with the zoom, so the land keeps its shape.
+        let radius = WorldData.dotSpacing * geometry.scale * 0.21
+        let visible = CGRect(origin: .zero, size: geometry.size).insetBy(dx: -radius, dy: -radius)
+        var land = Path()
+        var landContacted = Path()
+        let dots = WorldData.dots
+        for i in stride(from: 0, to: dots.count, by: 3) {
+            let center = geometry.point(canvasX: Double(dots[i]), y: Double(dots[i + 1]))
+            guard visible.contains(center) else { continue }
+            let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+            if contacted.contains(Int(dots[i + 2])) {
+                landContacted.addEllipse(in: rect)
+            } else {
+                land.addEllipse(in: rect)
+            }
+        }
+        return (land, landContacted)
     }
 }
 

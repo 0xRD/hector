@@ -40,19 +40,22 @@ public struct NetworkOwner: Hashable, Sendable, Codable {
 ///   per range; a `NetworkOwner` is only built for the address being looked up.
 /// Lookups are binary searches.
 public final class ASNDatabase: Sendable {
-    struct Range<T: FixedWidthInteger & Sendable>: Sendable {
+    struct Range<T: FixedWidthInteger & Sendable & BitwiseCopyable>: Sendable, BitwiseCopyable {
         let lower: T
         var upper: T
         let owner: UInt32
     }
 
-    private let v4: [Range<UInt32>]
-    private let v6: [Range<UInt128>]
+    // Tables of records, parsed or mapped from the cache next to the CSV (see `RecordCache`).
+    private let v4: RecordTable<Range<UInt32>>
+    private let v6: RecordTable<Range<UInt128>>
     /// AS number of each owner index.
-    private let numbers: [UInt32]
+    private let numbers: RecordTable<UInt32>
     /// Name of owner `i` is `nameBytes[nameOffsets[i]..<nameOffsets[i + 1]]`.
-    private let nameOffsets: [UInt32]
-    private let nameBytes: [UInt8]
+    private let nameOffsets: RecordTable<UInt32>
+    private let nameBytes: RecordTable<UInt8>
+
+    static let cacheLayout = RecordCache.layout([MemoryLayout<Range<UInt32>>.stride, MemoryLayout<Range<UInt128>>.stride], version: 1)
 
     /// Organization names longer than this are cut: they are labels, not documents.
     static let maximumNameLength = 120
@@ -70,7 +73,63 @@ public final class ASNDatabase: Sendable {
     }
 
     public convenience init(contentsOf url: URL) throws {
+        let stamp = RecordCache.Stamp(source: url, layout: Self.cacheLayout)
+        let cacheURL = RecordCache.url(for: url)
+        if let stamp, let s = RecordCache.read(from: cacheURL, stamp: stamp, sections: 5),
+           let v4 = RecordTable<Range<UInt32>>(data: s[0].data, offset: s[0].offset, count: s[0].count),
+           let v6 = RecordTable<Range<UInt128>>(data: s[1].data, offset: s[1].offset, count: s[1].count),
+           let numbers = RecordTable<UInt32>(data: s[2].data, offset: s[2].offset, count: s[2].count),
+           let offsets = RecordTable<UInt32>(data: s[3].data, offset: s[3].offset, count: s[3].count),
+           let names = RecordTable<UInt8>(data: s[4].data, offset: s[4].offset, count: s[4].count),
+           Self.isConsistent(v4: v4, v6: v6, numbers: numbers, offsets: offsets, names: names) {
+            self.init(v4: v4, v6: v6, numbers: numbers, nameOffsets: offsets, nameBytes: names)
+            return
+        }
         try self.init(csv: Data(contentsOf: url, options: .mappedIfSafe))
+        if let stamp {
+            RecordCache.write([(v4.data, v4.count), (v6.data, v6.count), (numbers.data, numbers.count),
+                               (nameOffsets.data, nameOffsets.count), (nameBytes.data, nameBytes.count)],
+                              stamp: stamp, to: cacheURL)
+        }
+    }
+
+    private init(v4: RecordTable<Range<UInt32>>, v6: RecordTable<Range<UInt128>>, numbers: RecordTable<UInt32>,
+                 nameOffsets: RecordTable<UInt32>, nameBytes: RecordTable<UInt8>) {
+        self.v4 = v4
+        self.v6 = v6
+        self.numbers = numbers
+        self.nameOffsets = nameOffsets
+        self.nameBytes = nameBytes
+    }
+
+    /// Everything a lookup relies on, checked once when a cache is mapped: ordered ranges, owner
+    /// indices in bounds, name offsets increasing within the name bytes.
+    private static func isConsistent(v4: RecordTable<Range<UInt32>>, v6: RecordTable<Range<UInt128>>,
+                                     numbers: RecordTable<UInt32>, offsets: RecordTable<UInt32>,
+                                     names: RecordTable<UInt8>) -> Bool {
+        guard v4.count + v6.count > 0, offsets.count == numbers.count + 1 else { return false }
+        let owners = UInt32(numbers.count)
+        func ordered<T>(_ table: RecordTable<Range<T>>) -> Bool {
+            table.withBuffer { ranges in
+                var previous: T?
+                for range in ranges {
+                    guard range.lower <= range.upper, range.owner < owners,
+                          previous.map({ $0 < range.lower }) ?? true else { return false }
+                    previous = range.upper
+                }
+                return true
+            }
+        }
+        let offsetsValid = offsets.withBuffer { values in
+            guard values.first == 0 else { return false }
+            var previous: UInt32 = 0
+            for value in values {
+                guard value >= previous, Int(value) <= names.count else { return false }
+                previous = value
+            }
+            return true
+        }
+        return offsetsValid && ordered(v4) && ordered(v6)
     }
 
     /// Parses DB-IP ASN CSV data. Blank lines, a header line and lines without an AS number
@@ -91,11 +150,11 @@ public final class ASNDatabase: Sendable {
         }
         guard !builder.v4.isEmpty || !builder.v6.isEmpty else { throw LoadError.empty }
         builder.finish()
-        v4 = builder.v4
-        v6 = builder.v6
-        numbers = builder.numbers
-        nameOffsets = builder.nameOffsets
-        nameBytes = builder.nameBytes
+        v4 = RecordTable(builder.v4)
+        v6 = RecordTable(builder.v6)
+        numbers = RecordTable(builder.numbers)
+        nameOffsets = RecordTable(builder.nameOffsets)
+        nameBytes = RecordTable(builder.nameBytes)
     }
 
     /// Number of ranges kept after merging (IPv4 + IPv6).
@@ -111,18 +170,24 @@ public final class ASNDatabase: Sendable {
         case .v4(let value): index = Self.find(value, in: v4)
         case .v6(let value): index = Self.find(value, in: v6)
         }
-        return index.map { owner(at: $0) }
+        return index.flatMap { owner(at: $0) }
     }
 
-    private func owner(at index: UInt32) -> NetworkOwner {
+    private func owner(at index: UInt32) -> NetworkOwner? {
         let i = Int(index)
-        let lower = Int(nameOffsets[i])
-        let upper = Int(nameOffsets[i + 1])
-        let name = String(decoding: nameBytes[lower..<upper], as: UTF8.self)
-        return NetworkOwner(number: numbers[i], name: name)
+        guard i + 1 < nameOffsets.count else { return nil }
+        let (lower, upper) = nameOffsets.withBuffer { (Int($0[i]), Int($0[i + 1])) }
+        guard lower <= upper, upper <= nameBytes.count else { return nil }
+        let name = nameBytes.withBuffer { String(decoding: UnsafeBufferPointer(rebasing: $0[lower..<upper]), as: UTF8.self) }
+        // Cleaned again: the cache is a file like any other.
+        return NetworkOwner(number: numbers.withBuffer { $0[i] }, name: Builder.clean(name))
     }
 
-    private static func find<T>(_ value: T, in ranges: [Range<T>]) -> UInt32? {
+    private static func find<T>(_ value: T, in table: RecordTable<Range<T>>) -> UInt32? {
+        table.withBuffer { find(value, in: $0) }
+    }
+
+    private static func find<T>(_ value: T, in ranges: UnsafeBufferPointer<Range<T>>) -> UInt32? {
         var low = 0
         var high = ranges.count - 1
         while low <= high {

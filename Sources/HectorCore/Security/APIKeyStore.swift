@@ -38,7 +38,23 @@ public struct APIKeyStore: Sendable {
         FileHash.isHex(key.trimmingCharacters(in: .whitespacesAndNewlines), length: 64)
     }
 
-    /// The stored key, or `nil` when none is stored.
+    /// Whether a key is stored, from the item's attributes alone.
+    ///
+    /// Reading the key itself (`read()`) makes macOS ask whether this program may use it, and an
+    /// ad hoc signed Hector counts as a new program after every update. Attributes are not
+    /// protected that way: use this for "is there a key?" and read the key only for a lookup.
+    public func exists() throws -> Bool {
+        var query = baseQuery
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return false }
+        guard status == errSecSuccess else { throw KeychainError.status(status) }
+        return true
+    }
+
+    /// The stored key, or `nil` when none is stored. May show a Keychain prompt: see `exists()`.
     public func read() throws -> String? {
         var query = baseQuery
         query[kSecReturnData as String] = true

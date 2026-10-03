@@ -36,6 +36,28 @@ final class ConnectionMonitor {
     private(set) var seesAllProcesses = false
     var isPaused = false
 
+    /// How often a snapshot is worth taking, set by the window. Every snapshot makes the helper
+    /// walk every process's sockets as root, so it is never taken faster than someone looks.
+    enum Demand: Equatable {
+        /// The map and list are on screen: every second.
+        case live
+        /// Another screen is shown: the sidebar's counts only.
+        case glance
+        /// No window can be seen: just enough to keep recent destinations in the history.
+        case hidden
+
+        var interval: Duration {
+            switch self {
+            case .live: .seconds(1)
+            case .glance: .seconds(5)
+            case .hidden: .seconds(10)
+            }
+        }
+    }
+
+    @ObservationIgnored var demand = Demand.live
+    @ObservationIgnored private var lastSnapshotAt = ContinuousClock.now - .seconds(3600)
+
     /// Where lines on the map start: the country the Mac is set to. No network lookup involved.
     let originCountry = Locale.current.region?.identifier ?? "US"
 
@@ -62,9 +84,12 @@ final class ConnectionMonitor {
             Task { [weak self] in await self?.loadNetworkNames() }
             while !Task.isCancelled {
                 guard let self else { return }
-                if !self.isPaused {
+                // Wakes every second but takes a snapshot only when one is due: a window that
+                // comes back into view is up to date within a second.
+                if !self.isPaused, ContinuousClock.now - self.lastSnapshotAt >= self.demand.interval - .milliseconds(100) {
+                    self.lastSnapshotAt = .now
                     let (snapshot, fromHelper) = await Task.detached(priority: .utility) { Self.takeSnapshot() }.value
-                    self.seesAllProcesses = fromHelper
+                    if self.seesAllProcesses != fromHelper { self.seesAllProcesses = fromHelper }
                     self.ingest(snapshot)
                 }
                 try? await Task.sleep(for: .seconds(1))

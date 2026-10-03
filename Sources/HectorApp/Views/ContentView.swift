@@ -1,3 +1,5 @@
+import AppKit
+import Combine
 import HectorCore
 import SwiftUI
 
@@ -130,6 +132,12 @@ struct ContentView: View {
         }
         #endif
         .sheet(isPresented: $state.showUninstall) { UninstallSheet() }
+        // Snapshots only as often as someone can see them: see ConnectionMonitor.Demand.
+        .onAppear(perform: updateDemand)
+        .onChange(of: state.sidebarSelection) { updateDemand() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { _ in updateDemand() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didHideNotification)) { _ in updateDemand() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didUnhideNotification)) { _ in updateDemand() }
         .onChange(of: state.appFilter) {
             if let selected = state.selectedDestination, let app = selectedAppID, selected.appID != app {
                 state.selectedDestination = nil
@@ -137,6 +145,13 @@ struct ContentView: View {
         }
         // Control tint: deeper than the sage ink in dark mode, so white labels stay readable.
         .tint(.hectorTint)
+    }
+
+    private func updateDemand() {
+        let visible = !NSApp.isHidden && NSApp.windows.contains {
+            $0.isVisible && !$0.isMiniaturized && $0.occlusionState.contains(.visible) && $0.contentViewController != nil
+        }
+        monitor.demand = !visible ? .hidden : (isNetworkScreen ? .live : .glance)
     }
 
     // MARK: - Map
@@ -432,7 +447,7 @@ private struct StatusBar: View {
     var body: some View {
         HStack(spacing: Spacing.md) {
             HStack(spacing: 6) {
-                StatusDot(kind: monitor.isPaused ? .neutral : .ok, pulsing: !monitor.isPaused, size: 7)
+                StatusDot(kind: monitor.isPaused ? .neutral : .ok, size: 7)
                 Text(monitor.isPaused ? "Paused" : "Live · refreshed every second")
             }
             .help(monitor.isPaused ? "Updates are frozen. Resume from the toolbar." : "Connections are read with libproc every second.")

@@ -37,7 +37,9 @@ public enum LegacyMigration {
     /// Copies the key to the new Keychain item, then deletes the old one. macOS may ask once whether
     /// Hector may read the item Netbite created.
     static func moveAPIKey(from legacy: APIKeyStore, to current: APIKeyStore) -> Bool {
-        guard (try? current.read()) == nil, let key = try? legacy.read() else { return false }
+        // Attributes only until there is something to move: reading a key can prompt.
+        guard (try? legacy.exists()) == true, (try? current.exists()) == false,
+              let key = try? legacy.read() else { return false }
         do {
             try current.save(key)
             try legacy.delete()
