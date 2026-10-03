@@ -75,7 +75,7 @@ struct UninstallSheet: View {
         state.uninstallPhase = .working
         switch await Uninstaller.uninstall() {
         case .done:
-            NSApp.terminate(nil)
+            Uninstaller.quitLeavingNoTrace()
         case .cancelled:
             state.uninstallPhase = .confirm
         case .failed(let message):

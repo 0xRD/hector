@@ -72,9 +72,32 @@ enum Uninstaller {
             try? FileManager.default.removeItem(at: url)
         }
         if let app = appBundle {
-            _ = try? await NSWorkspace.shared.recycle([app])
+            // Synchronous on purpose: the async NSWorkspace.recycle moved the bundle but never
+            // resumed, which left the app waiting forever.
+            try? FileManager.default.trashItem(at: app, resultingItemURL: nil)
         }
         return .done
+    }
+
+    /// Quits without letting AppKit save anything, then removes what it wrote while running.
+    ///
+    /// Preferences (window frames) and saved window state are written up to the last moment, so a
+    /// detached shell waits for this process to exit before deleting them. Paths are passed as
+    /// arguments, never spliced into the script.
+    static func quitLeavingNoTrace() -> Never {
+        let library = URL.libraryDirectory
+        let script = """
+        while /bin/kill -0 \(getpid()) 2>/dev/null; do /bin/sleep 0.2; done
+        /usr/bin/defaults delete \(bundleIdentifier) 2>/dev/null
+        /bin/rm -rf "$1" "$2"
+        """
+        let cleaner = Process()
+        cleaner.executableURL = URL(fileURLWithPath: "/bin/sh")
+        cleaner.arguments = ["-c", script, "netbite-cleanup",
+                             library.appending(path: "Preferences/\(bundleIdentifier).plist").path,
+                             library.appending(path: "Saved Application State/\(bundleIdentifier).savedState").path]
+        try? cleaner.run()
+        exit(0)
     }
 
     /// The installed helper first: it is root-owned, so a process of the user cannot have swapped
