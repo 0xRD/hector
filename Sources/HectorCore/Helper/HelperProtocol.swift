@@ -139,6 +139,11 @@ public enum HelperLimits {
     /// Connections the helper serves at the same time; the next ones wait in the listen backlog.
     public static let maximumConcurrentClients = 8
     public static let maximumNoteLength = 500
+    /// Networks in the pf tables (rules and countries together). pf's default limit is 200,000
+    /// table entries for the whole system; staying well under it leaves room for other software.
+    /// Lookups stay fast at any size (pf tables are radix trees, and only the first packet of a
+    /// connection is checked); the limit is about kernel memory.
+    public static let maximumPFNetworks = 150_000
 
     public struct Violation: Error, CustomStringConvertible {
         public let description: String

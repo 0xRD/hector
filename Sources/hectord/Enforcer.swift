@@ -72,6 +72,13 @@ final class Enforcer {
         let geo = blocklist.blockedCountries.isEmpty ? nil : try loadGeo()
         let lists = availableLists(blocklist.hostsLists, downloadMissing: downloadMissingLists)
         let compiled = RuleCompiler.compile(blocklist, geo: geo, lists: lists)
+        let networks = compiled.blockTable.count + compiled.geoTable.count
+        guard networks <= HelperLimits.maximumPFNetworks else {
+            // Refused before anything changes: the rules in force stay as they are.
+            throw CommandError(description: "These rules need \(networks.formatted()) networks; Hector allows up to "
+                + "\(HelperLimits.maximumPFNetworks.formatted()) (pf's system-wide limit is about \(200_000.formatted())). "
+                + "Large countries such as the United States have more than \(250_000.formatted()) networks on their own.")
+        }
         let ruleset = pfDirectory.appending(path: "netbite.pf.conf")
         let files: [(URL, String)] = [
             (ruleset, PFAnchor.ruleset(tableDirectory: pfDirectory.path)),
