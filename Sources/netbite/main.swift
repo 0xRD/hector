@@ -84,7 +84,7 @@ final class ReverseResolver: @unchecked Sendable {
         let unique = Array(Set(addresses))
         DispatchQueue.concurrentPerform(iterations: unique.count) { index in
             let address = unique[index]
-            if let name = Self.lookup(address) {
+            if let name = ReverseDNS.lookup(address) {
                 lock.withLock { names[address] = name }
             }
         }
@@ -93,34 +93,6 @@ final class ReverseResolver: @unchecked Sendable {
     func name(for address: IPAddress?) -> String? {
         guard let address else { return nil }
         return lock.withLock { names[address] }
-    }
-
-    private static func lookup(_ address: IPAddress) -> String? {
-        var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-        let status: Int32
-        if address.isV4 {
-            var sa = sockaddr_in()
-            sa.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-            sa.sin_family = sa_family_t(AF_INET)
-            inet_pton(AF_INET, address.description, &sa.sin_addr)
-            status = withUnsafePointer(to: &sa) {
-                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    getnameinfo($0, socklen_t(MemoryLayout<sockaddr_in>.size), &host, socklen_t(host.count), nil, 0, NI_NAMEREQD)
-                }
-            }
-        } else {
-            var sa = sockaddr_in6()
-            sa.sin6_len = UInt8(MemoryLayout<sockaddr_in6>.size)
-            sa.sin6_family = sa_family_t(AF_INET6)
-            inet_pton(AF_INET6, address.description, &sa.sin6_addr)
-            status = withUnsafePointer(to: &sa) {
-                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    getnameinfo($0, socklen_t(MemoryLayout<sockaddr_in6>.size), &host, socklen_t(host.count), nil, 0, NI_NAMEREQD)
-                }
-            }
-        }
-        guard status == 0 else { return nil }
-        return host.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
     }
 }
 

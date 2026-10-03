@@ -1,6 +1,6 @@
 # Roadmap
 
-## 0.1: core and CLI (in progress)
+## 0.1: core and CLI
 
 - [x] Socket collector per process (libproc), helpers grouped under their app
 - [x] IPv4/IPv6 address and CIDR model, range → CIDR conversion
@@ -15,12 +15,14 @@
 
 Based on the design mockup (main window and blocklist editor).
 
-- [ ] SwiftUI app shell: sidebar of apps and system processes, list of destinations per process
-- [ ] Live refresh (1 s) with a diff between snapshots: new, closed and idle connections
-- [ ] World map: arcs from the user's location to each destination; hovering a line highlights the process that owns it
-- [ ] Details panel: network, country, activity, the processes that use the destination
-- [ ] App icons from the bundles
-- [ ] Light and dark appearance
+- [x] SwiftUI app shell: sidebar of apps and system processes, list of destinations per process
+- [x] Live refresh (1 s): live and recent destinations kept for the session (30 min idle)
+- [x] World map: arcs from the user's country to each destination; hovering a line highlights the app that owns it
+- [x] Details panel: country, reverse DNS, activity, the apps that use the destination
+- [x] App icons from the bundles, app icon drawn in code, `scripts/bundle-app.sh`
+- [ ] Check the light appearance (only dark has been reviewed)
+- [ ] Fix the AppKit "reentrant operation in its NSTableView delegate" warning logged at launch
+- [ ] Network name (ASN) per destination
 
 ## 0.3: blocking from the app
 

@@ -22,6 +22,18 @@ Thanks for helping. Netbite runs with root privileges once the helper is install
 - Follow the existing code: small types, `///` doc comments on public API, comments that explain *why* rather than what.
 - Prefer clear names over abbreviations.
 
+## Checking the app without clicking around
+
+Debug builds of the app read three environment variables, so UI changes can be checked from a script:
+
+- `NETBITE_SNAPSHOT=/tmp/shot.png` writes the window to a PNG after `NETBITE_SNAPSHOT_DELAY` seconds (6 by default), then quits;
+- `NETBITE_DEBUG_HOVER=N` simulates the pointer over the N-th line of the map;
+- `NETBITE_DEBUG_SELECT=N` selects the N-th line of the map.
+
+```bash
+NETBITE_SNAPSHOT=/tmp/shot.png NETBITE_DEBUG_HOVER=0 swift run NetbiteApp
+```
+
 ## Testing changes that touch the firewall
 
 Never test blocking on your daily machine first. Use a macOS virtual machine (UTM or Tart), and keep this command at hand; it removes every Netbite pf rule:

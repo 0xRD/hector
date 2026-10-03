@@ -38,13 +38,17 @@ public struct NetProcess: Codable, Hashable, Sendable {
     /// Outermost `.app` bundle containing the executable, so helpers group under their app.
     public var appBundleIdentifier: String?
     public var appName: String?
+    /// Path of that outermost `.app` bundle.
+    public var appBundlePath: String?
 
-    public init(pid: Int32, name: String, executablePath: String?, appBundleIdentifier: String?, appName: String?) {
+    public init(pid: Int32, name: String, executablePath: String?, appBundleIdentifier: String?,
+                appName: String?, appBundlePath: String? = nil) {
         self.pid = pid
         self.name = name
         self.executablePath = executablePath
         self.appBundleIdentifier = appBundleIdentifier
         self.appName = appName
+        self.appBundlePath = appBundlePath
     }
 
     /// Name to show in a list: the app when known, else the process name.

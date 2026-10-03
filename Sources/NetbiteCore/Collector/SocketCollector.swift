@@ -16,7 +16,7 @@ public struct SocketCollector: Sendable {
     public func snapshot() -> CollectorSnapshot {
         var processes: [ProcessSockets] = []
         var unreadable = 0
-        var bundleCache: [String: (id: String?, name: String?)] = [:]
+        var bundleCache: [String: AppBundle] = [:]
 
         for pid in Self.allPIDs() where pid > 0 {
             guard let fds = Self.fileDescriptors(of: pid) else {
@@ -30,7 +30,7 @@ public struct SocketCollector: Sendable {
             guard !sockets.isEmpty else { continue }
 
             let path = Self.executablePath(of: pid)
-            var bundle: (id: String?, name: String?) = (nil, nil)
+            var bundle = AppBundle()
             if let path {
                 if let cached = bundleCache[path] {
                     bundle = cached
@@ -41,7 +41,8 @@ public struct SocketCollector: Sendable {
             }
             let name = Self.name(of: pid) ?? path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "pid \(pid)"
             let process = NetProcess(pid: pid, name: name, executablePath: path,
-                                     appBundleIdentifier: bundle.id, appName: bundle.name)
+                                     appBundleIdentifier: bundle.identifier, appName: bundle.name,
+                                     appBundlePath: bundle.path)
             processes.append(ProcessSockets(process: process, sockets: sockets))
         }
 
@@ -144,14 +145,20 @@ public struct SocketCollector: Sendable {
 
     /// The outermost `.app` in `path`: `/Applications/Google Chrome.app/…/Google Chrome Helper.app/…`
     /// resolves to Google Chrome, so helpers are grouped under the app the user knows.
-    static func appBundle(containing path: String) -> (id: String?, name: String?) {
+    struct AppBundle {
+        var identifier: String?
+        var name: String?
+        var path: String?
+    }
+
+    static func appBundle(containing path: String) -> AppBundle {
         let components = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard let index = components.firstIndex(where: { $0.hasSuffix(".app") }) else { return (nil, nil) }
+        guard let index = components.firstIndex(where: { $0.hasSuffix(".app") }) else { return AppBundle() }
         let appPath = components[...index].joined(separator: "/")
         let fallbackName = String(components[index].dropLast(4))
-        guard let bundle = Bundle(path: appPath) else { return (nil, fallbackName) }
+        guard let bundle = Bundle(path: appPath) else { return AppBundle(name: fallbackName, path: appPath) }
         let info = bundle.infoDictionary ?? [:]
         let name = (info["CFBundleDisplayName"] as? String) ?? (info["CFBundleName"] as? String) ?? fallbackName
-        return (bundle.bundleIdentifier, name)
+        return AppBundle(identifier: bundle.bundleIdentifier, name: name, path: appPath)
     }
 }

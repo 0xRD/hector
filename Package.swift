@@ -7,10 +7,13 @@ let package = Package(
     products: [
         .library(name: "NetbiteCore", targets: ["NetbiteCore"]),
         .executable(name: "netbite", targets: ["netbite"]),
+        // Not "Netbite": on a case-insensitive disk it would collide with the `netbite` CLI binary.
+        .executable(name: "NetbiteApp", targets: ["NetbiteApp"]),
     ],
     targets: [
         .target(name: "NetbiteCore"),
         .executableTarget(name: "netbite", dependencies: ["NetbiteCore"]),
+        .executableTarget(name: "NetbiteApp", dependencies: ["NetbiteCore"]),
         .testTarget(name: "NetbiteCoreTests", dependencies: ["NetbiteCore"]),
     ]
 )

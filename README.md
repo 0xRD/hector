@@ -14,10 +14,11 @@ Netbite is an open-source network monitor for macOS, in the spirit of [LuLu](htt
 
 Netbite *observes per app* and *blocks for the whole Mac*. The [architecture notes](docs/ARCHITECTURE.md) explain why.
 
-> **Status: early development.** The core library and the `netbite` command-line tool work today. The SwiftUI app and the privileged helper that applies rules are next; see the [roadmap](docs/ROADMAP.md).
+> **Status: early development.** The core library, the `netbite` command-line tool and a first version of the app work today; they observe but do not block yet. The privileged helper that applies rules is next; see the [roadmap](docs/ROADMAP.md).
 
 ## Features available now
 
+- **Netbite.app**: live list of apps and their destinations, a world map with one line per destination (hover a line to see which app owns it), and a details panel with reverse DNS, country and the last minute of activity.
 - **Live connections per process** through libproc, the same source `lsof -i` uses. Helper processes are grouped under their app, so Chrome's renderers show up as "Google Chrome".
 - **Country of every destination**, offline, from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database (about 700,000 ranges, 250 countries).
 - **Blocklist compiler**: domains, IPs, CIDR ranges and countries are turned into a pf ruleset, two pf tables and a managed `/etc/hosts` section.
@@ -40,6 +41,18 @@ swift test
 ```
 
 The binary is `.build/release/netbite`.
+
+To build the app as `Netbite.app`, ad-hoc signed (no developer account needed), then open it:
+
+```bash
+scripts/bundle-app.sh
+```
+
+```bash
+open .build/Netbite.app
+```
+
+During development, `swift run NetbiteApp` starts the app without bundling it.
 
 If `swift build` crashes with `Symbol not found … BuildServerProtocol`, or complains that the SDK is not supported by the compiler, your Command Line Tools do not match their own SDK (Command Line Tools 26.6 ships that way). Install Command Line Tools for Xcode 27 or later, or Xcode. Until then, `scripts/build.sh` builds the CLI with `swiftc` directly, picking an SDK the compiler can load. Tests still need SwiftPM.
 
@@ -96,7 +109,7 @@ netbite rules render blocklist.json --out ./out
 
 ## Privacy
 
-Netbite has no telemetry, no account and no server. Everything stays on your Mac. The only network request it makes is the monthly download of the DB-IP database, and only when you run `netbite geo update`.
+Netbite has no telemetry, no account and no server. Everything stays on your Mac. It makes only two kinds of network requests: the DB-IP database download, when you start it from the CLI (`netbite geo update`) or the app, and reverse DNS lookups of the addresses your apps already contact, through your system resolver. The starting point of the map is the region set in macOS, not a location lookup.
 
 ## Project layout
 
@@ -107,9 +120,13 @@ Sources/NetbiteCore/   Library shared by the CLI, the app and the helper
   GeoIP/               DB-IP loader, country lookups, range → CIDR conversion, updater
   Rules/               Blocklist model, compiler, pf anchor and /etc/hosts rendering
 Sources/netbite/       Command-line tool
+Sources/NetbiteApp/    SwiftUI app: live monitor, world map, details panel
 Tests/NetbiteCoreTests Swift Testing suites
 docs/                  Architecture and roadmap
-scripts/build.sh       swiftc-only build, for broken toolchains
+scripts/build.sh       swiftc-only build of the CLI, for broken toolchains
+scripts/bundle-app.sh  Builds and ad-hoc signs .build/Netbite.app
+scripts/generate-world-data.py
+                       Regenerates the map data from Natural Earth
 ```
 
 ## Contributing
@@ -121,3 +138,5 @@ Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING
 Netbite is free software, released under the [GNU General Public License v3.0](LICENSE).
 
 IP geolocation by [DB-IP](https://db-ip.com), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The database is downloaded at runtime and is not redistributed in this repository.
+
+Map data derived from [Natural Earth](https://www.naturalearthdata.com) (public domain).
