@@ -77,9 +77,9 @@ netbite connections
 
 ```text
 Example Browser  com.example.browser  (pid 4321)
-  ├ udp 198.51.100.20:443                          US
-  ├ tcp 203.0.113.7:443                           US   ESTABLISHED
-  └ tcp 192.0.2.188:5228                         US   ESTABLISHED
+  ├ udp 198.51.100.20:443                           US
+  ├ tcp 203.0.113.7:443                             DE   ESTABLISHED
+  └ tcp [2001:db8::25]:5228                         --   ESTABLISHED
 ```
 
 As a normal user you see your own processes. Run it with `sudo` to include system daemons. Add `--resolve` for reverse DNS, `--json` for machine-readable output, and `--all` to include listening sockets.
