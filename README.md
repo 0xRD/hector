@@ -41,7 +41,7 @@ swift test
 
 The binary is `.build/release/netbite`.
 
-If `swift build` crashes or complains that the SDK is not supported by the compiler, your Command Line Tools install is mixed up: several versions are present at once. Reinstall them, or install Xcode. Until then, `scripts/build.sh` builds with `swiftc` directly and picks an SDK the compiler can load:
+If `swift build` crashes with `Symbol not found … BuildServerProtocol`, or complains that the SDK is not supported by the compiler, your Command Line Tools do not match their own SDK (Command Line Tools 26.6 ships that way). Install Command Line Tools for Xcode 27 or later, or Xcode. Until then, `scripts/build.sh` builds the CLI with `swiftc` directly, picking an SDK the compiler can load. Tests still need SwiftPM.
 
 ```bash
 scripts/build.sh
