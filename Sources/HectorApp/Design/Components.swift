@@ -139,7 +139,8 @@ struct StatusDot: View {
 
 // MARK: - Shapes and tiles
 
-/// A pointy-top regular hexagon, the "ward" motif of the brand, with optional rounded corners.
+/// A pointy-top regular hexagon, the badge shape of screen and sidebar tiles, with optional
+/// rounded corners.
 ///
 ///     Hexagon(cornerRadius: 4).fill(Color.hectorInfoWash)
 struct Hexagon: Shape {
@@ -650,11 +651,11 @@ extension Banner where Actions == EmptyView {
     }
 }
 
-/// A friendly placeholder for an empty list or panel: a symbol inside a dashed hexagon ward,
+/// A friendly placeholder for an empty list or panel: a symbol inside a dashed hexagon halo,
 /// a title, a one-line message and optional actions. Fills its container unless `compact`.
 ///
-///     EmptyStateView("Nothing lurking here", systemImage: "sparkles",
-///                    message: "No launch item to review.") { Button("Scan again") { … } }
+///     EmptyStateView("All quiet", systemImage: "checkmark.shield",
+///                    message: "No launch item to review.") { Button("Scan Again") { … } }
 struct EmptyStateView<Actions: View>: View {
     let title: String
     let systemImage: String
@@ -682,7 +683,7 @@ struct EmptyStateView<Actions: View>: View {
     var body: some View {
         let maxHeight: CGFloat? = compact ? nil : .infinity
         VStack(spacing: compact ? Spacing.sm : Spacing.md) {
-            ward
+            halo
             VStack(spacing: Spacing.xs) {
                 Text(title)
                     .font(compact ? Font.headline : Font.sectionTitle)
@@ -705,7 +706,7 @@ struct EmptyStateView<Actions: View>: View {
         .frame(maxWidth: .infinity, maxHeight: maxHeight)
     }
 
-    private var ward: some View {
+    private var halo: some View {
         let outer: CGFloat = compact ? 52 : 84
         let inner: CGFloat = compact ? 34 : 54
         return ZStack {

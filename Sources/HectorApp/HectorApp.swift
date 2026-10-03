@@ -63,47 +63,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// The app icon, drawn in code so the repository needs no binary assets.
 ///
-/// The Hector icon: a plum squircle on the macOS icon grid (412 pt body in a 512 pt canvas),
-/// a faint hexagon lattice, a lavender glow, and the mark: a friendly ghost in a hexagon seal,
-/// with a honey spark breaking out of it.
+/// Hector on the walls of Troy: a squircle on the macOS icon grid (412 pt body in a 512 pt
+/// canvas) with a lavender-to-cream dawn sky, a honey sun rising behind his shoulder, the mark,
+/// and a sandstone rampart he peeks over. Warm, calm, a little vintage.
 struct AppIconArtwork: View {
     private static let canvas: CGFloat = 512
     private static let bodySize: CGFloat = 412
     private static let corner: CGFloat = 92
+    /// Side of the mark inside the body.
+    private static let markSize: CGFloat = 288
+    /// Top of the rampart, from the top of the body.
+    private static let wallTop: CGFloat = 286
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
         ZStack {
-            squircle
-                .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 8)
-            HectorMark(
-                lineWidth: 1.5,
-                seal: [.brandLavender, .brandSage],
-                ghost: .brandCream,
-                eyes: .brandPlum,
-                spark: .brandHoney
-            )
-            .frame(width: 272, height: 272)
-            .shadow(color: Color.brandLavender.opacity(0.35), radius: 18, x: 0, y: 0)
+            shape
+                .fill(Color.brandCream)
+                .shadow(color: .black.opacity(0.28), radius: 12, x: 0, y: 8)
+            scene
+                .clipShape(shape)
+            shape.strokeBorder(Color.brandPlum.opacity(0.12), lineWidth: 2)
         }
+        .frame(width: Self.bodySize, height: Self.bodySize)
         .frame(width: Self.canvas, height: Self.canvas)
-        .environment(\.colorScheme, .dark)
     }
 
-    private var squircle: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
-        let fill = LinearGradient(colors: [.brandPlum, .brandNight], startPoint: .top, endPoint: .bottom)
-        let glow = RadialGradient(
-            colors: [Color.brandLavender.opacity(0.30), Color.brandLavender.opacity(0)],
-            center: UnitPoint(x: 0.5, y: 0.42),
-            startRadius: 0,
-            endRadius: 210
-        )
+    private var scene: some View {
+        let half: CGFloat = Self.bodySize / 2
+        let wallHeight: CGFloat = Self.bodySize - Self.wallTop
+        let sky = LinearGradient(colors: [.brandSky, .brandCream], startPoint: .top, endPoint: .bottom)
         return ZStack {
-            shape.fill(fill)
-            HexLattice(cell: 46, color: Color.brandCream.opacity(0.05), lineWidth: 1.5)
-                .clipShape(shape)
-            shape.fill(glow)
-            shape.strokeBorder(Color.white.opacity(0.10), lineWidth: 2)
+            Rectangle().fill(sky)
+            Circle()
+                .fill(Color.brandHoney)
+                .frame(width: 104, height: 104)
+                .position(x: 302, y: 116)
+            HectorMark(
+                lineWidth: 0.95,
+                ink: .brandPlum,
+                helmet: [.brandLavender, .brandLavenderDeep],
+                face: .brandCream,
+                crest: .brandClay,
+                detailed: true
+            )
+            .frame(width: Self.markSize, height: Self.markSize)
+            .shadow(color: Color.brandPlum.opacity(0.18), radius: 10, x: 0, y: 6)
+            .position(x: half, y: 36 + Self.markSize / 2)
+            RampartPattern()
+                .frame(width: Self.bodySize, height: wallHeight)
+                .position(x: half, y: Self.wallTop + wallHeight / 2)
         }
         .frame(width: Self.bodySize, height: Self.bodySize)
     }

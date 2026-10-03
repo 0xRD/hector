@@ -41,9 +41,9 @@ struct PersistenceView: View {
             header(items: items)
             Divider()
             if security.persistence == nil {
-                EmptyStateView(security.isScanningPersistence ? "Looking under the bed…" : "Not scanned yet",
+                EmptyStateView(security.isScanningPersistence ? "Hector is looking around…" : "Not scanned yet",
                                systemImage: "magnifyingglass",
-                               message: "Launch agents and daemons, login items, cron jobs, extensions and profiles. Nothing found is ever run.") {
+                               message: "Launch agents and daemons, login items, cron jobs, extensions and profiles. Hector only reads them; nothing is ever run.") {
                     if !security.isScanningPersistence {
                         Button("Scan") { Task { await security.scanPersistence() } }
                             .buttonStyle(.borderedProminent)

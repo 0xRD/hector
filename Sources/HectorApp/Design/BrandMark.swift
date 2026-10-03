@@ -2,9 +2,12 @@ import SwiftUI
 
 // The brand marks, drawn in code on a 24 × 24 grid (like SF Symbols).
 //
-// - `HectorMark`: the app. A rounded hexagon seal (the "ward") holding a small, friendly
-//   ghost: the hex being shown the door. A honey spark breaks through the seal's top-right edge.
+// - `HectorMark`: the app. Hector, the defender of Troy, seen from the front: a rounded
+//   Corinthian helmet with a clay crest that leans a little to one side, and a calm face
+//   looking out through the visor. The one who holds fast, without making a fuss about it.
 // - `NetbiteLogo`: the network module. A globe with a bite taken out of it.
+//
+// See docs/DESIGN.md, "Brand marks".
 
 /// Geometry of the marks.
 enum BrandGeometry {
@@ -12,56 +15,96 @@ enum BrandGeometry {
 
     // MARK: Hector
 
-    /// The seal: a rounded, pointy-top hexagon.
-    static func ward() -> Path {
-        hexagonPath(in: CGRect(x: 1.4, y: 1.0, width: 21.2, height: 22.0), cornerRadius: 2.4)
-    }
+    /// The crest leans this much (radians, about 7° to the left): the one quirk of the mark.
+    static let crestTilt: CGFloat = -0.12
 
-    /// Where the spark breaks the seal.
-    static let sparkCenter = CGPoint(x: 19.4, y: 4.6)
-
-    /// Everything but a disc around the spark; clip the seal with `FillStyle(eoFill: true)`.
-    static func sealMask() -> Path {
-        var mask = Path(CGRect(x: -2, y: -2, width: grid + 4, height: grid + 4))
-        mask.addEllipse(in: CGRect(x: sparkCenter.x - 3.4, y: sparkCenter.y - 3.4, width: 6.8, height: 6.8))
-        return mask
-    }
-
-    /// The ghost: a dome, straight sides, and a hem of three scallops.
-    static func ghost() -> Path {
+    /// The helmet: a dome, two cheek guards, and a T-shaped opening (a horizontal visor slot and
+    /// the gap between the cheek guards). One closed contour, so it fills and strokes cleanly.
+    static func helmet() -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: 7.4, y: 11.0))
-        path.addCurve(to: CGPoint(x: 12.0, y: 6.2), control1: CGPoint(x: 7.4, y: 8.2), control2: CGPoint(x: 9.4, y: 6.2))
-        path.addCurve(to: CGPoint(x: 16.6, y: 11.0), control1: CGPoint(x: 14.6, y: 6.2), control2: CGPoint(x: 16.6, y: 8.2))
-        path.addLine(to: CGPoint(x: 16.6, y: 17.4))
-        path.addQuadCurve(to: CGPoint(x: 13.53, y: 17.4), control: CGPoint(x: 15.07, y: 19.2))
-        path.addQuadCurve(to: CGPoint(x: 10.47, y: 17.4), control: CGPoint(x: 12.0, y: 19.2))
-        path.addQuadCurve(to: CGPoint(x: 7.4, y: 17.4), control: CGPoint(x: 8.93, y: 19.2))
+        // Left cheek guard, from the bottom of the gap.
+        path.move(to: CGPoint(x: 10.7, y: 22.4))
+        path.addQuadCurve(to: CGPoint(x: 5.0, y: 17.4), control: CGPoint(x: 5.6, y: 22.4))
+        path.addLine(to: CGPoint(x: 5.0, y: 13.2))
+        // The dome.
+        path.addCurve(to: CGPoint(x: 12.0, y: 5.8), control1: CGPoint(x: 5.0, y: 8.8), control2: CGPoint(x: 8.2, y: 5.8))
+        path.addCurve(to: CGPoint(x: 19.0, y: 13.2), control1: CGPoint(x: 15.8, y: 5.8), control2: CGPoint(x: 19.0, y: 8.8))
+        // Right cheek guard.
+        path.addLine(to: CGPoint(x: 19.0, y: 17.4))
+        path.addQuadCurve(to: CGPoint(x: 13.3, y: 22.4), control: CGPoint(x: 18.4, y: 22.4))
+        // Up the gap, then around the visor slot.
+        path.addLine(to: CGPoint(x: 13.3, y: 15.0))
+        path.addLine(to: CGPoint(x: 15.0, y: 15.0))
+        path.addArc(tangent1End: CGPoint(x: 16.6, y: 15.0), tangent2End: CGPoint(x: 16.6, y: 11.8), radius: 1.6)
+        path.addArc(tangent1End: CGPoint(x: 16.6, y: 11.8), tangent2End: CGPoint(x: 15.0, y: 11.8), radius: 1.6)
+        path.addLine(to: CGPoint(x: 9.0, y: 11.8))
+        path.addArc(tangent1End: CGPoint(x: 7.4, y: 11.8), tangent2End: CGPoint(x: 7.4, y: 15.0), radius: 1.6)
+        path.addArc(tangent1End: CGPoint(x: 7.4, y: 15.0), tangent2End: CGPoint(x: 9.0, y: 15.0), radius: 1.6)
+        path.addLine(to: CGPoint(x: 10.7, y: 15.0))
         path.closeSubpath()
         return path
     }
 
-    /// The ghost's eyes, looking slightly up and to the right (toward the exit).
+    /// The face behind the helmet. Only the visor, the gap and the chin (just below the cheek
+    /// guards) show; the rest is covered by the helmet.
+    static func face() -> Path {
+        Path(roundedRect: CGRect(x: 6.8, y: 9.0, width: 10.4, height: 14.2), cornerRadius: 5.0, style: .continuous)
+    }
+
+    /// Two calm eyes, looking straight out.
     static func eyes() -> Path {
         var path = Path()
-        path.addEllipse(in: CGRect(x: 10.0, y: 10.0, width: 1.4, height: 1.9))
-        path.addEllipse(in: CGRect(x: 13.2, y: 10.0, width: 1.4, height: 1.9))
+        path.addEllipse(in: CGRect(x: 9.05, y: 12.6, width: 1.3, height: 1.6))
+        path.addEllipse(in: CGRect(x: 13.65, y: 12.6, width: 1.3, height: 1.6))
         return path
     }
 
-    /// A four-point spark centered on `center`.
-    static func spark(center: CGPoint, radius: CGFloat) -> Path {
-        let waist: CGFloat = radius * 0.2
-        let x: CGFloat = center.x
-        let y: CGFloat = center.y
+    /// A small, closed-mouth smile, in the gap between the cheek guards.
+    static func smile() -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: x, y: y - radius))
-        path.addQuadCurve(to: CGPoint(x: x + radius, y: y), control: CGPoint(x: x + waist, y: y - waist))
-        path.addQuadCurve(to: CGPoint(x: x, y: y + radius), control: CGPoint(x: x + waist, y: y + waist))
-        path.addQuadCurve(to: CGPoint(x: x - radius, y: y), control: CGPoint(x: x - waist, y: y + waist))
-        path.addQuadCurve(to: CGPoint(x: x, y: y - radius), control: CGPoint(x: x - waist, y: y - waist))
-        path.closeSubpath()
+        path.move(to: CGPoint(x: 11.3, y: 18.7))
+        path.addQuadCurve(to: CGPoint(x: 12.7, y: 18.7), control: CGPoint(x: 12.0, y: 19.5))
         return path
+    }
+
+    /// A highlight on the upper left of the dome.
+    static func shine() -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 7.0, y: 10.6))
+        path.addQuadCurve(to: CGPoint(x: 9.8, y: 7.6), control: CGPoint(x: 7.4, y: 8.2))
+        return path
+    }
+
+    /// The crest: a fan of horsehair flaring out of the dome. Its base is hidden by the helmet.
+    static func crest() -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 10.4, y: 7.4))
+        path.addQuadCurve(to: CGPoint(x: 6.0, y: 3.2), control: CGPoint(x: 8.6, y: 5.6))
+        path.addCurve(to: CGPoint(x: 12.0, y: 0.5), control1: CGPoint(x: 6.4, y: 1.4), control2: CGPoint(x: 9.2, y: 0.5))
+        path.addCurve(to: CGPoint(x: 18.0, y: 3.2), control1: CGPoint(x: 14.8, y: 0.5), control2: CGPoint(x: 17.6, y: 1.4))
+        path.addQuadCurve(to: CGPoint(x: 13.6, y: 7.4), control: CGPoint(x: 15.4, y: 5.6))
+        path.closeSubpath()
+        return tilted(path)
+    }
+
+    /// Two strands combed into the crest, following its flare.
+    static func crestStrands() -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 11.3, y: 6.6))
+        path.addQuadCurve(to: CGPoint(x: 8.6, y: 2.2), control: CGPoint(x: 9.6, y: 4.4))
+        path.move(to: CGPoint(x: 12.7, y: 6.6))
+        path.addQuadCurve(to: CGPoint(x: 15.4, y: 2.2), control: CGPoint(x: 14.4, y: 4.4))
+        return tilted(path)
+    }
+
+    /// Applies the crest's lean, around the top of the dome.
+    private static func tilted(_ path: Path) -> Path {
+        let pivotX: CGFloat = 12
+        let pivotY: CGFloat = 8
+        let transform = CGAffineTransform(translationX: pivotX, y: pivotY)
+            .rotated(by: crestTilt)
+            .translatedBy(x: -pivotX, y: -pivotY)
+        return path.applying(transform)
     }
 
     // MARK: Netbite
@@ -88,57 +131,78 @@ enum BrandGeometry {
     }
 }
 
-/// The Hector mark. Adapts to light and dark mode by default; the app icon passes the fixed
-/// brand colors.
+/// The Hector mark: a crested helmet with a calm face behind the visor. Adapts to light and dark
+/// mode by default; the app icon passes the fixed brand colors.
+///
+/// Below 28 pt the mark drops its small details (eyes, smile, strands, shine) and keeps the
+/// silhouette, the visor and the crest, which stay legible down to 16 pt.
 ///
 ///     HectorMark().frame(width: 64, height: 64)
 struct HectorMark: View {
-    var lineWidth: CGFloat = 1.6
-    /// Gradient of the seal, top-left to bottom-right.
-    var seal: [Color] = [.hectorInfo, .hectorOK]
-    /// Body of the ghost.
-    var ghost: Color = .hectorInfoWash
-    /// Eyes and outline of the ghost.
-    var eyes: Color = .hectorInfo
-    /// The spark.
-    var spark: Color = .hectorWarning
+    var lineWidth: CGFloat = 1.4
+    /// Outlines, eyes and smile.
+    var ink: Color = .hectorInfo
+    /// Fill of the helmet, top to bottom.
+    var helmet: [Color] = [.hectorHelmet, .hectorHelmetShade]
+    /// The face behind the visor.
+    var face: Color = .brandCream
+    /// The crest.
+    var crest: Color = .hectorCrest
+    /// Forces the small details on or off; `nil` decides from the size.
+    var detailed: Bool? = nil
 
     var body: some View {
         Canvas { context, size in
-            let scale: CGFloat = min(size.width, size.height) / BrandGeometry.grid
+            let side: CGFloat = min(size.width, size.height)
+            let scale: CGFloat = side / BrandGeometry.grid
+            let showsDetail: Bool = detailed ?? (side >= 28)
             context.scaleBy(x: scale, y: scale)
-            var sealed = context
-            sealed.clip(to: BrandGeometry.sealMask(), style: FillStyle(eoFill: true))
-            drawSeal(in: sealed)
-            drawGhost(in: context)
-            drawSpark(in: context)
+            drawCrest(in: context, detailed: showsDetail)
+            drawFace(in: context, detailed: showsDetail)
+            drawHelmet(in: context, detailed: showsDetail)
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityHidden(true)
     }
 
-    private func drawSeal(in context: GraphicsContext) {
+    private var outline: StrokeStyle {
+        StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+    }
+
+    private func drawCrest(in context: GraphicsContext, detailed: Bool) {
+        let shape = BrandGeometry.crest()
+        context.fill(shape, with: .color(crest))
+        if detailed {
+            let strands = StrokeStyle(lineWidth: lineWidth * 0.5, lineCap: .round)
+            context.stroke(BrandGeometry.crestStrands(), with: .color(ink.opacity(0.45)), style: strands)
+        }
+        context.stroke(shape, with: .color(ink), style: outline)
+    }
+
+    private func drawFace(in context: GraphicsContext, detailed: Bool) {
+        let shape = BrandGeometry.face()
+        context.fill(shape, with: .color(face))
+        context.stroke(shape, with: .color(ink), style: outline)
+        if detailed {
+            context.fill(BrandGeometry.eyes(), with: .color(ink))
+            let mouth = StrokeStyle(lineWidth: lineWidth * 0.55, lineCap: .round)
+            context.stroke(BrandGeometry.smile(), with: .color(ink), style: mouth)
+        }
+    }
+
+    private func drawHelmet(in context: GraphicsContext, detailed: Bool) {
+        let shape = BrandGeometry.helmet()
         let shading = GraphicsContext.Shading.linearGradient(
-            Gradient(colors: seal),
-            startPoint: CGPoint(x: 2, y: 2),
-            endPoint: CGPoint(x: 22, y: 22)
+            Gradient(colors: helmet),
+            startPoint: CGPoint(x: 12, y: 5.8),
+            endPoint: CGPoint(x: 12, y: 22.4)
         )
-        let style = StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
-        context.stroke(BrandGeometry.ward(), with: shading, style: style)
-    }
-
-    private func drawGhost(in context: GraphicsContext) {
-        let shape = BrandGeometry.ghost()
-        context.fill(shape, with: .color(ghost))
-        let outline: CGFloat = lineWidth * 0.55
-        context.stroke(shape, with: .color(eyes.opacity(0.55)), style: StrokeStyle(lineWidth: outline, lineJoin: .round))
-        context.fill(BrandGeometry.eyes(), with: .color(eyes))
-    }
-
-    private func drawSpark(in context: GraphicsContext) {
-        context.fill(BrandGeometry.spark(center: BrandGeometry.sparkCenter, radius: 2.5), with: .color(spark))
-        let small = BrandGeometry.spark(center: CGPoint(x: 22.4, y: 8.4), radius: 1.0)
-        context.fill(small, with: .color(spark.opacity(0.7)))
+        context.fill(shape, with: shading)
+        if detailed {
+            let shine = StrokeStyle(lineWidth: lineWidth * 0.7, lineCap: .round)
+            context.stroke(BrandGeometry.shine(), with: .color(.white.opacity(0.45)), style: shine)
+        }
+        context.stroke(shape, with: .color(ink), style: outline)
     }
 }
 
@@ -162,8 +226,8 @@ struct NetbiteLogo: View {
     }
 }
 
-/// The mark followed by the name in the serif display face, for an About panel, onboarding or
-/// the top of the sidebar after the rename.
+/// The mark followed by the name in the serif display face, for About, onboarding and other
+/// places where Hector introduces itself.
 ///
 ///     HectorWordmark(size: 28)
 struct HectorWordmark: View {
@@ -171,9 +235,9 @@ struct HectorWordmark: View {
     var size: CGFloat = 24
 
     var body: some View {
-        HStack(spacing: size * 0.35) {
+        HStack(alignment: .center, spacing: size * 0.3) {
             HectorMark()
-                .frame(width: size * 1.25, height: size * 1.25)
+                .frame(width: size * 1.4, height: size * 1.4)
             Text(name)
                 .font(.system(size: size, weight: .semibold, design: .serif))
                 .tracking(-0.2)
@@ -183,32 +247,43 @@ struct HectorWordmark: View {
     }
 }
 
-/// A faint hexagon lattice, used behind the app icon mark.
-struct HexLattice: View {
-    var cell: CGFloat = 34
-    var color: Color = .white
-    var lineWidth: CGFloat = 1
+/// The walls of Troy: courses of ashlar under a coping, for the bottom of the app icon.
+struct RampartPattern: View {
+    var stone: Color = .brandStone
+    var joint: Color = .brandStoneDeep
+    var edge: Color = .brandPlum
+    var course: CGFloat = 38
+    var block: CGFloat = 76
 
     var body: some View {
         Canvas { context, size in
-            context.stroke(latticePath(size: size), with: .color(color), lineWidth: lineWidth)
+            let coping: CGFloat = course * 0.34
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(stone))
+            let band = CGRect(x: 0, y: 0, width: size.width, height: coping)
+            context.fill(Path(band), with: .color(Color.white.opacity(0.22)))
+            context.stroke(joints(size: size, top: coping), with: .color(joint), lineWidth: 3)
+            var top = Path()
+            top.move(to: CGPoint(x: 0, y: 2.5))
+            top.addLine(to: CGPoint(x: size.width, y: 2.5))
+            context.stroke(top, with: .color(edge), lineWidth: 5)
         }
         .accessibilityHidden(true)
     }
 
-    private func latticePath(size: CGSize) -> Path {
-        let height: CGFloat = cell
-        let width: CGFloat = cell * 0.866_025_4
-        let rowStep: CGFloat = height * 0.75
-        let columns = Int(size.width / width) + 2
-        let rows = Int(size.height / rowStep) + 2
+    /// Horizontal beds and staggered vertical joints, one row of blocks per course.
+    private func joints(size: CGSize, top: CGFloat) -> Path {
         var path = Path()
+        let rows = Int((size.height - top) / course) + 1
+        let columns = Int(size.width / block) + 2
         for row in 0..<rows {
-            let offset: CGFloat = row % 2 == 0 ? 0 : width / 2
-            let y: CGFloat = CGFloat(row) * rowStep - height / 2
+            let y: CGFloat = top + CGFloat(row) * course
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
+            let offset: CGFloat = row % 2 == 0 ? block * 0.35 : block * 0.85
             for column in 0..<columns {
-                let x: CGFloat = CGFloat(column) * width + offset - width / 2
-                path.addPath(hexagonPath(in: CGRect(x: x, y: y, width: width, height: height)))
+                let x: CGFloat = offset + CGFloat(column) * block - block
+                path.move(to: CGPoint(x: x, y: y))
+                path.addLine(to: CGPoint(x: x, y: y + course))
             }
         }
         return path

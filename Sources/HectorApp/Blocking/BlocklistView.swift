@@ -17,7 +17,7 @@ struct BlocklistView: View {
                 HelperCard()
                 if blocking.pendingChanges > 0 { PendingBar() }
                 if let error = blocking.lastError {
-                    Banner("Something went wrong", message: error, kind: .danger)
+                    Banner("Hector could not finish that", message: error, kind: .danger)
                 }
                 CountriesSection()
                 RulesSection()
@@ -303,8 +303,8 @@ private struct RulesSection: View {
             if blocking.draft.rules.isEmpty {
                 Card {
                     EmptyStateView(
-                        "No rules yet",
-                        systemImage: "sparkles",
+                        "Nothing is blocked yet",
+                        systemImage: "nosign",
                         message: "Use “Block This Destination” in the details panel, or add a domain, an IP or a range above.",
                         tint: .hectorNeutral,
                         compact: true

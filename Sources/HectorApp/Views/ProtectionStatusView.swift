@@ -53,14 +53,14 @@ struct ProtectionStatusFooter: View {
     private var verdict: Verdict {
         switch blocking.helper {
         case .checking:
-            return Verdict(title: "Checking protection…", detail: "Asking the helper", symbol: "shield", kind: .neutral)
+            return Verdict(title: "Checking protection…", detail: "Asking the helper…", symbol: "shield", kind: .neutral)
         case .notInstalled:
             return Verdict(title: "Observe only", detail: "Install the helper to block", symbol: "eye", kind: .neutral)
         case .unreachable:
             return Verdict(title: "Helper not answering", detail: "Open Blocklists to retry", symbol: "exclamationmark.shield", kind: .danger)
         case .ready(let status):
             guard status.pfEnabled && status.anchorLoaded else {
-                return Verdict(title: "Helper ready", detail: "Nothing enforced yet", symbol: "shield", kind: .info)
+                return Verdict(title: "Helper ready", detail: "Nothing is blocked yet", symbol: "shield", kind: .info)
             }
             let applied = blocking.applied
             let rules = applied.rules.filter(\.isEnabled).count
