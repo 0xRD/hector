@@ -2,7 +2,7 @@ import Foundation
 
 public enum HectorVersion {
     /// The single version string of the app, the CLI and the helper. `scripts/bundle-app.sh` reads it.
-    public static let current = "0.4.0"
+    public static let current = "0.4.1"
 }
 
 /// Where the privileged helper lives once installed, and how to reach it.
@@ -125,6 +125,8 @@ public struct HelperInfo: Codable, Equatable, Sendable {
     /// Whether the installed helper is older than this app and should be updated.
     public var isOutdated: Bool {
         protocolVersion < Self.currentProtocol || !HelperCapability.allCases.allSatisfy(supports)
+            // A newer app may also carry a safer helper with the same requests.
+            || version.compare(HectorVersion.current, options: .numeric) == .orderedAscending
     }
 }
 
