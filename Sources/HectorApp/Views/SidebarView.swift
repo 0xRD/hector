@@ -21,8 +21,20 @@ struct SidebarView: View {
     let highlightedAppID: AppGroup.ID?
 
     var body: some View {
-        let apps = monitor.sortedApps
-        List(selection: $selection) {
+        // The footer sits below the list rather than in a `.safeAreaInset` of it: an inset on a
+        // sidebar List left the scroll view stuck at the bottom on macOS 15.
+        VStack(spacing: 0) {
+            list
+            ProtectionStatusFooter(selection: $selection)
+        }
+    }
+
+    private var list: some View {
+        // Alphabetical, not live-first: rows must not move every second, or the outline view
+        // jumps under the user's scrolling and keyboard selection (and AppKit reports reentrant
+        // updates of its table). Liveness shows in each row's sparkline and subtitle instead.
+        let apps = monitor.apps.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return List(selection: $selection) {
             Section {
                 SidebarLabel("Blocklists", subtitle: blocklistSubtitle, systemImage: "nosign", tint: .hectorDanger) {
                     if blocking.pendingChanges > 0 {
@@ -61,7 +73,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) { ProtectionStatusFooter(selection: $selection) }
     }
 
     private var persistenceSubtitle: String {
