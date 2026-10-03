@@ -49,6 +49,15 @@ Hand-off notes for the next working session. The roadmap ([ROADMAP.md](ROADMAP.m
    - In the app: the Privacy section of the sidebar, the "On" pill, the log while switching screens, Pause and Resume (listeners removed: no more events), and that monitoring costs nothing visible in Activity Monitor.
    - Camera attribution: try `log stream --predicate 'subsystem == "com.apple.cmio"'` while FaceTime starts, as a normal user, and see whether a PID or bundle ID can be read reliably on macOS 15 and 26.
 
+9. **Hosts lists** (written without a Swift toolchain: build and test first). StevenBlack Unified and EasyPrivacy (hMirror's conversion), downloaded by the helper from a fixed catalog; the app and the CLI send identifiers only. See ARCHITECTURE.md (Hosts lists) and SECURITY.md (Hosts lists). To verify on a Mac, ideally a VM:
+   - `swift build` with Xcode 16.4 (Swift 6.1) and `scripts/test.sh` (new suite `HostsListsTests.swift`); watch for strict-concurrency complaints about `HostsListDownloader.RedirectPolicy` and `BackgroundFetch`.
+   - `hector lists fetch stevenblack-unified` and `hector lists fetch easyprivacy` as a user: counts close to 72,000 and 43,000, few invalid lines. `hector lists parse /etc/hosts` should skip localhost and broadcasthost.
+   - Update the helper, switch both lists on in Blocklists → Lists, Apply: the helper log (`/Library/Logs/Hector/hectord.log`) shows the downloads; the tiles show counts and "updated just now"; `/etc/hosts` has the `# hosts lists` part; `dscacheutil -q host -a name <a listed domain>` answers 0.0.0.0.
+   - Measure: time of an apply with both lists, `time dscacheutil -q host -a name apple.com` before and after, mDNSResponder's memory in Activity Monitor, and whether browsing feels slower. If it is, drop the `::` line for list domains (`HostsFile.render`) and measure again.
+   - "Update Now" (or `hector lists refresh`) twice: the second check should log "has not changed" (ETag, 304). Disconnect the network and refresh: the error shows on the tile and the domains stay in /etc/hosts.
+   - Leave the helper running more than 15 minutes after a boot with lists on: no download at boot, the weekly check happens in the background and the app's live view keeps updating meanwhile.
+   - Switch the lists off and apply: the lists part of /etc/hosts disappears; Remove all rules and Uninstall still leave nothing (`scripts/check-uninstall.sh`).
+
 ## Things to know about this machine and toolchain
 
 - Only the Command Line Tools are installed (27.0, Swift 6.4). With them:

@@ -46,12 +46,15 @@ final class BlockingController {
     /// What pf enforces right now.
     var applied: Blocklist { helperStatus?.blocklist ?? Blocklist() }
 
-    /// Rules added, removed or toggled, plus countries switched, compared with what is applied.
+    /// Rules added, removed or toggled, plus countries and hosts lists switched, compared with what
+    /// is applied.
     var pendingChanges: Int {
         let before = Dictionary(uniqueKeysWithValues: applied.rules.map { ($0.id, $0) })
         let after = Dictionary(uniqueKeysWithValues: draft.rules.map { ($0.id, $0) })
         let ruleChanges = Set(before.keys).union(after.keys).filter { before[$0]?.isEnabled != after[$0]?.isEnabled }.count
-        return ruleChanges + applied.blockedCountries.symmetricDifference(draft.blockedCountries).count
+        let countryChanges = applied.blockedCountries.symmetricDifference(draft.blockedCountries).count
+        let listChanges = applied.hostsLists.symmetricDifference(draft.hostsLists).count
+        return ruleChanges + countryChanges + listChanges
     }
 
     func isPending(_ rule: Rule) -> Bool {
@@ -84,6 +87,11 @@ final class BlockingController {
 
     func discard() {
         draft = applied
+    }
+
+    /// Asks the helper to download the subscribed lists now. Needs the same approval as Apply.
+    func refreshHostsLists() async {
+        await perform { .refreshHostsLists(authorization: try HelperAuthorization.externalForm()) }
     }
 
     func flush() async {
@@ -161,6 +169,26 @@ final class BlockingController {
 
     func setCountry(_ code: String, blocked: Bool) {
         draft.setCountry(code, blocked: blocked)
+    }
+
+    // MARK: Hosts lists
+
+    func isListEnabled(_ id: String) -> Bool {
+        draft.hostsLists.contains(id)
+    }
+
+    func setList(_ id: String, enabled: Bool) {
+        draft.setHostsList(id, enabled: enabled)
+    }
+
+    /// What the helper reports about a list, `nil` before its first download.
+    func listState(_ id: String) -> HostsListState? {
+        helperStatus?.hostsLists?.first { $0.id == id }
+    }
+
+    /// `false` when the installed helper predates hosts lists and would ignore them.
+    var helperSupportsLists: Bool {
+        helperStatus?.hostsLists != nil
     }
 
     func addressRule(_ address: IPAddress) -> Rule? {

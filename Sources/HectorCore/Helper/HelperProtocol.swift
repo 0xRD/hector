@@ -46,6 +46,10 @@ public enum HelperRequest: Codable, Sendable {
     case apply(Blocklist, authorization: Data)
     /// Remove every Netbite pf rule and the managed /etc/hosts section, keeping the helper installed.
     case flush(authorization: Data)
+    /// Download the subscribed hosts lists now (conditionally), and apply them if they changed.
+    /// Carries no list and no URL: the helper refreshes the lists of the blocklist it enforces,
+    /// from the built-in catalog. Helpers older than this case answer with a failure.
+    case refreshHostsLists(authorization: Data)
     /// A socket snapshot taken as root, which includes system daemons.
     case snapshot
     /// Every running process as root sees it: arguments and sockets of every user included.
@@ -80,6 +84,10 @@ public enum HelperLimits {
         guard blocklist.blockedCountries.allSatisfy(Blocklist.isCountryCode) else {
             throw Violation(description: "Invalid country code.")
         }
+        // Only lists of the built-in catalog: the helper never downloads anything else.
+        if let unknown = blocklist.hostsLists.sorted().first(where: { HostsListCatalog.source($0) == nil }) {
+            throw Violation(description: "Unknown hosts list \(unknown).")
+        }
     }
 }
 
@@ -92,11 +100,19 @@ public struct HelperStatus: Codable, Sendable, Equatable {
     public var blocklist: Blocklist?
     public var blockTableCount: Int
     public var geoTableCount: Int
+    /// Domains of personal rules in /etc/hosts.
     public var hostsDomainCount: Int
     public var warnings: [String]
+    /// Domains from hosts lists in /etc/hosts, personal domains excluded. `nil` from helpers that
+    /// predate hosts lists.
+    public var listDomainCount: Int?
+    /// The state of every subscribed list, or of lists with a copy on disk. `nil` from helpers that
+    /// predate hosts lists: the app then asks to update the helper.
+    public var hostsLists: [HostsListState]?
 
     public init(version: String, pfEnabled: Bool, anchorLoaded: Bool, appliedAt: Date?, blocklist: Blocklist?,
-                blockTableCount: Int, geoTableCount: Int, hostsDomainCount: Int, warnings: [String]) {
+                blockTableCount: Int, geoTableCount: Int, hostsDomainCount: Int, warnings: [String],
+                listDomainCount: Int? = nil, hostsLists: [HostsListState]? = nil) {
         self.version = version
         self.pfEnabled = pfEnabled
         self.anchorLoaded = anchorLoaded
@@ -106,6 +122,8 @@ public struct HelperStatus: Codable, Sendable, Equatable {
         self.geoTableCount = geoTableCount
         self.hostsDomainCount = hostsDomainCount
         self.warnings = warnings
+        self.listDomainCount = listDomainCount
+        self.hostsLists = hostsLists
     }
 }
 
@@ -120,6 +138,6 @@ public enum HelperResponse: Codable, Sendable {
 
 extension Blocklist: Equatable {
     public static func == (lhs: Blocklist, rhs: Blocklist) -> Bool {
-        lhs.rules == rhs.rules && lhs.blockedCountries == rhs.blockedCountries
+        lhs.rules == rhs.rules && lhs.blockedCountries == rhs.blockedCountries && lhs.hostsLists == rhs.hostsLists
     }
 }

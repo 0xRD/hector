@@ -19,7 +19,7 @@ The privilege boundary is the helper's Unix socket, `/var/run/io.github.0xrd.hec
 Who may do what:
 
 - **Read** (`status`, `snapshot`, `processes`, `backgroundTasks`): root and members of the admin group. The socket is `0660 root:admin` and the helper also checks the peer with `getpeereid`. A snapshot lists every process's connections, which an administrator can already see with `sudo lsof -i`; `processes` adds every process's arguments (`ps -axww` shows them to anyone; the environment is never read); `backgroundTasks` returns the output of `sfltool dumpbtm`, the login items and background tasks of every user. These requests take no input: the helper runs a fixed tool path with fixed arguments and only reads.
-- **Change the firewall** (`apply`, `flush`): root, or a client holding the Authorization Services right `io.github.0xrd.hector.modify-firewall`. The right requires an administrator's password in the system dialog and is remembered for five minutes by the process that asked for it. Belonging to the admin group is not enough: any process running as an administrator account, malware included, is in that group without knowing the password.
+- **Change the firewall** (`apply`, `flush`, `refreshHostsLists`): root, or a client holding the Authorization Services right `io.github.0xrd.hector.modify-firewall`. The right requires an administrator's password in the system dialog and is remembered for five minutes by the process that asked for it. Belonging to the admin group is not enough: any process running as an administrator account, malware included, is in that group without knowing the password.
 
 What the helper does with root, and nothing else:
 
@@ -27,10 +27,28 @@ What the helper does with root, and nothing else:
 - loads the pf anchor `com.apple/250.Netbite`, takes and releases its own `pfctl -E` reference;
 - rewrites the Netbite section of `/etc/hosts` and flushes the DNS cache;
 - downloads the DB-IP country database over HTTPS when a country is blocked;
+- downloads the hosts lists the user subscribed to, from the fixed HTTPS addresses of its built-in catalog, when they are applied and then at most weekly (see below);
 - lists processes and runs `/usr/bin/sfltool dumpbtm` for the read requests above;
 - installs and uninstalls itself (`/Library/PrivilegedHelperTools`, `/Library/LaunchDaemons`, `/Library/Logs/Hector`).
 
 It runs fixed executables (`/sbin/pfctl`, `/usr/bin/dscacheutil`, `/usr/bin/killall`, `/bin/launchctl`, `/usr/bin/gunzip`) with argument arrays, never through a shell, and no argument comes from a client except values that were parsed and re-printed as addresses or networks.
+
+## Hosts lists
+
+Hosts lists (StevenBlack Unified, EasyPrivacy) are downloaded **by the helper, as root**, not by the app. Root downloading from the internet is new attack surface, so it is bounded on every side:
+
+- **No URL crosses the socket.** A blocklist carries list identifiers only (`"hostsLists": ["stevenblack-unified"]`). The helper accepts identifiers of its own built-in catalog (`HostsListCatalog`) and refuses any other; the URLs are constants in the code. There are no custom lists: a custom URL would let any process that obtained the authorization make root fetch an arbitrary address (local services included) and feed /etc/hosts with an arbitrary file.
+- **Why the helper downloads.** If the app downloaded and sent the domains, a request would carry 100,000 names (beyond the 5,000-rule and 4 MB limits), and a non-root process could inject a crafted set. With identifiers only, requests stay small and the helper alone decides what it trusts. The cost is that the helper makes network requests as root; they go through `URLSession` with an ephemeral configuration (no cookies, no cache).
+- **Transport.** HTTPS only; a redirect is followed only to HTTPS on the same host as the catalog URL. Every request has a 20 s idle timeout and a 30 s total timeout.
+- **Size.** A response larger than 16 MB (after HTTP decompression) is refused while it arrives, before it is all in memory. A list with more than 300,000 valid domains is refused; all lists together never put more than 400,000 domains in /etc/hosts.
+- **Content.** The body must be valid UTF-8. A strict parser (`HostsListParser`) reads `0.0.0.0 name`, `127.0.0.1 name`, `:: name`, `::1 name` and plain `name` lines; everything else is counted as invalid. Every name goes through the same validation as personal rules (`DomainPattern`: letters, digits, `-` and `_`, labels of 1 to 63 characters), so a list cannot inject lines into /etc/hosts. International names are converted to punycode, or dropped.
+- **Never a redirection.** A line mapping a name to any other address (`203.0.113.7 bank.example`) is skipped: Hector only ever points a name at `0.0.0.0` and `::`. Lists cannot redirect traffic, only block names.
+- **Never the system's names.** `localhost`, `broadcasthost`, the `ip6-*` names, single-label names and names under `.local`, `.localhost`, `.localdomain`, `.arpa` and `.internal` are skipped, as are the hosts Hector downloads from (`raw.githubusercontent.com`, `github.com`, `download.db-ip.com`), so a list cannot stop its own updates or the country database.
+- **Plausibility.** A download with fewer valid domains than expected for that list (an error page, an emptied file) is refused. A failed or refused download keeps the last good copy in force; the error is shown in the app.
+- **Storage.** Validated copies are written with `SecureFiles` into `/Library/Application Support/Hector/lists` (0700, root). They are parsed again with the same rules when loaded, and the compiler checks every name once more before writing /etc/hosts.
+- **Requests.** `refreshHostsLists` needs the same authorization as `apply`. Scheduled checks happen at most weekly per list (6 hours after a failure), with conditional requests (`If-None-Match`, `If-Modified-Since`); they download in the background so the helper keeps answering, and only the server loop changes files.
+
+Trust: subscribing to a list means trusting its maintainers to choose which names fail to resolve on this Mac. They cannot redirect traffic or reach beyond /etc/hosts, but a list could block a site you need; personal rules cannot unblock a list entry (unsubscribe from the list instead).
 
 ## Review before 0.3
 
@@ -65,5 +83,6 @@ What these screens cannot promise: a tap list does not cover every way to read k
 - **Releases are ad-hoc signed and not notarized.** Gatekeeper cannot vouch for them; their integrity relies on GitHub and on the published SHA-256, which come from the same place. Building from source avoids this.
 - **Reverse DNS names are claims, not facts.** A PTR record is set by whoever owns the address range and can say anything, `apple.com` included.
 - **The security checkup is a snapshot, not a guarantee.** It runs as the user and only reads: Apple's tools (`csrutil`, `spctl`, `fdesetup`, `socketfilterfw`, `launchctl print-disabled`, `profiles status`) by absolute path with fixed arguments, never through a shell, and world-readable preference files. It never asks for a password and never changes a setting; what only root can read is reported as unknown. Its "Open Settings" buttons open `x-apple.systempreferences:` links only. Malware with root could lie to these tools, and a passing check says nothing about what is already installed.
+- **Hosts lists come from third parties over the network, downloaded as root.** See [Hosts lists](#hosts-lists) for the bounds. A compromise of the list's GitHub repository could block arbitrary names (not redirect them) until the next update or until you unsubscribe.
 - **Blocking is system-wide and IP-based.** Content delivery networks share addresses across many sites: blocking one destination's address can block others. Domains in `/etc/hosts` are bypassed by apps that use their own DNS-over-HTTPS resolver.
 - **Uninstall with Hector → Uninstall Hector…** (or `sudo hectord uninstall --purge`). Dragging the app to the Trash alone leaves the helper running with its rules.

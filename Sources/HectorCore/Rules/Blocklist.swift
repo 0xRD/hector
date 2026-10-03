@@ -96,11 +96,15 @@ public struct Blocklist: Codable, Sendable {
     /// ISO 3166-1 alpha-2 codes whose every IP range is blocked. Empty by default: country blocking
     /// is strictly opt-in.
     public var blockedCountries: Set<String>
+    /// Identifiers of the subscribed hosts lists (`HostsListCatalog`). Empty by default. Only the
+    /// identifiers travel: the helper downloads the lists itself.
+    public var hostsLists: Set<String>
 
-    public init(rules: [Rule] = [], blockedCountries: Set<String> = []) {
+    public init(rules: [Rule] = [], blockedCountries: Set<String> = [], hostsLists: Set<String> = []) {
         self.schemaVersion = 1
         self.rules = rules
         self.blockedCountries = Set(blockedCountries.map { $0.uppercased() })
+        self.hostsLists = hostsLists
     }
 
     /// ISO 3166-1 alpha-2 shape: exactly two ASCII letters A–Z.
@@ -116,8 +120,17 @@ public struct Blocklist: Codable, Sendable {
         }
     }
 
-    // Countries are written sorted so the file diffs cleanly.
-    private enum CodingKeys: String, CodingKey { case schemaVersion, rules, blockedCountries }
+    public mutating func setHostsList(_ id: String, enabled: Bool) {
+        if enabled {
+            hostsLists.insert(id)
+        } else {
+            hostsLists.remove(id)
+        }
+    }
+
+    // Countries and lists are written sorted so the file diffs cleanly. Files written before hosts
+    // lists existed have no `hostsLists` key and decode with none.
+    private enum CodingKeys: String, CodingKey { case schemaVersion, rules, blockedCountries, hostsLists }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -129,6 +142,14 @@ public struct Blocklist: Codable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .blockedCountries, in: container,
                                                    debugDescription: "Country codes are two letters, A to Z.")
         }
+        let lists = try container.decodeIfPresent([String].self, forKey: .hostsLists) ?? []
+        hostsLists = Set(lists)
+        // Shape only: an identifier this version does not know is reported by the compiler, so a
+        // blocklist saved by a newer version still loads.
+        guard hostsLists.allSatisfy(HostsListCatalog.isIdentifier) else {
+            throw DecodingError.dataCorruptedError(forKey: .hostsLists, in: container,
+                                                   debugDescription: "Hosts list identifiers are 1 to 64 characters: a-z, 0-9 and -.")
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -136,6 +157,7 @@ public struct Blocklist: Codable, Sendable {
         try container.encode(schemaVersion, forKey: .schemaVersion)
         try container.encode(rules, forKey: .rules)
         try container.encode(blockedCountries.sorted(), forKey: .blockedCountries)
+        try container.encode(hostsLists.sorted(), forKey: .hostsLists)
     }
 
     public static func load(from url: URL) throws -> Blocklist {

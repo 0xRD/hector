@@ -26,6 +26,14 @@ USAGE
   hector rules render FILE --out DIR [--db PATH] [--hosts PATH]
       Write the pf ruleset, pf tables and the resulting hosts file into DIR.
       Nothing on the system is changed: this is what the privileged helper will apply.
+      Both take --fetch-lists (download the subscribed hosts lists now) or --lists-dir DIR
+      (read them from DIR/ID.txt); without either, hosts lists are left out.
+
+  hector lists [--json]                 Hosts lists catalog, subscriptions and the helper's copies
+  hector lists refresh                  Ask the helper to download the subscribed lists now
+  hector lists fetch ID [--out FILE]    Download and validate one list as you (nothing is applied)
+  hector lists parse FILE [--print]     Parse a local hosts file with the helper's rules
+      Subscribe with "hostsLists": ["stevenblack-unified", "easyprivacy"] in a blocklist file.
 
   hector helper status                  State of the privileged helper and of pf
   hector helper apply FILE              Enforce a blocklist (system-wide, through the helper)
@@ -267,7 +275,7 @@ func geo(_ args: Arguments) async throws {
     }
 }
 
-func rules(_ args: Arguments) throws {
+func rules(_ args: Arguments) async throws {
     guard let sub = args.positional.first else { throw CLIError("Missing rules subcommand.\n\n\(usage)") }
     switch sub {
     case "example":
@@ -276,19 +284,25 @@ func rules(_ args: Arguments) throws {
             Rule(target: RuleTarget("*.hotjar.com")!, note: "Session recording"),
             Rule(target: RuleTarget("203.0.113.0/24")!, note: "Documentation range (TEST-NET-3)"),
             Rule(target: RuleTarget("198.51.100.17")!, isEnabled: false, note: "Disabled rules are kept but not applied"),
-        ], blockedCountries: [])
+        ], blockedCountries: [], hostsLists: [])
         print(String(decoding: try JSONEncoder.hector.encode(example), as: UTF8.self))
     case "check", "render":
         guard args.positional.count == 2 else { throw CLIError("Give one blocklist file.") }
         let blocklist = try Blocklist.load(from: URL(fileURLWithPath: args.positional[1]))
-        let compiled = RuleCompiler.compile(blocklist, geo: try loadGeo(args, required: false))
+        try HelperLimits.validate(blocklist)
+        let lists = try await listsForRules(blocklist, args)
+        let compiled = RuleCompiler.compile(blocklist, geo: try loadGeo(args, required: false), lists: lists)
         let countries = blocklist.blockedCountries.isEmpty ? "none" : blocklist.blockedCountries.sorted().joined(separator: ", ")
+        let subscribed = blocklist.hostsLists.sorted().map { id in
+            compiled.listDomainCounts[id].map { "\(id) (\($0.formatted()) domains)" } ?? id
+        }
         print("""
         Rules: \(blocklist.rules.count) (\(blocklist.rules.filter(\.isEnabled).count) enabled)
         Blocked countries: \(countries)
+        Hosts lists: \(subscribed.isEmpty ? "none" : subscribed.joined(separator: ", "))
         pf <\(PFAnchor.blockTable)>: \(compiled.blockTable.count) networks
         pf <\(PFAnchor.geoTable)>: \(compiled.geoTable.count) networks
-        /etc/hosts: \(compiled.hostsDomains.count) domains
+        /etc/hosts: \(compiled.hostsDomains.count) domains, \(compiled.listDomains.count.formatted()) from lists
         """)
         compiled.warnings.forEach { print("warning: \($0)") }
         guard sub == "render" else { return }
@@ -302,7 +316,7 @@ func rules(_ args: Arguments) throws {
         try PFAnchor.ruleset(tableDirectory: out.path).write(to: ruleset, atomically: true, encoding: .utf8)
         try PFAnchor.tableFile(compiled.blockTable).write(to: out.appending(path: "\(PFAnchor.blockTable).table"), atomically: true, encoding: .utf8)
         try PFAnchor.tableFile(compiled.geoTable).write(to: out.appending(path: "\(PFAnchor.geoTable).table"), atomically: true, encoding: .utf8)
-        try HostsFile.render(existing: currentHosts, domains: compiled.hostsDomains).write(to: out.appending(path: "hosts"), atomically: true, encoding: .utf8)
+        try HostsFile.render(existing: currentHosts, domains: compiled.hostsDomains, listDomains: compiled.listDomains).write(to: out.appending(path: "hosts"), atomically: true, encoding: .utf8)
         print("\nWrote \(out.path)/{netbite.pf.conf, \(PFAnchor.blockTable).table, \(PFAnchor.geoTable).table, hosts}")
         print("The helper would then run:")
         PFAnchor.applyCommands(rulesetPath: ruleset.path).forEach { print("  " + $0.joined(separator: " ")) }
@@ -337,6 +351,10 @@ func helper(_ args: Arguments) throws {
         pf <\(PFAnchor.blockTable)>: \(status.blockTableCount) networks · <\(PFAnchor.geoTable)>: \(status.geoTableCount) networks · /etc/hosts: \(status.hostsDomainCount) domains
         Blocked countries: \(status.blocklist.map { $0.blockedCountries.sorted().joined(separator: ", ") }.flatMap { $0.isEmpty ? nil : $0 } ?? "none")
         """)
+        if let listDomains = status.listDomainCount {
+            let subscribed = status.blocklist?.hostsLists.sorted() ?? []
+            print("Hosts lists: \(subscribed.isEmpty ? "none" : subscribed.joined(separator: ", ")) · \(listDomains.formatted()) domains in /etc/hosts (`hector lists` for details)")
+        }
         status.warnings.forEach { print("warning: \($0)") }
     case .snapshot, .processes, .toolOutput:
         print("Unexpected reply.")
@@ -351,11 +369,12 @@ let argv = CommandLine.arguments.dropFirst()
 LegacyMigration.run()
 do {
     let command = argv.first ?? "help"
-    let args = try Arguments(argv.dropFirst(), valueOptions: ["--db", "--asn-db", "--out", "--hosts", "--socket"])
+    let args = try Arguments(argv.dropFirst(), valueOptions: ["--db", "--asn-db", "--out", "--hosts", "--socket", "--lists-dir"])
     switch command {
     case "connections", "conn": try connections(args)
     case "geo": try await geo(args)
-    case "rules": try rules(args)
+    case "rules": try await rules(args)
+    case "lists": try await lists(args)
     case "helper": try helper(args)
     case "sign", "vt": try await security(command, args)
     case "persistence": try persistence(Arguments(argv.dropFirst(), valueOptions: ["--category", "--socket"]))

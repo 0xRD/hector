@@ -41,6 +41,7 @@ A Network Extension can be added later as an optional component for people who h
 │               GeoIPUpdater, ASNUpdater (monthly DB-IP files)   │
 │  Rules ────── Blocklist (JSON) → RuleCompiler → CompiledBlock- │
 │               list → PFAnchor (ruleset, tables) + HostsFile    │
+│               HostsListCatalog · HostsListParser · Downloader  │
 └────────────────────────────────────────────────────────────────┘
              │ blocklist as JSON over a Unix socket
              ▼
@@ -107,6 +108,32 @@ Limits of this approach, documented in the UI as well:
 - `*.example.com` cannot be expressed in a hosts file; only the apex is blocked and a warning is shown.
 - Apps that use their own DNS-over-HTTPS resolver (some browsers) bypass `/etc/hosts`. Blocking the IP or the country still works for them.
 
+### Hosts lists
+
+Subscribed lists (`Blocklist.hostsLists`, identifiers of the built-in `HostsListCatalog`) add their domains to the same managed section, after a `# hosts lists` comment line, so personal domains and list domains stay apart while flush and uninstall keep working unchanged.
+
+| List | Source | Format | Size |
+|---|---|---|---|
+| StevenBlack Unified | `raw.githubusercontent.com/StevenBlack/hosts/master/hosts` | hosts (`0.0.0.0 name`) | ~72,000 domains, 2.2 MB |
+| EasyPrivacy | `raw.githubusercontent.com/hectorm/hmirror/master/data/easyprivacy/list.txt` | one name per line | ~43,000 domains, 0.9 MB |
+
+EasyPrivacy itself is an Adblock Plus filter list; hMirror, the source of the hBlock project, extracts the domains of its whole-domain rules daily. Rules that only match a path or a third-party context cannot be expressed in a hosts file and are not in it. The two lists overlap by about 1,700 domains.
+
+Design:
+
+- **The helper downloads, the app sends identifiers.** Lists hold ~100,000 domains, far beyond the 5,000 rules and 4 MB a request may carry. The helper fetches the lists from the catalog's fixed URLs, as it does for the GeoIP database, so requests stay small and a non-root process cannot inject a crafted domain set. See [SECURITY.md](../SECURITY.md#hosts-lists) for the bounds.
+- **Parsing.** `HostsListParser` accepts hosts lines whose address is a sink (`0.0.0.0`, `127.0.0.1`, `::`, `::1`) and plain one-name lines; comments, blank lines, CRLF and a byte order mark are handled; international names become punycode (`IDNA`, `Punycode`). Redirections, reserved and protected names are skipped and counted, malformed lines are dropped and counted. `HostsListDownloader.validate` refuses a list that is too small or too large.
+- **Storage.** The helper keeps a validated copy of each list (one name per line) and a state file (domain count, last download, last check, last error, ETag, Last-Modified) in `/Library/Application Support/Hector/lists`. A failed download keeps the last good copy.
+- **Updates.** When a blocklist with a new list is applied, the helper downloads it before applying (a failure is reported and the rest applies). Afterwards the server loop looks every 15 minutes for lists checked more than a week ago (or 6 hours after a failure) and refreshes them in the background with conditional requests; nothing is downloaded at boot. "Update Now" in the app and `hector lists refresh` force a check.
+- **Compiling.** `RuleCompiler.compile(_:geo:lists:)` merges the subscribed lists, removes the personal domains and duplicates, checks every name again, and caps the total at 400,000. `CompiledBlocklist.listDomains` and `listDomainCounts` keep the lists apart from `hostsDomains`; `HelperStatus` reports `listDomainCount` and a `HostsListState` per list.
+- **Compatibility.** Old blocklist files have no `hostsLists` key and decode with none; status replies from an older helper have no `hostsLists`, and the app then offers to update the helper.
+
+Trade-offs of /etc/hosts at this size:
+
+- Each domain is written twice (`0.0.0.0` and `::`), like personal rules, so that IPv6 lookups fail fast as well: ~110,000 domains are ~220,000 lines, about 6 MB. Rendering and comparing the file takes well under a second; it is rewritten only when its content changes.
+- After each write the helper runs `dscacheutil -flushcache` and `killall -HUP mDNSResponder`; mDNSResponder then reloads the whole file. StevenBlack's file is widely used this way on macOS, but resolution latency and mDNSResponder's memory with both lists have to be measured on a real Mac (see NEXT_STEPS). If needed, list entries can drop the `::` line to halve the file.
+- Hosts files block exact names only: subdomains not listed are not blocked, and apps with their own DNS-over-HTTPS resolver bypass the file.
+
 ### Safety rails
 
 `RuleCompiler` refuses:
@@ -122,9 +149,9 @@ Country blocking is **opt-in**: `Blocklist.blockedCountries` is empty by default
 
 1. The app runs `Hector.app/Contents/Helpers/hectord install` through `do shell script … with administrator privileges`; macOS shows its own password prompt. `install` copies the binary to `/Library/PrivilegedHelperTools/io.github.0xrd.hectord`, writes a LaunchDaemon plist and bootstraps it.
 2. The helper listens on `/var/run/io.github.0xrd.hectord.sock`, mode 0660, owner root, group admin, and also checks the peer with `getpeereid`: only administrators can talk to it.
-3. The protocol is one line of JSON per request (`status`, `apply(Blocklist, authorization)`, `flush(authorization)`, `snapshot`) and one line of JSON in reply, at most 4 MB and within 5 s. Types are in `HectorCore/Helper`.
+3. The protocol is one line of JSON per request (`status`, `apply(Blocklist, authorization)`, `flush(authorization)`, `refreshHostsLists(authorization)`, `snapshot`, `processes`, `backgroundTasks`) and one line of JSON in reply, at most 4 MB and within 5 s. Types are in `HectorCore/Helper`.
 4. Changing the firewall needs more than the admin group: the client obtains the Authorization Services right `io.github.0xrd.hector.modify-firewall` (administrator password, remembered five minutes) and sends its external form; the helper checks it without interaction. Root clients are exempt.
-5. On `apply`, the helper recompiles the blocklist itself with HectorCore: nothing compiled by the client is trusted. It writes the pf files under `/Library/Application Support/Hector/pf`, loads the anchor, and restores the previous files if `pfctl` fails. It downloads its own copy of the GeoIP database when a country is blocked.
+5. On `apply`, the helper recompiles the blocklist itself with HectorCore: nothing compiled by the client is trusted. It writes the pf files under `/Library/Application Support/Hector/pf`, loads the anchor, and restores the previous files if `pfctl` fails. It downloads its own copy of the GeoIP database when a country is blocked, and of every subscribed hosts list.
 6. pf rules do not survive a reboot. The helper stores the applied blocklist and applies it again when launchd starts it.
 7. pf is enabled with `pfctl -E`, which returns a reference token; `flush` releases it with `pfctl -X`, so Hector never disables pf for other software. If pf has no main ruleset at all, the stock `/etc/pf.conf` is loaded so that `anchor "com.apple/*"` is evaluated.
 8. Files are written as root through `SecureFiles` (no symlink followed, root-owned, temp file then rename) and every log line is sanitized. See [SECURITY.md](../SECURITY.md) for the threat model.

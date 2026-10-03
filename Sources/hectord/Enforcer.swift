@@ -19,8 +19,17 @@ final class Enforcer {
     private var blocklistFile: URL { dataDirectory.appending(path: "blocklist.json") }
     private var stateFile: URL { dataDirectory.appending(path: "state.json") }
     private var geoFile: URL { dataDirectory.appending(path: "dbip-country-lite.csv") }
+    /// Validated copies of the hosts lists, one domain per line, and what is known about them.
+    private var listsDirectory: URL { dataDirectory.appending(path: "lists", directoryHint: .isDirectory) }
+    private var listStatesFile: URL { listsDirectory.appending(path: "state.json") }
 
     private var lastCompiled: CompiledBlocklist?
+    /// Parsed lists, by identifier, so an apply does not read and validate them again.
+    private var listCache: [String: [String]] = [:]
+    private var listStates: [String: HostsListState] = [:]
+    /// The first scheduled check waits a while after launch: at boot the network may not be up.
+    private var nextListCheck = Date().addingTimeInterval(HostsListCatalog.checkInterval)
+    private var backgroundFetch: BackgroundFetch?
 
     init(root: URL?) throws {
         dryRun = root != nil
@@ -29,11 +38,14 @@ final class Enforcer {
         hostsFile = base.appending(path: "etc/hosts")
         if dryRun {
             try FileManager.default.createDirectory(at: pfDirectory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: listsDirectory, withIntermediateDirectories: true)
         } else {
             // Root-only: the applied blocklist is private and nobody else may plant files here.
             try SecureFiles.ensureDirectory(dataDirectory.path, mode: 0o700)
             try SecureFiles.ensureDirectory(pfDirectory.path, mode: 0o700)
+            try SecureFiles.ensureDirectory(listsDirectory.path, mode: 0o700)
         }
+        listStates = loadListStates()
         if dryRun, !FileManager.default.fileExists(atPath: hostsFile.path) {
             try FileManager.default.createDirectory(at: hostsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
             try FileManager.default.copyItem(atPath: "/etc/hosts", toPath: hostsFile.path)
@@ -42,20 +54,24 @@ final class Enforcer {
 
     // MARK: - Commands
 
-    /// Re-applies the stored blocklist: pf rules do not survive a reboot.
+    /// Re-applies the stored blocklist: pf rules do not survive a reboot. Hosts lists come from
+    /// their copies on disk; nothing is downloaded at boot.
     func restoreAtLaunch() {
         guard let blocklist = try? Blocklist.load(from: blocklistFile) else { return }
         do {
-            _ = try apply(blocklist)
+            _ = try apply(blocklist, downloadMissingLists: false)
             log("Restored the blocklist at launch.")
         } catch {
             log("Could not restore the blocklist at launch: \(error)")
         }
     }
 
-    func apply(_ blocklist: Blocklist) throws -> HelperStatus {
+    /// `downloadMissingLists`: download subscribed lists that have no copy yet (an apply from the
+    /// user); a failed download is reported in the list's state and the rest is applied.
+    func apply(_ blocklist: Blocklist, downloadMissingLists: Bool = true) throws -> HelperStatus {
         let geo = blocklist.blockedCountries.isEmpty ? nil : try loadGeo()
-        let compiled = RuleCompiler.compile(blocklist, geo: geo)
+        let lists = availableLists(blocklist.hostsLists, downloadMissing: downloadMissingLists)
+        let compiled = RuleCompiler.compile(blocklist, geo: geo, lists: lists)
         let ruleset = pfDirectory.appending(path: "netbite.pf.conf")
         let files: [(URL, String)] = [
             (ruleset, PFAnchor.ruleset(tableDirectory: pfDirectory.path)),
@@ -77,12 +93,12 @@ final class Enforcer {
 
         var state = loadState()
         try enablePF(&state)
-        try writeHosts(domains: compiled.hostsDomains)
+        try writeHosts(domains: compiled.hostsDomains, listDomains: compiled.listDomains)
         state.appliedAt = Date()
         try saveState(state)
         try writeFile(JSONEncoder.hector.encode(blocklist), to: blocklistFile, mode: 0o600)
         lastCompiled = compiled
-        log("Applied: \(compiled.blockTable.count) networks, \(compiled.geoTable.count) country networks, \(compiled.hostsDomains.count) domains.")
+        log("Applied: \(compiled.blockTable.count) networks, \(compiled.geoTable.count) country networks, \(compiled.hostsDomains.count) domains, \(compiled.listDomains.count) list domains.")
         return status()
     }
 
@@ -93,7 +109,7 @@ final class Enforcer {
             _ = try? run("/sbin/pfctl", "-X", token)
             state.pfToken = nil
         }
-        try writeHosts(domains: [])
+        try writeHosts(domains: [], listDomains: [])
         state.appliedAt = nil
         try saveState(state)
         try? FileManager.default.removeItem(at: blocklistFile)
@@ -105,7 +121,9 @@ final class Enforcer {
     func status() -> HelperStatus {
         let blocklist = try? Blocklist.load(from: blocklistFile)
         if lastCompiled == nil, let blocklist {
-            lastCompiled = RuleCompiler.compile(blocklist, geo: blocklist.blockedCountries.isEmpty ? nil : try? loadGeo(download: false))
+            let geo = blocklist.blockedCountries.isEmpty ? nil : try? loadGeo(download: false)
+            let lists = availableLists(blocklist.hostsLists, downloadMissing: false)
+            lastCompiled = RuleCompiler.compile(blocklist, geo: geo, lists: lists)
         }
         // stdout only: pfctl prints warnings such as "No ALTQ support in kernel" on stderr, which
         // would otherwise make an empty anchor look loaded.
@@ -120,8 +138,212 @@ final class Enforcer {
             blockTableCount: lastCompiled?.blockTable.count ?? 0,
             geoTableCount: lastCompiled?.geoTable.count ?? 0,
             hostsDomainCount: lastCompiled?.hostsDomains.count ?? 0,
-            warnings: lastCompiled?.warnings ?? []
+            warnings: lastCompiled?.warnings ?? [],
+            listDomainCount: lastCompiled?.listDomains.count ?? 0,
+            hostsLists: listStatus(subscribed: blocklist?.hostsLists ?? [])
         )
+    }
+
+    // MARK: - Hosts lists
+
+    /// Downloads every list of the enforced blocklist now (conditionally), and applies again if one
+    /// changed. The request carries no list: only the catalog's fixed URLs are ever fetched.
+    func refreshHostsLists() throws -> HelperStatus {
+        guard let blocklist = try? Blocklist.load(from: blocklistFile), !blocklist.hostsLists.isEmpty else { return status() }
+        var changed = false
+        for id in blocklist.hostsLists.sorted() {
+            guard let source = HostsListCatalog.source(id) else { continue }
+            if update(source) { changed = true }
+        }
+        if changed { _ = try apply(blocklist, downloadMissingLists: false) }
+        return status()
+    }
+
+    /// Whether a scheduled download runs in the background; the server loop then wakes up often
+    /// to collect it.
+    var isRefreshingInBackground: Bool { backgroundFetch != nil }
+
+    /// Called by the server loop between requests and when it wakes up. Scheduled downloads (lists
+    /// due weekly, or `retryInterval` after a failure) run in the background so the helper keeps
+    /// answering; their results are recorded and applied here, on the loop's thread. Cheap when
+    /// nothing is due.
+    func refreshHostsListsIfDue(now: Date = Date()) {
+        if let fetch = backgroundFetch {
+            guard let results = fetch.results() else { return }
+            backgroundFetch = nil
+            var changed = false
+            for (source, result) in results {
+                if record(result, for: source, at: fetch.startedAt) { changed = true }
+            }
+            // Read again: the blocklist may have been changed or flushed meanwhile.
+            guard changed, let blocklist = try? Blocklist.load(from: blocklistFile) else { return }
+            do {
+                _ = try apply(blocklist, downloadMissingLists: false)
+                log("Applied the updated hosts lists.")
+            } catch {
+                log("Could not apply the updated hosts lists: \(error)")
+            }
+            return
+        }
+
+        guard now >= nextListCheck else { return }
+        nextListCheck = now.addingTimeInterval(HostsListCatalog.checkInterval)
+        guard let blocklist = try? Blocklist.load(from: blocklistFile), !blocklist.hostsLists.isEmpty else { return }
+        var requests: [BackgroundFetch.Request] = []
+        for id in blocklist.hostsLists.sorted() {
+            guard let source = HostsListCatalog.source(id) else { continue }
+            let state = listStates[id] ?? HostsListState(id: id)
+            guard state.isDue(at: now) else { continue }
+            let hasCopy = cachedList(id) != nil
+            requests.append(BackgroundFetch.Request(source: source, etag: hasCopy ? state.etag : nil,
+                                                    lastModified: hasCopy ? state.lastModified : nil))
+        }
+        guard !requests.isEmpty else { return }
+        log("Checking \(requests.count) hosts list(s) for updates in the background.")
+        let fetch = BackgroundFetch(startedAt: now)
+        backgroundFetch = fetch
+        let pending: [BackgroundFetch.Request] = requests
+        Task.detached {
+            for request in pending {
+                do {
+                    let outcome = try await HostsListDownloader.fetch(request.source, etag: request.etag, lastModified: request.lastModified)
+                    fetch.add(request.source, .success(outcome))
+                } catch {
+                    fetch.add(request.source, .failure(error))
+                }
+            }
+            fetch.finish()
+        }
+    }
+
+    /// The parsed domains of each subscribed list that has a copy, downloading missing ones when
+    /// asked. Lists no longer subscribed leave the memory cache.
+    private func availableLists(_ subscribed: Set<String>, downloadMissing: Bool) -> [String: [String]] {
+        listCache = listCache.filter { subscribed.contains($0.key) }
+        var lists: [String: [String]] = [:]
+        for id in subscribed.sorted() {
+            guard let source = HostsListCatalog.source(id) else { continue }
+            if let domains = cachedList(id) {
+                lists[id] = domains
+            } else if downloadMissing, update(source), let domains = cachedList(id) {
+                lists[id] = domains
+            }
+        }
+        return lists
+    }
+
+    /// The copy on disk, validated again with the same parser (it is root-only, but this costs
+    /// little and a damaged file must not reach /etc/hosts).
+    private func cachedList(_ id: String) -> [String]? {
+        if let domains = listCache[id] { return domains }
+        let url = listFile(id)
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = (attributes[.size] as? NSNumber)?.intValue, size <= HostsListCatalog.maximumDownloadSize,
+              let data = try? Data(contentsOf: url) else { return nil }
+        let domains = HostsListParser.parse(data).domains
+        listCache[id] = domains
+        return domains
+    }
+
+    /// `id` comes from the catalog (checked by every caller), so it is a safe file name.
+    private func listFile(_ id: String) -> URL {
+        listsDirectory.appending(path: "\(id).txt")
+    }
+
+    /// Downloads one list and waits for it (a request from the user). Returns `true` when a new
+    /// copy replaced the old one.
+    private func update(_ source: HostsListSource) -> Bool {
+        let state = listStates[source.id] ?? HostsListState(id: source.id)
+        let now = Date()
+        // Validators only make sense when the copy they describe is still here.
+        let hasCopy = cachedList(source.id) != nil
+        log("Downloading the hosts list \(source.name)…")
+        let etag: String? = hasCopy ? state.etag : nil
+        let lastModified: String? = hasCopy ? state.lastModified : nil
+        let result: Result<HostsListDownloader.Outcome, any Error> = Result { try fetch(source, etag: etag, lastModified: lastModified) }
+        return record(result, for: source, at: now)
+    }
+
+    /// Records the outcome of a download attempt made at `now`: a new copy is written and kept in
+    /// memory; on any failure the last good copy stays and the error goes into the list's state.
+    /// Returns `true` when a new copy replaced the old one.
+    private func record(_ result: Result<HostsListDownloader.Outcome, any Error>, for source: HostsListSource, at now: Date) -> Bool {
+        var state = listStates[source.id] ?? HostsListState(id: source.id)
+        state.attemptedAt = now
+        var changed = false
+        do {
+            switch try result.get() {
+            case .notModified:
+                log("\(source.name) has not changed.")
+            case .downloaded(let parsed, let etag, let lastModified):
+                let body = parsed.domains.joined(separator: "\n") + "\n"
+                try writeFile(Data(body.utf8), to: listFile(source.id), mode: 0o600)
+                listCache[source.id] = parsed.domains
+                state.domainCount = parsed.domains.count
+                state.invalidLines = parsed.invalidLines
+                state.skippedEntries = parsed.skippedEntries
+                state.updatedAt = now
+                state.etag = etag
+                state.lastModified = lastModified
+                changed = true
+                log("\(source.name): \(parsed.domains.count) domains, \(parsed.invalidLines) invalid lines, \(parsed.skippedEntries) entries skipped.")
+            }
+            state.checkedAt = now
+            state.lastError = nil
+        } catch {
+            let message = (error as? HostsListDownloader.DownloadError)?.description ?? error.localizedDescription
+            state.lastError = String(message.prefix(300))
+            log("Could not update the hosts list \(source.name): \(message)")
+        }
+        listStates[source.id] = state
+        saveListStates()
+        return changed
+    }
+
+    /// Waits for the download: the helper serves one request at a time, and the downloader's
+    /// timeouts bound the wait.
+    private func fetch(_ source: HostsListSource, etag: String?, lastModified: String?) throws -> HostsListDownloader.Outcome {
+        let done = DispatchSemaphore(value: 0)
+        let box = FetchBox()
+        Task.detached {
+            do {
+                box.outcome = try await HostsListDownloader.fetch(source, etag: etag, lastModified: lastModified)
+            } catch {
+                box.error = error
+            }
+            done.signal()
+        }
+        done.wait()
+        if let error = box.error { throw error }
+        guard let outcome = box.outcome else { throw CommandError(description: "The download of \(source.name) ended without a result.") }
+        return outcome
+    }
+
+    /// The state of every catalog list that is subscribed or has been downloaded, catalog order.
+    private func listStatus(subscribed: Set<String>) -> [HostsListState] {
+        HostsListCatalog.all.compactMap { (source: HostsListSource) -> HostsListState? in
+            if let state = listStates[source.id] { return state }
+            return subscribed.contains(source.id) ? HostsListState(id: source.id) : nil
+        }
+    }
+
+    private func loadListStates() -> [String: HostsListState] {
+        guard let data = try? Data(contentsOf: listStatesFile),
+              let states = try? JSONDecoder.hector.decode([HostsListState].self, from: data) else { return [:] }
+        var byID: [String: HostsListState] = [:]
+        for state in states where HostsListCatalog.source(state.id) != nil {
+            byID[state.id] = state
+        }
+        return byID
+    }
+
+    private func saveListStates() {
+        let states = listStates.values.sorted { $0.id < $1.id }
+        do {
+            try writeFile(JSONEncoder.hector.encode(states), to: listStatesFile, mode: 0o600)
+        } catch {
+            log("Could not save the hosts lists state: \(error)")
+        }
     }
 
     // MARK: - pf
@@ -153,9 +375,9 @@ final class Enforcer {
 
     // MARK: - /etc/hosts
 
-    private func writeHosts(domains: [String]) throws {
+    private func writeHosts(domains: [String], listDomains: [String]) throws {
         let current = (try? String(contentsOf: hostsFile, encoding: .utf8)) ?? ""
-        let updated = HostsFile.render(existing: current, domains: domains)
+        let updated = HostsFile.render(existing: current, domains: domains, listDomains: listDomains)
         guard updated != current else { return }
         // /etc/hosts must stay world-readable: every process resolves names through it.
         try writeFile(Data(updated.utf8), to: hostsFile, mode: 0o644)
@@ -242,6 +464,44 @@ private final class ErrorBuffer: @unchecked Sendable {
 
 private final class Outcome: @unchecked Sendable {
     var error: Error?
+}
+
+/// Written by the download task before it signals, read after the wait.
+private final class FetchBox: @unchecked Sendable {
+    var outcome: HostsListDownloader.Outcome?
+    var error: Error?
+}
+
+/// Scheduled downloads running in the background. The task only downloads and parses; the
+/// helper's state and files are changed by the server loop once `results()` returns them.
+final class BackgroundFetch: @unchecked Sendable {
+    struct Request: Sendable {
+        let source: HostsListSource
+        let etag: String?
+        let lastModified: String?
+    }
+
+    let startedAt: Date
+    private let lock = NSLock()
+    private var collected: [(HostsListSource, Result<HostsListDownloader.Outcome, any Error>)] = []
+    private var finished = false
+
+    init(startedAt: Date) {
+        self.startedAt = startedAt
+    }
+
+    func add(_ source: HostsListSource, _ result: Result<HostsListDownloader.Outcome, any Error>) {
+        lock.withLock { collected.append((source, result)) }
+    }
+
+    func finish() {
+        lock.withLock { finished = true }
+    }
+
+    /// Every result once the task is done, `nil` while it runs.
+    func results() -> [(HostsListSource, Result<HostsListDownloader.Outcome, any Error>)]? {
+        lock.withLock { finished ? collected : nil }
+    }
 }
 
 /// Every log line goes through `LogText.sanitized`: messages can carry text sent by a client.

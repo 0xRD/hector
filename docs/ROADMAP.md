@@ -46,7 +46,8 @@ Based on the design mockup (main window and blocklist editor).
   - [x] CI also bundles the app; can be run by hand on a branch
 - [x] Tag `v0.3.0` and check the published release (universal zip, SHA-256, release notes)
   - [x] Release workflow: dry run by hand (zip kept as an artifact), checks of the zip before publishing
-- [ ] Imported hosts lists (StevenBlack Unified, EasyPrivacy converted), with periodic updates (moved to 0.4 if 0.3 ships first)
+- [x] Imported hosts lists (StevenBlack Unified, EasyPrivacy converted), with periodic updates (shipped in 0.4: downloaded by the helper from a fixed catalog, weekly conditional checks, Lists section and `hector lists`)
+  - [ ] Check on a real Mac: resolution latency and mDNSResponder memory with ~110,000 domains in /etc/hosts
 
 ## 0.4: Hector
 
