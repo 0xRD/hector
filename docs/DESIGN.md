@@ -1,21 +1,26 @@
 # Hector design brief
 
-Hector is a small, all-in-one security app for macOS: network monitor and blocking,
-persistence scan, process explorer, VirusTotal lookups. **Netbite** is the name of its network
-module (the live map and list of connections, and blocking). Hector was called Netbite up to 0.3.
+Hector is a small, all-in-one security app for macOS. It watches what your Mac talks to, what
+starts by itself and what runs, and it tells you plainly when something is worth a look.
+**Netbite** is the name of its network module (the live map and list of connections, and
+blocking). The whole app was called Netbite up to 0.3.
 
 The code lives in `Sources/HectorApp/Design/` (tokens, components, brand marks). Network-only
 pieces (status of a destination, country badge, sparkline) stay in `Views/Theme.swift`.
 
 ## 1. The idea
 
-*A calm exorcist for your Mac.* Security tools tend to shout: red dashboards, alarm icons,
-gauges. Hector is the opposite. It is a quiet, well-lit study: warm paper, soft colors,
-clear verdicts, and a small friendly ghost that gets shown the door. Calm by default, very
-clear when something deserves a look, never alarmist.
+*The one who holds fast.* Hector is named after the defender of Troy: not a conqueror, the one
+who stands on the walls and keeps the city safe. As a character he is warm, calm, a bit vintage
+and a little quirky, someone you would trust with your Mac the way you trust a good neighbour
+with your keys. He does not shout. He looks, he tells you what he saw, and he lets you decide.
 
-- **Friendly but serious.** The personality lives in the mark, the empty states and a few small
-  details (the spark, the hexagon ward). Verdicts, warnings and destructive actions stay plain.
+Security tools tend to shout: red dashboards, alarm icons, gauges. Hector is the opposite. It is
+a quiet, well-lit study: warm paper, soft colors, clear verdicts, and a friendly face behind a
+helmet. Calm by default, very clear when something deserves a look, never alarmist.
+
+- **Friendly but serious.** The personality lives in the mark, the app icon, the empty states and
+  a few words of copy. Verdicts, warnings and destructive actions stay plain.
 - **Calm and refined.** Warm neutrals, generous whitespace, soft rounded shapes, a serif for
   titles, as in Claude's own interface.
 - **Native first.** It must feel like a Mac app: standard sidebars, toolbars, inspectors,
@@ -23,15 +28,23 @@ clear when something deserves a look, never alarmist.
 
 ### How the modules sit together
 
-| Module | What it is | Glyph |
-|---|---|---|
-| Hector (the app) | Brand, app icon, About, onboarding | `HectorMark`: ghost in a hexagon seal |
-| Netbite (network) | Map, list of destinations, Blocklists | `NetbiteLogo`: globe with a bite |
-| Persistence | What starts by itself | SF Symbol on a hexagon `SymbolTile` |
-| Processes | What runs now | SF Symbol on a hexagon `SymbolTile` |
+Hector is the app and the character; each module is one part of the watch he keeps. A module is
+one sidebar section or entry, one `ScreenHeader`, and speaks the same verdict language
+(section 7).
 
-Each module is one sidebar section or entry, one `ScreenHeader`, and uses the same verdict
-language (section 7). The Netbite glyph appears where the network module is named (the map
+| Module | What it watches | Status | Glyph |
+|---|---|---|---|
+| **Hector** (the app) | Brand, app icon, About, settings, onboarding | shipped | `HectorMark`: the crested helmet |
+| **Netbite** (network) | Live connections per app, the world map, Blocklists (pf and `/etc/hosts`) | shipped | `NetbiteLogo`: globe with a bite |
+| **Persistence** | What starts by itself: launch agents and daemons, login items, extensions, profiles | shipped | `arrow.triangle.2.circlepath` on a hexagon `SymbolTile` |
+| **Processes** | What runs now: tree, signatures, flags, VirusTotal | shipped | `cpu` on a hexagon `SymbolTile` |
+| Security checkup | The Mac's own defenses: FileVault, firewall, Gatekeeper, SIP, updates | planned | for example `checklist` on a hexagon tile |
+| Keyboard taps | Who can read the keyboard (event taps, input monitoring) | planned | for example `keyboard` on a hexagon tile |
+| Camera & microphone | Who is using them now, and who may | planned | for example `video` or `mic` on a hexagon tile |
+
+Only Netbite has its own drawn glyph, because it had a name before Hector did. New modules use an
+SF Symbol on a hexagon tile, in lavender (`hectorInfo`) unless their color carries meaning
+(Blocklists are clay). The Netbite glyph appears where the network module is named (the map
 header today, its sidebar section later).
 
 ## 2. Principles
@@ -46,21 +59,38 @@ header today, its sidebar section later).
    whether it can be undone, and when it takes effect ("Nothing changes until you apply").
 5. **Hierarchy through type and space**, not boxes. Cards group related facts; they are not
    wrapped around everything.
-6. **Respect the platform.** Sidebar → content → inspector, toolbar search, context menus,
+6. **Respect the platform.** Sidebar, content, inspector; toolbar search, context menus,
    standard shortcuts, Reduce Motion, Increase Contrast, Dynamic colors, VoiceOver labels.
 
 ## 3. Tone of voice
 
-- **Plain and short.** Sentence case, verbs first: "Block This Destination", "Download Again".
-  Button titles in title case (macOS convention); everything else in sentence case.
-- **Calm, never alarmist.** "3 items to review", not "3 THREATS DETECTED". Say what was found
-  and what it means.
+Hector speaks in short, warm, plain sentences. He reports what he saw, says what it means, and
+offers the next step. He is never alarmist, and never cute when something is wrong.
+
+- **Short and plain.** One idea per sentence. Sentence case everywhere, except button titles and
+  menu items, which use title case (macOS convention): "Block This Destination", "Download Again".
+- **Calm, never alarmist.** "3 items to review", not "3 THREATS DETECTED". No exclamation marks.
+- **Hector may speak in the third person**, sparingly, where it makes a message warmer: empty
+  states, progress, errors ("Hector is looking around…", "Hector could not finish that").
+  Never "I", never "we".
 - **Honest about limits.** "Blocking is for the whole Mac" explains why, in one sentence.
-- **A wink, in the right places only.** Empty states and success moments may be light:
-  "Nothing lurking here", "All quiet". Never in warnings, errors, or anything destructive.
-- **No jargon without a gloss.** "pf (the macOS firewall)", "SHA-256 (a fingerprint of the
-  file, never the file itself)".
-- Ellipsis (…) on any command that asks for more (a password, a confirmation).
+- **A little warmth, in the right places only.** Empty states, progress and success may be
+  light. Verdicts, warnings, errors and anything destructive stay plain and exact.
+- **No jargon without a gloss.** "pf (the macOS firewall)", "SHA-256 (a fingerprint of the file,
+  never the file itself)".
+- Ellipsis (…) on any command that asks for more (a password, a confirmation), and on progress
+  ("Scanning…").
+
+| Do | Don't |
+|---|---|
+| All quiet. | No threats detected! Your Mac is 100 % safe! |
+| Hector found 2 items worth a look. | WARNING: 2 suspicious items found |
+| Nothing is blocked yet. | Your blocklist is empty :( |
+| Hector is looking around… | Scanning for malware, please wait… |
+| Hector could not finish that. *(then the reason, verbatim)* | Oops! Something went wrong. |
+| Unsigned | Sketchy, Evil, Nope |
+| Uninstall Hector… "There is no undo: rules, helper and data are deleted." | Bye-bye, Hector! |
+| Install the helper to block. | You are not protected! |
 
 ## 4. Palette
 
@@ -177,29 +207,69 @@ Developer ID, other certificate → neutral; ad hoc → warning; unsigned, inval
 VirusTotal: malicious > 0 → danger; suspicious > 0 → warning; known and clean → ok; unknown →
 neutral. Use `Color.hectorWarning` instead of `.orange`.
 
-## 8. Iconography
+## 8. Iconography and brand marks
 
 - **SF Symbols** everywhere, in their filled variant for verdicts and their outline variant for
   navigation and actions. No custom bitmap icons.
 - **Hexagon tiles** (`SymbolTile`) give screens and sidebar entries their identity: a symbol in
-  the module's ink on its 16 % wash, inside a rounded hexagon. Rounded squares and circles exist
-  for secondary uses (avatars, inline list icons).
+  the module's ink on its 16 % wash, inside a rounded hexagon, like the badge on a shield.
+  Rounded squares and circles exist for secondary uses (avatars, inline list icons).
 - App bundles keep their real icon (`AppIcon`, `PathIcon`); tools and daemons get a symbol on a
   stone tile.
 - On a selected row, tiles and pills switch to white automatically (`backgroundProminence`).
 
-### Logo and app icon
+### The mark: `HectorMark`
 
-- **Mark** (`HectorMark`): a rounded, pointy-top hexagon seal stroked with a lavender → sage
-  gradient; inside, a small ghost (dome, three-scallop hem, two eyes glancing up and to the right,
-  toward the exit); a honey four-point spark breaks through the seal's top-right edge, where the
-  stroke is cut. The cut is the Hector bite, kept as a family resemblance.
-- **App icon** (`AppIconArtwork`): plum squircle on the macOS icon grid (412 pt body in 512 pt,
-  continuous corners), plum → night gradient, a faint cream hexagon lattice, a lavender glow
-  behind the mark, a cream ghost with plum eyes. Drawn in code at launch.
-- **Wordmark** (`HectorWordmark`): the mark and "Hector" in New York semibold, slightly
-  tight tracking. For About, onboarding, the top of the sidebar.
-- **Netbite glyph** (`NetbiteLogo`): the bitten globe, sage, for the network module.
+Hector seen from the front: a rounded **Corinthian helmet** with a **crest** of horsehair, and a
+calm **face** behind the visor. Drawn in code on a 24 × 24 grid (`BrandGeometry`).
+
+- **Helmet**: a soft dome and two cheek guards, one closed contour with a T-shaped opening (the
+  visor slot and the gap between the cheek guards). Soft lavender shading downward, lavender
+  ink outline.
+- **Crest**: a clay fan of horsehair flaring out of the dome, with two combed strands. It **leans about 7° to the left**: the one quirk of
+  the mark, the cowlick of a defender who has been up since dawn.
+- **Face**: cream, seen through the visor; two round eyes looking straight out, a small closed
+  smile in the gap, and the chin peeking just below the cheek guards.
+- **Sizes**: below 28 pt the mark drops its small details (eyes, smile, crest strands, the shine
+  on the dome) and keeps the silhouette, the visor and the crest, which read at 16 pt. Pass
+  `detailed:` to force either way.
+- **Colors**: `ink` `hectorInfo`, `helmet` `hectorHelmet` to `hectorHelmetShade`, `crest`
+  `hectorCrest` (a brand-only clay, never used for a verdict), `face` `brandCream`. It follows
+  light and dark mode; the cream face stays light in both, so the visor always reads.
+- Do not give it a sword or a spear, do not make it frown, do not straighten the crest.
+
+### The app icon: `AppIconArtwork`
+
+**Hector on the walls of Troy.** A squircle on the macOS icon grid (412 pt body in a 512 pt
+canvas, continuous corners): a lavender-to-cream dawn sky (`brandSky` to `brandCream`), a honey
+sun rising behind his shoulder (`brandHoney`), the mark in its fixed brand colors (lavender helmet
+shading to a deeper lavender, clay crest, cream face, plum outline), and a sandstone rampart
+(`RampartPattern`: a coping over staggered ashlar courses) that he peeks over. Drawn in code at
+launch and set as the Dock icon (`AppIconArtwork.render(size:)`).
+
+### Wordmark: `HectorWordmark`
+
+The mark and "Hector" in New York semibold, slightly tight tracking. For About (Settings, About
+tab), onboarding, and any place where Hector introduces himself.
+
+### Netbite glyph: `NetbiteLogo`
+
+The bitten globe, sage, for the network module. It keeps its own drawing as a member of the
+family: same 24-point grid, similar stroke weight, rounded caps.
+
+### Brand tokens
+
+| Token | Value | Use |
+|---|---|---|
+| `hectorCrest` | `#CC7357` light, `#E68F73` dark | The crest in the in-app mark |
+| `hectorHelmet`, `hectorHelmetShade` | `#CCBFF5` / `#B09EE8` light, `#665994` / `#544775` dark | The helmet in the in-app mark |
+| `brandPlum` | `#33293D` | Outlines of the icon artwork |
+| `brandCream` | `#FAF2E6` | Face of the mark, bottom of the icon sky |
+| `brandSky` | `#E3DEFA` | Top of the icon sky |
+| `brandLavender`, `brandLavenderDeep` | `#C7B8F7`, `#9E8CDE` | The helmet on the icon |
+| `brandClay` | `#DB785C` | The crest on the icon |
+| `brandHoney` | `#FAD180` | The sun on the icon |
+| `brandStone`, `brandStoneDeep` | `#E3D1B8`, `#BDA68A` | The rampart and its joints |
 
 ## 9. Motion
 
@@ -224,13 +294,13 @@ All in `Sources/HectorApp/Design/Components.swift`, documented with `///` commen
 | `StatusPill(text, kind:, systemImage:, showsIcon:, size:)` | Capsule, wash fill, ink text and icon, caption semibold, tabular digits, `.small` variant. White on selected rows. |
 | `StatusDot(kind:, pulsing:, size:)` | 8 pt status light; optional slow halo. |
 | `Banner(title, message:, kind:, systemImage:, actionsBelow:) { actions }` | Radius 10, wash fill, 22 % ink hairline, title semibold, selectable message, actions trailing (or below in narrow columns). |
-| `EmptyStateView(title, systemImage:, message:, tint:, compact:) { actions }` | Symbol tile inside a dashed hexagon ward rotated 30°, serif title, one-line message, optional actions. Fills its container unless compact. |
+| `EmptyStateView(title, systemImage:, message:, tint:, compact:) { actions }` | Symbol tile inside a dashed hexagon halo rotated 30°, serif title, one-line message, optional actions. Fills its container unless compact. |
 | `DetailRow(label, value:, monospaced:)` / `DetailRow(label) { view }` | Label in a 104 pt secondary column, value selectable; combined for VoiceOver. |
 | `Metric(value, label:, tint:)` | Rounded tabular number over a caption. |
 | `SymbolTile(systemImage, tint:, size:, shape:)` | Hexagon (default), rounded square or circle tile. |
 | `SidebarLabel(title, subtitle:, systemImage:, tint:) { accessory }` | 26 pt hexagon tile, medium title, caption subtitle, trailing accessory (count pill, sparkline). |
 | `CodeTag(text, tint:)` | Monospaced 10.5 pt tag with hairline, radius 4. |
-| `Hexagon(cornerRadius:)` | The ward shape. |
+| `Hexagon(cornerRadius:)` | The badge shape of tiles and of the empty-state halo. |
 | `.hoverHighlight(id, cornerRadius:)` | Soft hover wash for rows and tiles outside a `List`. |
 | `.motion(animation, value:)` | Animation that respects Reduce Motion. |
 
@@ -269,8 +339,9 @@ with `SectionHeader(style: .eyebrow)` and `DetailRow`s; `EmptyStateView` when no
 - **Malwarebytes:** a single protection verdict that is always visible. That is the sidebar
   footer ("Blocking on" / "Observe only"), one click from where it is managed.
 - **CleanMyMac:** friendly illustrations in empty and finished states. We use a lighter touch: a
-  symbol inside a dashed hexagon ward, and a one-line wink at most.
-- **Claude:** warm neutrals, cream canvas, serif titles, generous whitespace, soft radii.
+  symbol inside a dashed hexagon halo, and one warm line at most.
+- **Claude:** warm neutrals, cream canvas, serif titles, generous whitespace, soft radii, and a
+  name that is a person rather than a product: a character you trust, who speaks plainly.
 
 ## 12. Accessibility checklist
 

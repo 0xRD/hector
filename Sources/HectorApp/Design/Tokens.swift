@@ -60,20 +60,35 @@ extension Color {
     /// Land dots of countries the Mac currently talks to.
     static let mapLandContacted = dynamic(light: (0.72, 0.80, 0.72), dark: (0.29, 0.38, 0.32))
 
-    // MARK: Brand (fixed, appearance-independent)
+    // MARK: Brand
 
-    /// Deep plum ink of the app icon background.
+    /// Clay of Hector's crest in the in-app mark. Brand only: never a verdict.
+    static let hectorCrest = dynamic(light: (0.80, 0.45, 0.34), dark: (0.90, 0.56, 0.45))
+    /// Lavender of the helmet in the in-app mark, lit side.
+    static let hectorHelmet = dynamic(light: (0.80, 0.75, 0.96), dark: (0.40, 0.35, 0.58))
+    /// Lavender of the helmet in the in-app mark, shaded side.
+    static let hectorHelmetShade = dynamic(light: (0.69, 0.62, 0.91), dark: (0.33, 0.28, 0.46))
+
+    // MARK: Brand (fixed, appearance-independent: the app icon and the face of the mark)
+
+    /// Deep plum: outlines of the icon artwork.
     static let brandPlum = Color(red: 0.20, green: 0.16, blue: 0.24)
-    /// Darker end of the icon gradient.
-    static let brandNight = Color(red: 0.11, green: 0.09, blue: 0.12)
-    /// Cream of the mark on the icon.
+    /// Cream: the face behind the visor, the bottom of the icon sky.
     static let brandCream = Color(red: 0.98, green: 0.95, blue: 0.90)
-    /// Pastel lavender of the mark.
+    /// Lavender mist: the top of the icon sky.
+    static let brandSky = Color(red: 0.89, green: 0.87, blue: 0.98)
+    /// Pastel lavender: the helmet, light side.
     static let brandLavender = Color(red: 0.78, green: 0.72, blue: 0.97)
-    /// Pastel sage of the mark.
-    static let brandSage = Color(red: 0.66, green: 0.85, blue: 0.71)
-    /// Honey spark of the mark.
+    /// Deeper lavender: the helmet, shaded side.
+    static let brandLavenderDeep = Color(red: 0.62, green: 0.55, blue: 0.87)
+    /// Clay: the crest on the icon.
+    static let brandClay = Color(red: 0.86, green: 0.47, blue: 0.36)
+    /// Honey: the sun rising behind Hector on the icon.
     static let brandHoney = Color(red: 0.98, green: 0.82, blue: 0.50)
+    /// Sandstone of the wall on the icon.
+    static let brandStone = Color(red: 0.89, green: 0.82, blue: 0.72)
+    /// Joints between the stones of the wall.
+    static let brandStoneDeep = Color(red: 0.74, green: 0.65, blue: 0.54)
 
     /// A color that follows the light or dark appearance. Components are sRGB, 0...1.
     static func dynamic(

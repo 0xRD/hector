@@ -26,10 +26,10 @@ struct ProcessesView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .canvasBackground()
             } else if rows.isEmpty {
-                EmptyStateView(state.processesFlaggedOnly ? "Nothing lurking here" : "Nothing matches",
-                               systemImage: state.processesFlaggedOnly ? "sparkles" : "sparkle.magnifyingglass",
+                EmptyStateView(state.processesFlaggedOnly ? "All quiet" : "Nothing matches",
+                               systemImage: state.processesFlaggedOnly ? "checkmark.shield" : "sparkle.magnifyingglass",
                                message: state.processesFlaggedOnly
-                                   ? "No process runs from a temporary, Downloads or hidden folder, and none runs deleted code."
+                                   ? "No process runs from a temporary, Downloads or hidden folder, and none runs code that was deleted."
                                    : "No process matches the search.",
                                tint: state.processesFlaggedOnly ? .hectorOK : .hectorNeutral)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

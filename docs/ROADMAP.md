@@ -50,7 +50,7 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 
 - [x] Rename the app, the bundle, the helper, the CLI and the docs to Hector, with migration from Netbite 0.3 (helper, blocklist, data, VirusTotal key)
 - [ ] Rename the GitHub repository to `hector` (owner, in Settings; GitHub redirects the old URL)
-- [ ] Rework the brand identity for Hector (the mark and the brief still describe the Hexorcist ghost)
+- [x] Brand identity for Hector: the crested-helmet mark, the "Hector on the walls" app icon, the tone of voice, and a rewritten design brief (`docs/DESIGN.md`)
 - [x] Core library and CLI for code signatures, SHA-256 and VirusTotal hash lookups (`hector sign`, `hector vt`)
 - [x] Core library and CLI for the persistence scan (`hector persistence`)
 - [x] App screens for Persistence and Processes, with signature and VirusTotal columns; settings to store the API key
