@@ -36,11 +36,11 @@ Based on the design mockup (main window and blocklist editor).
 - [x] Security review of the privileged code and fixes (see [SECURITY.md](../SECURITY.md)); tested for real: block, unauthorized requests refused, flush restores everything
 - [x] Hector → Uninstall Hector…: helper, rules, logs, user data, Keychain item and the app; `scripts/check-uninstall.sh`
 - [ ] Re-test the in-app uninstall end to end after the fix for the hang (install helper, uninstall, `scripts/check-uninstall.sh`); check System Settings → General → Login Items for a stale background item
-- [ ] Remove personal data before going public: rewrite the commits that carry a personal e-mail (use the GitHub noreply address), scan files and fixtures again, then force-push after explicit approval
-- [ ] First push of the workflows: confirm CI passes on GitHub's macOS runner (Xcode, not the Command Line Tools)
+- [x] Remove personal data before going public: rewrite the commits that carry a personal e-mail (use the GitHub noreply address), scan files and fixtures again, then force-push after explicit approval
+- [x] First push of the workflows: confirm CI passes on GitHub's macOS runner (Xcode, not the Command Line Tools)
   - [x] First run failed on Swift 6.1.2 (Xcode 16.4): type-checker timeout in `MapGeometry.swift`, fixed
   - [x] CI also bundles the app; can be run by hand on a branch
-- [ ] Tag `v0.3.0` and check the published release (universal zip, SHA-256, release notes)
+- [x] Tag `v0.3.0` and check the published release (universal zip, SHA-256, release notes)
   - [x] Release workflow: dry run by hand (zip kept as an artifact), checks of the zip before publishing
 - [ ] Imported hosts lists (StevenBlack Unified, EasyPrivacy converted), with periodic updates (moved to 0.4 if 0.3 ships first)
 
@@ -57,8 +57,8 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 - [x] Login items and background tasks through the helper (`sfltool dumpbtm` needs root)
 - [ ] Check the `sfltool dumpbtm` parser against real output on macOS 15 and 26/27
 - [ ] Keychain: the API key item is tied to the binary that created it; decide how the app and the CLI share it without prompts
-- [ ] **VirusTotal**: personal API key stored in the Keychain; lookups by SHA-256 only, never uploading a file unless the user asks for that file; results cached; the free-tier limit (4 requests per minute, 500 per day) respected
-- [ ] **Persistence** (in the spirit of KnockKnock): launch agents and daemons, login items and background tasks, cron and periodic jobs, system extensions, configuration profiles, browser extensions. Each item with its code signature (Apple, Developer ID, ad hoc, unsigned), notarization, path, and VirusTotal score
+- [x] **VirusTotal**: personal API key stored in the Keychain; lookups by SHA-256 only, never uploading a file unless the user asks for that file; results cached; the free-tier limit (4 requests per minute, 500 per day) respected
+- [x] **Persistence** (in the spirit of KnockKnock): launch agents and daemons, login items and background tasks, cron and periodic jobs, system extensions, configuration profiles, browser extensions. Each item with its code signature (Apple, Developer ID, ad hoc, unsigned), notarization, path, and VirusTotal score
 - [x] **Processes** (in the spirit of TaskExplorer): process tree, signature, parent, arguments, open connections, VirusTotal score; flags for unsigned code and binaries running from temporary, Downloads or hidden folders, with the quarantine download URL
 - [ ] **Keyboard taps** (in the spirit of ReiKey): apps that intercept keystrokes, through the public event tap list
 - [ ] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined
