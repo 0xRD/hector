@@ -24,6 +24,14 @@ USAGE
       Write the pf ruleset, pf tables and the resulting hosts file into DIR.
       Nothing on the system is changed: this is what the privileged helper will apply.
 
+  netbite sign PATH... [--json]          Code signature of files or app bundles: trust level, team ID,
+                                         notarization, hardened runtime, SHA-256. Nothing is executed.
+  netbite vt PATH... [--json] [--refresh]
+      Look up the SHA-256 of files on VirusTotal (hash only: files are never uploaded).
+      Results are cached for 7 days (1 day for unknown files); free tier: 4 lookups/min, 500/day.
+  netbite vt key set                     Store your VirusTotal API key in the Keychain (read from stdin)
+  netbite vt key delete                  Remove it
+
   netbite version | help
 
 Default GeoIP database: \(GeoIPUpdater.defaultDatabaseURL.path)
@@ -240,6 +248,7 @@ do {
     case "connections", "conn": try connections(args)
     case "geo": try await geo(args)
     case "rules": try rules(args)
+    case "sign", "vt": try await security(command, args)
     case "version", "--version": print("netbite \(version)")
     case "help", "--help", "-h": print(usage)
     default: throw CLIError("Unknown command: \(command)\n\n\(usage)")
