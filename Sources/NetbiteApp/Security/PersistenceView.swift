@@ -41,17 +41,21 @@ struct PersistenceView: View {
             header(items: items)
             Divider()
             if security.persistence == nil {
-                ContentUnavailableView {
-                    Label(security.isScanningPersistence ? "Scanning…" : "Not scanned yet", systemImage: "magnifyingglass")
-                } description: {
-                    Text("Launch agents and daemons, login items, cron jobs, extensions and profiles. Nothing found is run.")
-                } actions: {
+                EmptyStateView(security.isScanningPersistence ? "Looking under the bed…" : "Not scanned yet",
+                               systemImage: "magnifyingglass",
+                               message: "Launch agents and daemons, login items, cron jobs, extensions and profiles. Nothing found is ever run.") {
                     if !security.isScanningPersistence {
                         Button("Scan") { Task { await security.scanPersistence() } }
+                            .buttonStyle(.borderedProminent)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .canvasBackground()
             } else if items.isEmpty {
-                ContentUnavailableView.search(text: state.search)
+                EmptyStateView("Nothing matches", systemImage: "sparkle.magnifyingglass",
+                               message: "No item matches “\(state.search)”.", tint: .hexNeutral)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .canvasBackground()
             } else {
                 list(items)
             }
@@ -67,13 +71,9 @@ struct PersistenceView: View {
 
     private func header(items: [PersistenceItem]) -> some View {
         @Bindable var security = security
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("What starts automatically").font(.headline)
-                    Text(summary(items)).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
+            ScreenHeader("What starts by itself", subtitle: summary(items), systemImage: "arrow.triangle.2.circlepath",
+                         tint: .hexInfo, pinned: true) {
                 Toggle("Show Apple items", isOn: $security.includeAppleItems)
                     .toggleStyle(.checkbox)
                     .onChange(of: security.includeAppleItems) { Task { await security.scanPersistence() } }
@@ -86,11 +86,12 @@ struct PersistenceView: View {
                 .disabled(security.isScanningPersistence)
             }
             ForEach(sourceNotes, id: \.self) { note in
-                Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
+                Banner(note.title, message: note.message, kind: note.kind)
+                    .padding(.horizontal, Spacing.xl)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.bottom, sourceNotes.isEmpty ? 0 : Spacing.sm)
+        .background(Color.surfaceCanvas)
     }
 
     @ViewBuilder
@@ -119,11 +120,13 @@ struct PersistenceView: View {
                         PersistenceRow(item: item).tag(item.id)
                     }
                 } header: {
-                    Label(category.title, systemImage: category.symbol).font(.headline)
+                    SectionHeader(category.title, systemImage: category.symbol, style: .eyebrow)
                 }
             }
         }
         .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .canvasBackground()
     }
 
     private var visibleItems: [PersistenceItem] {
@@ -142,12 +145,24 @@ struct PersistenceView: View {
         return security.persistence?.items.first { $0.id == id }
     }
 
-    private var sourceNotes: [String] {
+    private struct SourceNote: Hashable {
+        var title: String
+        var message: String
+        var kind: StatusKind
+    }
+
+    private var sourceNotes: [SourceNote] {
         var notes = (security.persistence?.sources ?? []).flatMap { source in
-            source.notes.map { "\(source.name): \($0)" }
+            source.notes.map { note in
+                note.hasPrefix("needs the helper")
+                    ? SourceNote(title: "\(source.name) need the helper",
+                                 message: "Install it from Blocklists: listing them needs root.", kind: .info)
+                    : SourceNote(title: source.name, message: note, kind: .warning)
+            }
         }
         if let issue = security.persistenceHelperIssue {
-            notes.append("The helper could not list login items: \(issue) Reinstalling the helper from Blocklists updates it.")
+            notes.append(SourceNote(title: "The helper could not list login items",
+                                    message: "\(issue) Updating the helper from Blocklists fixes an older one.", kind: .warning))
         }
         return notes
     }
@@ -168,7 +183,7 @@ private struct PersistenceRow: View {
     var body: some View {
         let path = SecurityController.codePath(of: item)
         HStack(spacing: 10) {
-            PathIcon(path: item.owningBundlePath ?? path, size: 22)
+            PathIcon(path: item.owningBundlePath ?? path, size: 24)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(item.label).fontWeight(.medium).lineLimit(1)
@@ -176,8 +191,8 @@ private struct PersistenceRow: View {
                         Text("Disabled").font(.caption2).foregroundStyle(.secondary)
                     }
                     if !item.notes.isEmpty {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundStyle(.orange)
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color.hexWarning)
                             .help(item.notes.joined(separator: "\n"))
                     }
                 }
@@ -188,7 +203,8 @@ private struct PersistenceRow: View {
                     .truncationMode(.middle)
             }
             Spacer(minLength: 8)
-            Text(item.scope.label).font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .leading)
+            StatusPill(item.scope.label, kind: item.scope == .user ? .info : .neutral, showsIcon: false, size: .small)
+                .frame(width: 64, alignment: .leading)
             SignatureBadge(path: path).frame(width: 120, alignment: .leading)
             VirusTotalBadge(path: path).frame(width: 80, alignment: .leading)
         }
@@ -203,50 +219,52 @@ struct PersistenceDetailView: View {
         if let item {
             ScrollView {
                 content(item)
-                    .padding(18)
+                    .padding(Spacing.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .canvasBackground()
         } else {
-            ContentUnavailableView("No item selected", systemImage: "list.bullet.rectangle",
-                                   description: Text("Pick an item to see what it runs and who signed it."))
+            EmptyStateView("No item selected", systemImage: "list.bullet.rectangle",
+                           message: "Pick an item to see what it runs and who signed it.", compact: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     @ViewBuilder
     private func content(_ item: PersistenceItem) -> some View {
         let path = SecurityController.codePath(of: item)
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                SectionTitle(item.category.title)
-                Text(item.label).font(.title2.bold()).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                Text("\(item.scope.label) item").font(.callout).foregroundStyle(.secondary)
-            }
-
-            if !item.notes.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(item.notes, id: \.self) { note in
-                        Label(note, systemImage: "exclamationmark.circle.fill").foregroundStyle(.orange)
-                    }
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            HStack(alignment: .top, spacing: Spacing.md) {
+                PathIcon(path: item.owningBundlePath ?? path, size: 40)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    SectionHeader(item.category.title, style: .eyebrow)
+                    Text(item.label).font(Font.sectionTitle).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    StatusPill("\(item.scope.label) item", kind: item.scope == .user ? .info : .neutral, showsIcon: false, size: .small)
                 }
-                .font(.callout)
             }
 
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-                if let path { row("Runs") { pathText(path) } }
-                if let configuration = item.configurationPath { row("Declared in") { pathText(configuration) } }
+            ForEach(item.notes, id: \.self) { note in
+                Banner(note, kind: .warning)
+            }
+
+            Card {
+                SectionHeader("Details", systemImage: "list.bullet.rectangle", style: .eyebrow)
+                if let path { DetailRow("Runs") { pathText(path) } }
+                if let configuration = item.configurationPath { DetailRow("Declared in") { pathText(configuration) } }
                 if item.arguments.count > 1 {
-                    row("Arguments") { Text(item.arguments.dropFirst().joined(separator: " ")).monospaced().textSelection(.enabled) }
+                    DetailRow("Arguments", value: item.arguments.dropFirst().joined(separator: " "), monospaced: true)
                 }
-                if let runAtLoad = item.runAtLoad { row("Run at load") { Text(runAtLoad ? "Yes" : "No") } }
-                if let keepAlive = item.keepAlive { row("Keep alive") { Text(keepAlive ? "Yes" : "No") } }
-                if let disabled = item.isDisabled { row("Enabled") { Text(disabled ? "No" : "Yes") } }
-                if let bundle = item.owningBundleIdentifier { row("App") { Text(bundle).textSelection(.enabled) } }
-                if let modified = item.modifiedAt { row("Modified") { Text(modified.formatted(date: .abbreviated, time: .shortened)) } }
+                if let runAtLoad = item.runAtLoad { DetailRow("Run at load", value: runAtLoad ? "Yes" : "No") }
+                if let keepAlive = item.keepAlive { DetailRow("Keep alive", value: keepAlive ? "Yes" : "No") }
+                if let disabled = item.isDisabled { DetailRow("Enabled", value: disabled ? "No" : "Yes") }
+                if let bundle = item.owningBundleIdentifier { DetailRow("App", value: bundle) }
+                if let modified = item.modifiedAt {
+                    DetailRow("Modified", value: modified.formatted(date: .abbreviated, time: .shortened))
+                }
                 ForEach(item.details.keys.sorted(), id: \.self) { key in
-                    row(key.capitalized) { Text(item.details[key] ?? "").textSelection(.enabled) }
+                    DetailRow(key.capitalized, value: item.details[key] ?? "")
                 }
             }
-            .font(.callout)
 
             if let path {
                 CodeDetailsSection(path: path)
@@ -260,12 +278,5 @@ struct PersistenceDetailView: View {
 
     private func pathText(_ path: String) -> some View {
         Text(path).font(.system(.callout, design: .monospaced)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func row<Content: View>(_ label: String, @ViewBuilder _ value: () -> Content) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
-            value()
-        }
     }
 }

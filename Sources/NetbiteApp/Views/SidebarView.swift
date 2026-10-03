@@ -29,9 +29,9 @@ struct SidebarView: View {
                 .tag(SidebarItem.blocklists)
             }
             Section("Security") {
-                SecuritySidebarRow(title: "Persistence", symbol: "arrow.triangle.2.circlepath", subtitle: persistenceSubtitle)
+                SidebarLabel("Persistence", subtitle: persistenceSubtitle, systemImage: "arrow.triangle.2.circlepath")
                     .tag(SidebarItem.persistence)
-                SecuritySidebarRow(title: "Processes", symbol: "cpu", subtitle: processesSubtitle)
+                SidebarLabel("Processes", subtitle: processesSubtitle, systemImage: "cpu")
                     .tag(SidebarItem.processes)
             }
             Section("Apps") {
@@ -109,24 +109,5 @@ private struct AppSidebarRow: View {
         let count = app.destinations.count
         let live = app.liveCount
         return "\(count) dest." + (live > 0 ? " · \(live) live" : "")
-    }
-}
-
-private struct SecuritySidebarRow: View {
-    let title: String
-    let symbol: String
-    let subtitle: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol)
-                .frame(width: 26, height: 26)
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).fontWeight(.medium)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-        }
-        .padding(.vertical, 2)
     }
 }

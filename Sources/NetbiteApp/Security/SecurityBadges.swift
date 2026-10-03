@@ -16,12 +16,12 @@ extension TrustLevel {
         }
     }
 
-    var color: Color {
+    var kind: StatusKind {
         switch self {
-        case .apple, .appStore, .developerIDNotarized: .netbiteAccent
-        case .developerID, .otherCertificate: .secondary
-        case .adHoc: .orange
-        case .unsigned, .invalid: .netbiteBlock
+        case .apple, .appStore, .developerIDNotarized: .ok
+        case .developerID, .otherCertificate: .neutral
+        case .adHoc: .warning
+        case .unsigned, .invalid: .danger
         }
     }
 
@@ -51,14 +51,12 @@ struct SignatureBadge: View {
     var body: some View {
         switch path.flatMap({ security.signatures[$0] }) {
         case .analyzed(let info)?:
-            Label(info.trustLevel.shortLabel, systemImage: info.trustLevel.symbol)
-                .labelStyle(BadgeLabelStyle(color: info.trustLevel.color, iconSize: 9))
+            StatusPill(info.trustLevel.shortLabel, kind: info.trustLevel.kind, systemImage: info.trustLevel.symbol, size: .small)
                 .help(info.signerName.map { "\(info.trustLevel.label) · \($0)" } ?? info.trustLevel.label)
         case .analyzing?:
             ProgressView().controlSize(.mini)
         case .failed(let message)?:
-            Label("Unreadable", systemImage: "questionmark")
-                .labelStyle(BadgeLabelStyle(color: .secondary, iconSize: 9))
+            StatusPill("Unreadable", kind: .neutral, systemImage: "questionmark", size: .small)
                 .help(message)
         case nil:
             Text("–").foregroundStyle(.tertiary)
@@ -73,11 +71,11 @@ extension VirusTotalLookup {
         return "\(stats.malicious + stats.suspicious)/\(stats.verdictCount)"
     }
 
-    var scoreColor: Color {
-        guard let stats = report?.stats else { return .secondary }
-        if stats.malicious > 0 { return .netbiteBlock }
-        if stats.suspicious > 0 { return .orange }
-        return .netbiteAccent
+    var scoreKind: StatusKind {
+        guard let stats = report?.stats else { return .neutral }
+        if stats.malicious > 0 { return .danger }
+        if stats.suspicious > 0 { return .warning }
+        return .ok
     }
 }
 
@@ -90,8 +88,8 @@ struct VirusTotalBadge: View {
         if let path {
             switch security.virusTotal[path] {
             case .done(let lookup)?:
-                Label(lookup.scoreLabel, systemImage: lookup.isKnown ? "shield.lefthalf.filled" : "questionmark.circle")
-                    .labelStyle(BadgeLabelStyle(color: lookup.scoreColor, iconSize: 9))
+                StatusPill(lookup.scoreLabel, kind: lookup.scoreKind,
+                           systemImage: lookup.isKnown ? "shield.lefthalf.filled" : "questionmark.circle", size: .small)
                     .help(lookup.isKnown ? "Engines flagging the file / engines with a verdict" : "VirusTotal has never seen this file")
             case .checking?:
                 ProgressView().controlSize(.mini).help("Hashing and looking up (4 lookups per minute on the free tier)")
@@ -99,7 +97,7 @@ struct VirusTotalBadge: View {
                 Button {
                     Task { await security.checkVirusTotal(path: path) }
                 } label: {
-                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(Color.hexWarning)
                 }
                 .buttonStyle(.borderless)
                 .help("\(message) Click to retry.")
@@ -125,7 +123,7 @@ struct PathIcon: View {
             if let path, FileManager.default.fileExists(atPath: path) {
                 Image(nsImage: IconCache.icon(for: path)).resizable()
             } else {
-                Image(systemName: "questionmark.square.dashed").resizable().scaledToFit().foregroundStyle(.tertiary)
+                SymbolTile("questionmark", tint: .hexNeutral, size: size, shape: .rounded)
             }
         }
         .frame(width: size, height: size)
@@ -139,11 +137,15 @@ struct CodeDetailsSection: View {
     let path: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionTitle("Code signature")
-            signature
-            SectionTitle("VirusTotal").padding(.top, 6)
-            virusTotal
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Card {
+                SectionHeader("Code signature", systemImage: "signature", style: .eyebrow)
+                signature
+            }
+            Card {
+                SectionHeader("VirusTotal", systemImage: "shield.lefthalf.filled", style: .eyebrow)
+                virusTotal
+            }
         }
     }
 
@@ -151,18 +153,17 @@ struct CodeDetailsSection: View {
     private var signature: some View {
         switch security.signatures[path] {
         case .analyzed(let info)?:
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
-                row("Trust") { SignatureBadge(path: path) }
-                if let problem = info.validationError { row("Problem") { Text(problem) } }
-                if let signer = info.signerName { row("Signer") { Text(signer).textSelection(.enabled) } }
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                DetailRow("Trust") { SignatureBadge(path: path) }
+                if let problem = info.validationError { DetailRow("Problem", value: problem) }
+                if let signer = info.signerName { DetailRow("Signer", value: signer) }
                 if info.isSigned {
-                    row("Team ID") { Text(info.teamIdentifier ?? "–").monospaced().textSelection(.enabled) }
-                    row("Identifier") { Text(info.signingIdentifier ?? "–").textSelection(.enabled) }
-                    row("Notarized") { Text(info.isNotarized ? "Yes" : (info.isApplePlatform || info.isAppStore ? "Not needed" : "No")) }
-                    row("Hardened runtime") { Text(info.hasHardenedRuntime ? "Yes" : "No") }
+                    DetailRow("Team ID", value: info.teamIdentifier ?? "–", monospaced: true)
+                    DetailRow("Identifier", value: info.signingIdentifier ?? "–")
+                    DetailRow("Notarized", value: info.isNotarized ? "Yes" : (info.isApplePlatform || info.isAppStore ? "Not needed" : "No"))
+                    DetailRow("Hardened runtime", value: info.hasHardenedRuntime ? "Yes" : "No")
                 }
             }
-            .font(.callout)
         case .analyzing?:
             ProgressView().controlSize(.small)
         case .failed(let message)?:
@@ -206,13 +207,6 @@ struct CodeDetailsSection: View {
                 Button("Check with VirusTotal") { Task { await security.checkVirusTotal(path: path) } }
                 Text("Only the file's SHA-256 is sent, never the file.").font(.caption).foregroundStyle(.secondary)
             }
-        }
-    }
-
-    private func row<Content: View>(_ label: String, @ViewBuilder _ value: () -> Content) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
-            value()
         }
     }
 }

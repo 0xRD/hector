@@ -22,13 +22,18 @@ struct ProcessesView: View {
             header(rows: rows)
             Divider()
             if security.processes == nil {
-                ContentUnavailableView("Listing processes…", systemImage: "cpu")
+                EmptyStateView("Taking attendance…", systemImage: "cpu", message: "Listing every running process.")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .canvasBackground()
             } else if rows.isEmpty {
-                ContentUnavailableView(state.processesFlaggedOnly ? "Nothing flagged" : "No process",
-                                       systemImage: "checkmark.shield",
-                                       description: Text(state.processesFlaggedOnly
-                                                         ? "No process runs from a temporary, Downloads or hidden folder, and none runs deleted code."
-                                                         : "Nothing matches the search."))
+                EmptyStateView(state.processesFlaggedOnly ? "Nothing lurking here" : "Nothing matches",
+                               systemImage: state.processesFlaggedOnly ? "sparkles" : "sparkle.magnifyingglass",
+                               message: state.processesFlaggedOnly
+                                   ? "No process runs from a temporary, Downloads or hidden folder, and none runs deleted code."
+                                   : "No process matches the search.",
+                               tint: state.processesFlaggedOnly ? .hexOK : .hexNeutral)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .canvasBackground()
             } else {
                 table(rows)
             }
@@ -44,12 +49,7 @@ struct ProcessesView: View {
 
     private func header(rows: [ProcessRow]) -> some View {
         @Bindable var state = state
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Running processes").font(.headline)
-                Text(summary).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
+        return ScreenHeader("Running processes", subtitle: summary, systemImage: "cpu", tint: .hexInfo, pinned: true) {
             Toggle("Tree", isOn: $state.processesAsTree).toggleStyle(.checkbox)
                 .help("Show children under their parent process")
             Toggle("Flagged only", isOn: $state.processesFlaggedOnly).toggleStyle(.checkbox)
@@ -77,8 +77,6 @@ struct ProcessesView: View {
             .disabled(security.isLoadingProcesses)
             .keyboardShortcut("r", modifiers: .command)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     private func table(_ rows: [ProcessRow]) -> some View {
@@ -164,7 +162,7 @@ private struct ProcessNameCell: View {
             Text(row.process.name).lineLimit(1)
             if !row.flags.isEmpty {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(Color.netbiteBlock)
+                    .foregroundStyle(Color.hexDanger)
                     .help(row.flags.sorted().map(\.label).joined(separator: "\n"))
             }
         }
@@ -180,8 +178,7 @@ private struct ConnectionCountCell: View {
             if connections.isEmpty {
                 Text("0").foregroundStyle(.tertiary)
             } else {
-                Label("\(connections.count)", systemImage: "network")
-                    .labelStyle(BadgeLabelStyle(color: .netbiteAccent, iconSize: 9))
+                StatusPill("\(connections.count)", kind: .ok, systemImage: "network", size: .small)
             }
         } else {
             Text("–").foregroundStyle(.tertiary).help("Needs the helper")
@@ -197,60 +194,49 @@ struct ProcessDetailView: View {
         if let row {
             ScrollView {
                 content(row)
-                    .padding(18)
+                    .padding(Spacing.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .canvasBackground()
         } else {
-            ContentUnavailableView("No process selected", systemImage: "cpu",
-                                   description: Text("Pick a process to see its code, its parent and its connections."))
+            EmptyStateView("No process selected", systemImage: "cpu",
+                           message: "Pick a process to see its code, its parent and its connections.", compact: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     @ViewBuilder
     private func content(_ row: ProcessRow) -> some View {
         let process = row.process
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                SectionTitle("Process \(process.pid)")
-                HStack(spacing: 10) {
-                    PathIcon(path: process.appBundlePath ?? process.executablePath, size: 32)
-                    Text(process.displayName).font(.title2.bold()).textSelection(.enabled)
-                }
-                if process.appName != nil, process.appName != process.name {
-                    Text(process.name).font(.callout).foregroundStyle(.secondary)
-                }
-            }
-
-            if !row.flags.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(row.flags.sorted(), id: \.self) { flag in
-                        Label(flag.label, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.netbiteBlock)
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            HStack(alignment: .top, spacing: Spacing.md) {
+                PathIcon(path: process.appBundlePath ?? process.executablePath, size: 40)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    SectionHeader("Process", style: .eyebrow)
+                    Text(process.displayName).font(Font.sectionTitle).textSelection(.enabled)
+                    HStack(spacing: Spacing.xs) {
+                        CodeTag("PID \(process.pid)")
+                        if process.appName != nil, process.appName != process.name { CodeTag(process.name) }
                     }
                 }
-                .font(.callout)
             }
 
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-                detailRow("Parent") { Text(parentLabel(process)) }
-                detailRow("User") { Text(process.userName.map { "\($0) (\(process.userID))" } ?? String(process.userID)) }
+            ForEach(row.flags.sorted(), id: \.self) { flag in
+                Banner(flag.label, message: flag.explanation, kind: .danger)
+            }
+
+            Card {
+                SectionHeader("Details", systemImage: "list.bullet.rectangle", style: .eyebrow)
+                DetailRow("Parent", value: parentLabel(process))
+                DetailRow("User", value: process.userName.map { "\($0) (\(process.userID))" } ?? String(process.userID))
                 if let started = process.startedAt {
-                    detailRow("Started") { Text(started.formatted(date: .abbreviated, time: .standard)) }
+                    DetailRow("Started", value: started.formatted(date: .abbreviated, time: .standard))
                 }
-                if let path = process.executablePath {
-                    detailRow("Executable") {
-                        Text(path).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                if let path = process.executablePath { DetailRow("Executable", value: path, monospaced: true) }
                 if process.arguments.count > 1 {
-                    detailRow("Arguments") {
-                        Text(process.arguments.dropFirst().joined(separator: " "))
-                            .font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    DetailRow("Arguments", value: process.arguments.dropFirst().joined(separator: " "), monospaced: true)
                 }
             }
-            .font(.callout)
 
             if let quarantine = security.quarantineInfo(for: process) {
                 QuarantineSection(info: quarantine)
@@ -270,8 +256,8 @@ struct ProcessDetailView: View {
 
     @ViewBuilder
     private func connections(_ connections: [SocketInfo]?) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionTitle("Connections")
+        Card {
+            SectionHeader("Connections", systemImage: "network", style: .eyebrow)
             if let connections {
                 if connections.isEmpty {
                     Text("None right now").font(.callout).foregroundStyle(.secondary)
@@ -299,38 +285,21 @@ struct ProcessDetailView: View {
         let parent = security.processes?.processes.first { $0.pid == process.parentPID }
         return parent.map { "\($0.name) (\($0.pid))" } ?? String(process.parentPID)
     }
-
-    private func detailRow<Content: View>(_ label: String, @ViewBuilder _ value: () -> Content) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
-            value()
-        }
-    }
 }
 
 private struct QuarantineSection: View {
     let info: QuarantineInfo
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionTitle("Downloaded")
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
-                if let agent = info.agent { GridRow { Text("By").foregroundStyle(.secondary); Text(agent) } }
-                if let date = info.downloadedAt {
-                    GridRow { Text("On").foregroundStyle(.secondary); Text(date.formatted(date: .abbreviated, time: .shortened)) }
-                }
-                if let url = info.dataURL {
-                    GridRow { Text("From").foregroundStyle(.secondary); Text(url).textSelection(.enabled).lineLimit(3) }
-                }
-                if let origin = info.originURL {
-                    GridRow { Text("Page").foregroundStyle(.secondary); Text(origin).textSelection(.enabled).lineLimit(3) }
-                }
-                GridRow {
-                    Text("Opened").foregroundStyle(.secondary)
-                    Text(info.userApproved ? "Approved by the user in Gatekeeper" : "Not approved yet")
-                }
+        Card(tint: .hexWarningWash) {
+            SectionHeader("Downloaded from the internet", systemImage: "arrow.down.circle", style: .eyebrow)
+            if let agent = info.agent { DetailRow("By", value: agent) }
+            if let date = info.downloadedAt {
+                DetailRow("On", value: date.formatted(date: .abbreviated, time: .shortened))
             }
-            .font(.callout)
+            if let url = info.dataURL { DetailRow("From", value: url, monospaced: true) }
+            if let origin = info.originURL { DetailRow("Page", value: origin, monospaced: true) }
+            DetailRow("Opened", value: info.userApproved ? "Approved by the user in Gatekeeper" : "Not approved yet")
         }
     }
 }

@@ -226,6 +226,16 @@ public enum ProcessFlag: String, Codable, CaseIterable, Comparable, Sendable {
         }
     }
 
+    /// Why the flag deserves attention, in one sentence.
+    public var explanation: String {
+        switch self {
+        case .deletedExecutable: "The file this process started from is gone: it was deleted or replaced while running."
+        case .temporaryFolder: "Installers do this; malware too, because temporary folders are writable by anyone."
+        case .downloads: "Apps usually run from Applications; code started from Downloads was never installed."
+        case .hiddenPath: "Something in the path is hidden from Finder, a common way to stay unnoticed."
+        }
+    }
+
     public static func < (lhs: ProcessFlag, rhs: ProcessFlag) -> Bool {
         allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!
     }

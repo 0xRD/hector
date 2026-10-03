@@ -37,7 +37,7 @@ struct NetbiteApp: App {
             SettingsView()
                 .environment(security)
                 .environment(windowState)
-                .tint(.netbiteAccent)
+                .tint(.hexTint)
         }
     }
 }

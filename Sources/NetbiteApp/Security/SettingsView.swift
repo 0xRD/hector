@@ -22,7 +22,7 @@ private struct VirusTotalSettings: View {
             Section {
                 LabeledContent("API key") {
                     if security.hasAPIKey {
-                        Label("Stored in your Keychain", systemImage: "key.fill").foregroundStyle(Color.netbiteAccent)
+                        Label("Stored in your Keychain", systemImage: "key.fill").foregroundStyle(Color.hexOK)
                     } else {
                         Text("None").foregroundStyle(.secondary)
                     }
@@ -40,7 +40,7 @@ private struct VirusTotalSettings: View {
                     Link("Get a free key", destination: URL(string: "https://www.virustotal.com/gui/my-apikey")!)
                 }
                 if let message = security.keyMessage {
-                    Text(message).font(.caption).foregroundStyle(Color.netbiteBlock)
+                    Text(message).font(.caption).foregroundStyle(Color.hexDanger)
                 }
             } header: {
                 Text("VirusTotal")
