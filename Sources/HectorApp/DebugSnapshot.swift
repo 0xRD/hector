@@ -8,6 +8,8 @@ import AppKit
 /// - `HECTOR_DEBUG_HOVER=N` pretends the pointer hovers the N-th line of the map.
 /// - `HECTOR_DEBUG_SELECT=N` selects the N-th line of the map.
 /// - `HECTOR_DEBUG_BLOCKLISTS=1` opens the Blocklists screen.
+/// - `HECTOR_DEBUG_SCREEN=NAME` opens a screen: blocklists, persistence, processes, checkup,
+///   taps or devices.
 @MainActor
 enum DebugSnapshot {
     static var environment: [String: String] { ProcessInfo.processInfo.environment }
@@ -15,6 +17,19 @@ enum DebugSnapshot {
     static var hoverIndex: Int? { environment["HECTOR_DEBUG_HOVER"].flatMap(Int.init) }
     static var selectIndex: Int? { environment["HECTOR_DEBUG_SELECT"].flatMap(Int.init) }
     static var opensBlocklists: Bool { environment["HECTOR_DEBUG_BLOCKLISTS"] != nil }
+
+    static var screen: SidebarItem? {
+        if opensBlocklists { return .blocklists }
+        switch environment["HECTOR_DEBUG_SCREEN"] {
+        case "blocklists": return .blocklists
+        case "persistence": return .persistence
+        case "processes": return .processes
+        case "checkup": return .checkup
+        case "taps": return .keyboardTaps
+        case "devices": return .captureDevices
+        default: return nil
+        }
+    }
 
     static func scheduleIfRequested() {
         guard let path = environment["HECTOR_SNAPSHOT"] else { return }

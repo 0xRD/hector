@@ -52,8 +52,10 @@ struct ContentView: View {
                     Divider()
                     StatusBar()
                 }
+                .fillsSplitPane()
                 .inspector(isPresented: $state.showInspector) {
                     DestinationDetailView(row: selectedRow, usedBy: usedBySelected)
+                        .fillsSplitPane()
                         .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
                 }
             }
@@ -102,7 +104,7 @@ struct ContentView: View {
         }
         #if DEBUG
         .task {
-            if DebugSnapshot.opensBlocklists { state.sidebarSelection = .blocklists }
+            if let screen = DebugSnapshot.screen { state.sidebarSelection = screen }
             guard DebugSnapshot.hoverIndex != nil || DebugSnapshot.selectIndex != nil else { return }
             try? await Task.sleep(for: .seconds(4))
             let rows = visibleRows.filter { $0.destination.country != nil }

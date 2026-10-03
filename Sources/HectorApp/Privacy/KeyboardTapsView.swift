@@ -32,8 +32,10 @@ struct KeyboardTapsView: View {
             Divider()
             content(taps)
         }
+        .fillsSplitPane()
         .inspector(isPresented: $state.showInspector) {
             KeyboardTapDetailView(security: security, tap: selectedTap)
+                .fillsSplitPane()
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
         .task {
@@ -129,9 +131,11 @@ struct KeyboardTapsView: View {
 
     private var summary: String {
         guard let taps = privacy.taps else { return "Apps that receive your keystrokes through an event tap" }
-        let active = taps.filter(\.isActive).count
+        // A switched-off tap receives nothing, whatever its mode.
+        let active = taps.filter { $0.isActive && $0.isEnabled }.count
+        let off = taps.filter { !$0.isEnabled }.count
         let count = taps.count == 1 ? "1 keyboard tap" : "\(taps.count) keyboard taps"
-        return "\(count) · \(active) active · read from the system's event tap list"
+        return "\(count) · \(active) active" + (off > 0 ? " · \(off) switched off" : "") + " · read from the system's event tap list"
     }
 }
 

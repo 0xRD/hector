@@ -13,7 +13,7 @@ func taps(_ args: Arguments) throws {
         print("No event tap receives keystrokes.")
         return
     }
-    print(pad("TAP", 7) + pad("PID", 7) + pad("MODE", 13) + pad("SCOPE", 22) + pad("SIGNATURE", 14) + "PROCESS")
+    print(pad("TAP", 11) + pad("PID", 7) + pad("MODE", 13) + pad("SCOPE", 22) + pad("SIGNATURE", 22) + "PROCESS")
     var signatures: [String: String] = [:]
     for tap in taps {
         let process = tap.tapping
@@ -30,10 +30,10 @@ func taps(_ args: Arguments) throws {
             }
         }
         let name = process.displayName + (process.executablePath.map { "  \($0)" } ?? "")
-        print(pad(String(tap.tapID), 7) + pad(String(process.pid), 7) + pad(mode, 13) + pad(LogText.sanitized(scope), 22)
-              + pad(trust, 14) + LogText.sanitized(name))
+        print(pad(String(tap.tapID), 11) + pad(String(process.pid), 7) + pad(mode, 13) + pad(LogText.sanitized(scope), 22)
+              + pad(trust, 22) + LogText.sanitized(name))
         let events = tap.allEvents ? "every event" : tap.keyEvents.map { $0.label.lowercased() }.joined(separator: ", ")
-        print(String(repeating: " ", count: 14) + "\(events) · \(tap.location.label.lowercased())")
+        print(String(repeating: " ", count: 18) + "\(events) · \(tap.location.label.lowercased())")
     }
     let active = taps.filter(\.isActive).count
     print("\(taps.count) keyboard taps, \(active) active (can change or drop keystrokes).")

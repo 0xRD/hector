@@ -139,8 +139,9 @@ func endpoint(_ address: IPAddress?, _ port: UInt16) -> String {
     return address.isV4 ? "\(address):\(port)" : "[\(address)]:\(port)"
 }
 
+/// Pads a table cell to `width`; a longer value keeps one space so it never runs into the next.
 func pad(_ s: String, _ width: Int) -> String {
-    s.count >= width ? s : s + String(repeating: " ", count: width - s.count)
+    s.count >= width ? s + " " : s + String(repeating: " ", count: width - s.count)
 }
 
 // MARK: - Reverse DNS
