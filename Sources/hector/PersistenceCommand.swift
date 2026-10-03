@@ -49,7 +49,7 @@ func persistence(_ args: Arguments) throws {
 private func backgroundTasksFromHelper(_ args: Arguments) -> ToolOutput? {
     let socket = args.options["--socket"] ?? HelperPaths.socket
     guard geteuid() != 0, FileManager.default.fileExists(atPath: socket),
-          case .toolOutput(let text, let truncated)? = try? HelperClient.send(.backgroundTasks, socketPath: socket, timeout: 30)
+          case .toolOutput(let text, let truncated)? = try? HelperClient.sendChecked(.backgroundTasks, socketPath: socket, timeout: 30)
     else { return nil }
     return ToolOutput(output: text, truncated: truncated)
 }

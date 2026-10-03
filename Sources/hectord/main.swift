@@ -57,25 +57,55 @@ func serve(dryRunRoot: URL?, socketPath: String) async throws -> Never {
     guard listen(server, 8) == 0 else { throw HelperError("listen") }
     log("hectord \(HectorVersion.current) listening on \(socketPath)\(dryRunRoot.map { " (dry run in \($0.path))" } ?? "")")
 
-    // One request at a time. Between requests, and at least every few minutes when nobody talks to
-    // the helper, subscribed hosts lists that are due are downloaded again.
+    // Connections are served side by side (at most `HelperLimits.maximumConcurrentClients`), so
+    // the app's once-per-second snapshot never waits behind a long apply. Everything that reads or
+    // changes the rules goes through `gate`, one at a time. Between connections, and at least
+    // every few minutes when nobody talks to the helper, subscribed hosts lists that are due are
+    // downloaded again.
+    let gate = EnforcerGate(enforcer)
+    let clients = DispatchQueue(label: "io.github.0xrd.hectord.clients", attributes: .concurrent)
+    let slots = DispatchSemaphore(value: HelperLimits.maximumConcurrentClients)
+    let dryRun = dryRunRoot != nil
     let waitMilliseconds = Int32(HostsListCatalog.checkInterval * 1_000)
     while true {
         var descriptor = pollfd(fd: server, events: Int16(POLLIN), revents: 0)
         // While a scheduled download runs in the background, wake up often to collect it.
-        let wait: Int32 = enforcer.isRefreshingInBackground ? 1_000 : waitMilliseconds
-        if poll(&descriptor, 1, wait) > 0 {
+        let refreshing = gate.sync { $0.isRefreshingInBackground }
+        if poll(&descriptor, 1, refreshing ? 1_000 : waitMilliseconds) > 0 {
+            slots.wait()
             let client = accept(server, nil, nil)
             if client >= 0 {
-                await handle(client: client, enforcer: enforcer, dryRun: dryRunRoot != nil)
-                close(client)
+                clients.async {
+                    handle(client: client, gate: gate, dryRun: dryRun)
+                    close(client)
+                    slots.signal()
+                }
+            } else {
+                slots.signal()
             }
         }
-        enforcer.refreshHostsListsIfDue()
+        gate.async { $0.refreshHostsListsIfDue() }
     }
 }
 
-func handle(client: Int32, enforcer: Enforcer, dryRun: Bool) async {
+/// The only way to the `Enforcer`, which is not thread-safe: whatever reads or changes the rules
+/// runs on one serial queue, in the order requests arrived.
+final class EnforcerGate: @unchecked Sendable {
+    private let enforcer: Enforcer
+    private let queue = DispatchQueue(label: "io.github.0xrd.hectord.rules")
+
+    init(_ enforcer: Enforcer) { self.enforcer = enforcer }
+
+    func sync<T>(_ body: (Enforcer) throws -> T) rethrows -> T {
+        try queue.sync { try body(enforcer) }
+    }
+
+    func async(_ body: @escaping @Sendable (Enforcer) -> Void) {
+        queue.async { body(self.enforcer) }
+    }
+}
+
+func handle(client: Int32, gate: EnforcerGate, dryRun: Bool) {
     // Each read() waits at most 2 s; the whole request must arrive within the deadline.
     var timeout = timeval(tv_sec: 2, tv_usec: 0)
     setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
@@ -88,35 +118,15 @@ func handle(client: Int32, enforcer: Enforcer, dryRun: Bool) async {
         do {
             let line = try LineSocket.readLine(from: client, maximumSize: HelperLimits.maximumRequestSize,
                                                deadline: Date().addingTimeInterval(HelperLimits.requestDeadline))
-            let request = try JSONDecoder.hector.decode(HelperRequest.self, from: line)
-            switch request {
-            case .status:
-                response = .status(enforcer.status())
-            case .snapshot:
-                response = .snapshot(SocketCollector().snapshot())
-            case .processes:
-                response = .processes(ProcessCollector().snapshot())
-            case .backgroundTasks:
-                // Fixed path and arguments: nothing from the request reaches the command line.
-                guard let output = ToolRunner.live.run("/usr/bin/sfltool", ["dumpbtm"]), output.succeeded else {
-                    throw HelperError("sfltool dumpbtm failed.")
-                }
-                response = .toolOutput(output.output, truncated: output.truncated)
-            case .apply(let blocklist, let authorization):
-                try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
-                try HelperLimits.validate(blocklist)
-                log("Apply requested by uid \(peer).")
-                response = .status(try enforcer.apply(blocklist))
-            case .flush(let authorization):
-                try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
-                log("Flush requested by uid \(peer).")
-                response = .status(try enforcer.flush())
-            case .refreshHostsLists(let authorization):
-                // It makes root download and rewrites /etc/hosts: the same approval as apply.
-                try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
-                log("Hosts lists refresh requested by uid \(peer).")
-                response = .status(try enforcer.refreshHostsLists())
+            let request: HelperRequest
+            do {
+                request = try JSONDecoder.hector.decode(HelperRequest.self, from: line)
+            } catch is DecodingError {
+                // Most likely an app newer than this helper.
+                throw HelperError("hectord \(HectorVersion.current) does not understand this request. "
+                                  + "Update the helper from Hector → Blocklists.")
             }
+            response = try respond(to: request, peer: peer, gate: gate, dryRun: dryRun)
         } catch {
             log("Request failed: \(error)")
             response = .failure(String(describing: error))
@@ -126,6 +136,39 @@ func handle(client: Int32, enforcer: Enforcer, dryRun: Bool) async {
     }
     if let data = try? JSONEncoder.hectorWire.encode(response) {
         try? LineSocket.write(data, to: client)
+    }
+}
+
+func respond(to request: HelperRequest, peer: uid_t, gate: EnforcerGate, dryRun: Bool) throws -> HelperResponse {
+    switch request {
+    case .hello:
+        return .hello(.current)
+    case .snapshot:
+        return .snapshot(SocketCollector().snapshot())
+    case .processes:
+        return .processes(ProcessCollector().snapshot())
+    case .backgroundTasks:
+        // Fixed path and arguments: nothing from the request reaches the command line.
+        guard let output = ToolRunner.live.run("/usr/bin/sfltool", ["dumpbtm"]), output.succeeded else {
+            throw HelperError("sfltool dumpbtm failed.")
+        }
+        return .toolOutput(output.output, truncated: output.truncated)
+    case .status:
+        return .status(gate.sync { $0.status() })
+    case .apply(let blocklist, let authorization):
+        try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
+        try HelperLimits.validate(blocklist)
+        log("Apply requested by uid \(peer).")
+        return .status(try gate.sync { try $0.apply(blocklist) })
+    case .flush(let authorization):
+        try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
+        log("Flush requested by uid \(peer).")
+        return .status(try gate.sync { try $0.flush() })
+    case .refreshHostsLists(let authorization):
+        // It makes root download and rewrites /etc/hosts: the same approval as apply.
+        try requireAuthorization(authorization, peer: peer, dryRun: dryRun)
+        log("Hosts lists refresh requested by uid \(peer).")
+        return .status(try gate.sync { try $0.refreshHostsLists() })
     }
 }
 

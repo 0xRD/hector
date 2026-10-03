@@ -85,3 +85,47 @@ import Testing
         #expect(LegacyPaths.authorizationRight != HelperAuthorization.rightName)
     }
 }
+
+@Suite struct HelperHandshakeTests {
+    @Test func everyRequestMapsToACapabilityTheHelperAnnounces() {
+        let requests: [HelperRequest] = [
+            .hello, .status, .snapshot, .processes, .backgroundTasks,
+            .apply(Blocklist(), authorization: Data()), .flush(authorization: Data()),
+            .refreshHostsLists(authorization: Data()),
+        ]
+        let current = HelperInfo.current
+        #expect(Set(requests.map(\.capability)) == Set(HelperCapability.allCases))
+        #expect(requests.allSatisfy { current.supports($0.capability) })
+        #expect(!current.isOutdated)
+        // Only what touches the rules is serialized; snapshots never wait behind an apply.
+        #expect(requests.filter(\.touchesRules).map(\.capability).sorted { $0.rawValue < $1.rawValue }
+                == [.apply, .flush, .refreshHostsLists, .status])
+    }
+
+    @Test func legacyHelpersAreOutdatedAndLackTheNewRequests() {
+        let legacy = HelperInfo.legacy
+        #expect(legacy.isOutdated)
+        #expect(legacy.supports(.status) && legacy.supports(.snapshot) && legacy.supports(.apply) && legacy.supports(.flush))
+        #expect(!legacy.supports(.processes) && !legacy.supports(.backgroundTasks) && !legacy.supports(.refreshHostsLists))
+    }
+
+    @Test func helloRoundTripsAndToleratesUnknownCapabilities() throws {
+        let reply = HelperResponse.hello(HelperInfo(version: "9.9.9", protocolVersion: 7,
+                                                    capabilities: HelperCapability.allCases.map(\.rawValue) + ["teleport"]))
+        let decoded = try JSONDecoder.hector.decode(HelperResponse.self, from: JSONEncoder.hectorWire.encode(reply))
+        guard case .hello(let info) = decoded else { Issue.record("not a hello"); return }
+        #expect(info.version == "9.9.9")
+        #expect(info.capabilities.contains("teleport"))
+        #expect(!info.isOutdated)
+        let request = try JSONDecoder.hector.decode(HelperRequest.self, from: JSONEncoder.hectorWire.encode(HelperRequest.hello))
+        #expect(request.capability == .hello)
+    }
+
+    @Test func anOlderHelperCannotDecodeHello() throws {
+        // What a pre-handshake helper does with the request: its enum has no `hello` case, so
+        // decoding fails and it answers with a failure, which the client reads as `legacy`.
+        enum OldRequest: Codable { case status, snapshot }
+        let data = try JSONEncoder.hectorWire.encode(HelperRequest.hello)
+        #expect(throws: DecodingError.self) { try JSONDecoder.hector.decode(OldRequest.self, from: data) }
+    }
+}

@@ -356,7 +356,10 @@ func helper(_ args: Arguments) throws {
             print("Hosts lists: \(subscribed.isEmpty ? "none" : subscribed.joined(separator: ", ")) · \(listDomains.formatted()) domains in /etc/hosts (`hector lists` for details)")
         }
         status.warnings.forEach { print("warning: \($0)") }
-    case .snapshot, .processes, .toolOutput:
+        if let info = try? HelperClient.info(socketPath: socket) {
+            print("Protocol \(info.protocolVersion)" + (info.isOutdated ? " · older than this CLI: update the helper from Hector → Blocklists" : ""))
+        }
+    case .snapshot, .processes, .toolOutput, .hello:
         print("Unexpected reply.")
     case .failure(let message):
         throw CLIError(message)

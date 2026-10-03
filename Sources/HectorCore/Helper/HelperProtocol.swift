@@ -57,6 +57,75 @@ public enum HelperRequest: Codable, Sendable {
     /// The output of `sfltool dumpbtm`, the login items and background tasks of every user. The
     /// tool asks for a password unless it runs as root.
     case backgroundTasks
+    /// Who the helper is and what it can do (`HelperInfo`). Send it first: a helper older than
+    /// this case cannot decode it and answers with a failure, which tells the client it faces a
+    /// helper from before the handshake (`HelperInfo.legacy`).
+    case hello
+
+    /// The capability a request needs, to check it against `HelperInfo.capabilities` before sending.
+    public var capability: HelperCapability {
+        switch self {
+        case .status: .status
+        case .apply: .apply
+        case .flush: .flush
+        case .refreshHostsLists: .refreshHostsLists
+        case .snapshot: .snapshot
+        case .processes: .processes
+        case .backgroundTasks: .backgroundTasks
+        case .hello: .hello
+        }
+    }
+
+    /// Requests that read or change the enforced rules. The helper runs them one at a time; the
+    /// others (snapshots, processes, login items, hello) run alongside them.
+    public var touchesRules: Bool {
+        switch self {
+        case .status, .apply, .flush, .refreshHostsLists: true
+        case .snapshot, .processes, .backgroundTasks, .hello: false
+        }
+    }
+}
+
+/// One kind of request a helper understands.
+public enum HelperCapability: String, Codable, CaseIterable, Sendable {
+    case hello, status, snapshot, apply, flush, processes, backgroundTasks, refreshHostsLists
+}
+
+/// The helper's answer to `hello`.
+public struct HelperInfo: Codable, Equatable, Sendable {
+    /// Bumped when requests or responses change shape, independently of the app version.
+    public static let currentProtocol = 2
+
+    public var version: String
+    public var protocolVersion: Int
+    /// Raw values, so a newer helper's capabilities an older app does not know still decode.
+    public var capabilities: [String]
+
+    public init(version: String, protocolVersion: Int, capabilities: [String]) {
+        self.version = version
+        self.protocolVersion = protocolVersion
+        self.capabilities = capabilities
+    }
+
+    /// What this build of the helper answers.
+    public static var current: HelperInfo {
+        HelperInfo(version: HectorVersion.current, protocolVersion: currentProtocol,
+                   capabilities: HelperCapability.allCases.map(\.rawValue))
+    }
+
+    /// A helper from before the handshake (Netbite 0.3 and Hector before protocol 2): it knows
+    /// status, snapshots, apply and flush, and maybe more, but cannot say so.
+    public static let legacy = HelperInfo(version: "0.3 or older", protocolVersion: 1,
+                                          capabilities: [HelperCapability.status, .snapshot, .apply, .flush].map(\.rawValue))
+
+    public func supports(_ capability: HelperCapability) -> Bool {
+        capabilities.contains(capability.rawValue)
+    }
+
+    /// Whether the installed helper is older than this app and should be updated.
+    public var isOutdated: Bool {
+        protocolVersion < Self.currentProtocol || !HelperCapability.allCases.allSatisfy(supports)
+    }
 }
 
 /// Bounds the helper enforces on what clients send it.
@@ -67,6 +136,8 @@ public enum HelperLimits {
     /// helper, which serves one request at a time.
     public static let requestDeadline: TimeInterval = 5
     public static let maximumRules = 5_000
+    /// Connections the helper serves at the same time; the next ones wait in the listen backlog.
+    public static let maximumConcurrentClients = 8
     public static let maximumNoteLength = 500
 
     public struct Violation: Error, CustomStringConvertible {
@@ -133,6 +204,7 @@ public enum HelperResponse: Codable, Sendable {
     case processes(ProcessSnapshot)
     /// Text printed by a system tool, as the app parses it itself.
     case toolOutput(String, truncated: Bool)
+    case hello(HelperInfo)
     case failure(String)
 }
 

@@ -53,6 +53,7 @@ Based on the design mockup (main window and blocklist editor).
 
 Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbite stays the name of its network module. Everything keeps working without a paid Apple Developer account.
 
+- [x] Helper: connections served concurrently (rule changes serialized), and a `hello` handshake with version, protocol and capabilities so the app and the CLI name an outdated helper instead of failing to decode
 - [ ] **Blocking before release:** on macOS 26 the sidebar is drawn above the window and the top of the map is cut off; to fix in a local session on a Mac (details and leads in NEXT_STEPS.md, item 0)
 
 - [x] Rename the app, the bundle, the helper, the CLI and the docs to Hector, with migration from Netbite 0.3 (helper, blocklist, data, VirusTotal key)

@@ -106,7 +106,7 @@ final class BlockingController {
         lastError = nil
         defer { isWorking = false }
         do {
-            let response = try await Task.detached { try HelperClient.send(makeRequest()) }.value
+            let response = try await Task.detached { try HelperClient.sendChecked(makeRequest()) }.value
             handle(response)
         } catch let error as HelperAuthorization.AuthorizationError where error.status == errAuthorizationCanceled {
             return
@@ -119,7 +119,7 @@ final class BlockingController {
         switch response {
         case .status(let status): helper = .ready(status)
         case .failure(let message): lastError = message
-        case .snapshot, .processes, .toolOutput: break
+        case .snapshot, .processes, .toolOutput, .hello: break
         }
     }
 
