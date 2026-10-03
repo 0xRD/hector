@@ -1,9 +1,12 @@
 name: Release
 
 # Push a tag such as v0.3.0 to publish a downloadable, universal Netbite.app.
+# Run it by hand (Actions → Release → Run workflow) for a dry run: the same build and checks, with
+# the zip kept as a workflow artifact instead of a published release.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -20,8 +23,15 @@ jobs:
       - name: Check the tag matches the version in the code
         run: |
           VERSION=$(sed -n 's/.*static let current = "\(.*\)".*/\1/p' Sources/NetbiteCore/Helper/HelperProtocol.swift)
-          test "v$VERSION" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match version $VERSION"; exit 1; }
+          test -n "$VERSION" || { echo "No version found in HelperProtocol.swift"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            test "v$VERSION" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match version $VERSION"; exit 1; }
+          fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ZIP=.build/Netbite-$VERSION-macOS.zip" >> "$GITHUB_ENV"
+
+      - name: Toolchain
+        run: swift --version
 
       - name: Test
         run: swift test
@@ -29,12 +39,46 @@ jobs:
       - name: Build universal Netbite.app
         run: scripts/bundle-app.sh --universal --zip
 
+      # Checks what users download, not the build folder: unpacked from the zip, both
+      # architectures in every binary, a valid signature, the right version, a matching checksum.
+      - name: Check the zip
+        run: |
+          (cd .build && shasum -a 256 -c "$(basename "$ZIP").sha256")
+          CHECK=$(mktemp -d)
+          ditto -x -k "$ZIP" "$CHECK"
+          APP="$CHECK/Netbite.app"
+          for BIN in "$APP/Contents/MacOS/Netbite" "$APP/Contents/Helpers/netbite" "$APP/Contents/Helpers/netbited"; do
+            ARCHS=$(lipo -archs "$BIN")
+            echo "$BIN: $ARCHS"
+            case " $ARCHS " in *" arm64 "*) ;; *) echo "arm64 missing"; exit 1 ;; esac
+            case " $ARCHS " in *" x86_64 "*) ;; *) echo "x86_64 missing"; exit 1 ;; esac
+          done
+          codesign --verify --strict --deep "$APP"
+          PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
+          test "$PLIST_VERSION" = "$VERSION" || { echo "Info.plist says $PLIST_VERSION"; exit 1; }
+          test "$("$APP/Contents/Helpers/netbite" version)" = "netbite $VERSION"
+
+      - name: Write the release notes
+        run: |
+          SHA=$(cut -d' ' -f1 "$ZIP.sha256")
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" docs/RELEASE_NOTES.md > .build/notes.md
+          if grep -n '{{' .build/notes.md; then echo "Unfilled placeholder in the release notes"; exit 1; fi
+
+      - name: Keep the dry-run build
+        if: github.ref_type != 'tag'
+        # Pinned to a commit, like checkout.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Netbite-${{ env.VERSION }}-dry-run
+          path: |
+            ${{ env.ZIP }}
+            ${{ env.ZIP }}.sha256
+            .build/notes.md
+
       - name: Publish the release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ZIP=".build/Netbite-$VERSION-macOS.zip"
-          SHA=$(cut -d' ' -f1 "$ZIP.sha256")
-          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" docs/RELEASE_NOTES.md > notes.md
           gh release create "$GITHUB_REF_NAME" "$ZIP" "$ZIP.sha256" \
-            --title "Netbite $VERSION" --notes-file notes.md
+            --verify-tag --title "Netbite $VERSION" --notes-file .build/notes.md

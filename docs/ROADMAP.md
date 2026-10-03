@@ -38,7 +38,10 @@ Based on the design mockup (main window and blocklist editor).
 - [ ] Re-test the in-app uninstall end to end after the fix for the hang (install helper, uninstall, `scripts/check-uninstall.sh`); check System Settings → General → Login Items for a stale background item
 - [ ] Remove personal data before going public: rewrite the commits that carry a personal e-mail (use the GitHub noreply address), scan files and fixtures again, then force-push after explicit approval
 - [ ] First push of the workflows: confirm CI passes on GitHub's macOS runner (Xcode, not the Command Line Tools)
+  - [x] First run failed on Swift 6.1.2 (Xcode 16.4): type-checker timeout in `MapGeometry.swift`, fixed
+  - [x] CI also bundles the app; can be run by hand on a branch
 - [ ] Tag `v0.3.0` and check the published release (universal zip, SHA-256, release notes)
+  - [x] Release workflow: dry run by hand (zip kept as an artifact), checks of the zip before publishing
 - [ ] Imported hosts lists (StevenBlack Unified, EasyPrivacy converted), with periodic updates (moved to 0.4 if 0.3 ships first)
 
 ## 0.4: Hexorcist

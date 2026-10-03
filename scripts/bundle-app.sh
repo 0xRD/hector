@@ -64,5 +64,7 @@ if [ "$ZIP" = 1 ]; then
     rm -f "$ARCHIVE"
     # ditto keeps the signature and extended attributes intact, unlike zip.
     ditto -c -k --keepParent "$APP" "$ARCHIVE"
-    shasum -a 256 "$ARCHIVE" | tee "$ARCHIVE.sha256"
+    # From inside .build, so the checksum file names the zip alone and `shasum -c` works next to
+    # the downloaded zip.
+    (cd .build && shasum -a 256 "$(basename "$ARCHIVE")") | tee "$ARCHIVE.sha256"
 fi

@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets a branch be checked by hand (Actions → CI → Run workflow) before a pull request.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,3 +24,7 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+      # The release workflow runs the same script with --universal; this catches a broken bundle
+      # before a tag is pushed.
+      - name: Bundle the app
+        run: scripts/bundle-app.sh --zip

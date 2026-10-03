@@ -63,11 +63,16 @@ struct MapGeometry {
         /// Points along the arc for hit-testing; the first fifth is skipped because every arc
         /// starts at the same origin.
         func samples(_ count: Int = 18) -> [CGPoint] {
-            (0...count).map { i in
-                let t = 0.2 + 0.8 * Double(i) / Double(count)
-                let u = 1 - t
-                return CGPoint(x: u * u * start.x + 2 * u * t * control.x + t * t * end.x,
-                               y: u * u * start.y + 2 * u * t * control.y + t * t * end.y)
+            // Typed step by step: as one expression, Swift 6.1 (Xcode 16) gives up type-checking it.
+            (0...count).map { (i: Int) -> CGPoint in
+                let t: CGFloat = 0.2 + 0.8 * CGFloat(i) / CGFloat(count)
+                let u: CGFloat = 1 - t
+                let a: CGFloat = u * u
+                let b: CGFloat = 2 * u * t
+                let c: CGFloat = t * t
+                let x: CGFloat = a * start.x + b * control.x + c * end.x
+                let y: CGFloat = a * start.y + b * control.y + c * end.y
+                return CGPoint(x: x, y: y)
             }
         }
     }
