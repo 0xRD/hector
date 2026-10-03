@@ -10,6 +10,8 @@ import Observation
 @Observable
 final class WindowState {
     var sidebarSelection: SidebarItem? = .allApps
+    /// The app the Connections screen is narrowed to; `nil` shows every app.
+    var appFilter: AppGroup.ID?
     var selectedDestination: DestinationRef?
     /// Destination under the pointer, on the map or in the list.
     var hovered: DestinationRef?

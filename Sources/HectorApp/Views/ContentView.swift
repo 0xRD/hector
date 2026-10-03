@@ -15,10 +15,7 @@ struct ContentView: View {
         }
     }
 
-    private var selectedAppID: AppGroup.ID? {
-        if case .app(let id) = state.sidebarSelection { return id }
-        return nil
-    }
+    private var selectedAppID: AppGroup.ID? { state.appFilter }
 
     var body: some View {
         @Bindable var monitor = monitor
@@ -27,7 +24,7 @@ struct ContentView: View {
         let groups = listGroups(from: rows)
 
         NavigationSplitView {
-            SidebarView(selection: $state.sidebarSelection, highlightedAppID: state.hovered?.appID)
+            SidebarView(selection: $state.sidebarSelection)
                 .navigationSplitViewColumnWidth(min: 230, ideal: 260, max: 340)
         } detail: {
             if state.sidebarSelection == .blocklists {
@@ -65,6 +62,11 @@ struct ContentView: View {
         .navigationSubtitle(isNetworkScreen ? "\(monitor.liveConnectionCount) live connections" : "")
         .searchable(text: $state.search, placement: .toolbar, prompt: searchPrompt)
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                if isNetworkScreen {
+                    AppFilterMenu(monitor: monitor, state: state)
+                }
+            }
             ToolbarItem(placement: .principal) {
                 if isNetworkScreen {
                     Picker("Show", selection: $state.filter) {
@@ -109,7 +111,7 @@ struct ContentView: View {
         }
         #endif
         .sheet(isPresented: $state.showUninstall) { UninstallSheet() }
-        .onChange(of: state.sidebarSelection) {
+        .onChange(of: state.appFilter) {
             if let selected = state.selectedDestination, let app = selectedAppID, selected.appID != app {
                 state.selectedDestination = nil
             }
@@ -130,7 +132,7 @@ struct ContentView: View {
                 selected: state.selectedDestination,
                 hovered: Bindable(state).hovered,
                 onSelect: { row in
-                    if selectedAppID != nil { state.sidebarSelection = .app(row.app.id) }
+                    if selectedAppID != nil { state.appFilter = row.app.id }
                     state.selectedDestination = row.id
                     state.showInspector = true
                 }
@@ -165,7 +167,7 @@ struct ContentView: View {
         case .captureDevices: return "Camera & mic"
         default: break
         }
-        guard let id = selectedAppID else { return "All apps" }
+        guard let id = selectedAppID else { return "Connections" }
         return monitor.apps[id]?.name ?? "Hector"
     }
 
@@ -377,5 +379,42 @@ private struct StatusBarLabelStyle: LabelStyle {
             configuration.icon.imageScale(.small)
             configuration.title
         }
+    }
+}
+
+/// Narrows the Connections screen to one app. Replaces the per-app rows the sidebar used to
+/// have. Takes its models as parameters: toolbar items are hosted outside the window's view tree.
+private struct AppFilterMenu: View {
+    let monitor: ConnectionMonitor
+    let state: WindowState
+
+    var body: some View {
+        let apps = monitor.apps.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        Menu {
+            Button("All apps") { state.appFilter = nil }
+            Divider()
+            Section("Apps") {
+                ForEach(apps.filter { $0.kind == .app }) { app in
+                    Button(label(for: app)) { state.appFilter = app.id }
+                }
+            }
+            Section("System & tools") {
+                ForEach(apps.filter { $0.kind == .system }) { app in
+                    Button(label(for: app)) { state.appFilter = app.id }
+                }
+            }
+        } label: {
+            Label(currentName, systemImage: state.appFilter == nil ? "square.grid.2x2" : "app.badge.checkmark")
+        }
+        .help("Show the connections of every app, or of one app")
+    }
+
+    private var currentName: String {
+        guard let id = state.appFilter else { return "All apps" }
+        return monitor.apps[id]?.name ?? "All apps"
+    }
+
+    private func label(for app: AppGroup) -> String {
+        app.liveCount > 0 ? "\(app.name) · \(app.liveCount) live" : app.name
     }
 }

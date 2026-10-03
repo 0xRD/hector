@@ -1,8 +1,11 @@
 import SwiftUI
 
+/// The sidebar is navigation only: one entry per screen. It holds no live, per-app rows, so it
+/// stays short and static (a long list refreshed every second kept the sidebar's scroll view
+/// stuck at the bottom on macOS 26). Filtering by app happens on the Connections screen.
 enum SidebarItem: Hashable {
+    /// Netbite's map and list of connections, for every app or the one in `WindowState.appFilter`.
     case allApps
-    case app(AppGroup.ID)
     case blocklists
     case persistence
     case processes
@@ -18,8 +21,6 @@ struct SidebarView: View {
     @Environment(CheckupController.self) private var checkup
     @Environment(PrivacyController.self) private var privacy
     @Binding var selection: SidebarItem?
-    /// App owning the line hovered on the map or in the list.
-    let highlightedAppID: AppGroup.ID?
 
     var body: some View {
         // The footer sits below the list rather than in a `.safeAreaInset` of it: an inset on a
@@ -31,12 +32,10 @@ struct SidebarView: View {
     }
 
     private var list: some View {
-        // Alphabetical, not live-first: rows must not move every second, or the outline view
-        // jumps under the user's scrolling and keyboard selection (and AppKit reports reentrant
-        // updates of its table). Liveness shows in each row's sparkline and subtitle instead.
-        let apps = monitor.apps.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        return List(selection: $selection) {
-            Section {
+        List(selection: $selection) {
+            Section("Netbite") {
+                SidebarLabel("Connections", subtitle: connectionsSubtitle, systemImage: "globe", tint: .hectorOK)
+                    .tag(SidebarItem.allApps)
                 SidebarLabel("Blocklists", subtitle: blocklistSubtitle, systemImage: "nosign", tint: .hectorDanger) {
                     if blocking.pendingChanges > 0 {
                         StatusPill("\(blocking.pendingChanges)", kind: .warning, systemImage: "clock", size: .small)
@@ -56,24 +55,12 @@ struct SidebarView: View {
             Section("Privacy") {
                 PrivacySidebarRows(privacy: privacy)
             }
-            Section("Apps") {
-                SidebarLabel("All apps", subtitle: "\(apps.count) apps · \(monitor.liveConnectionCount) live",
-                             systemImage: "square.grid.2x2", tint: .hectorOK)
-                .tag(SidebarItem.allApps)
-
-                ForEach(apps.filter { $0.kind == .app }) { app in
-                    AppSidebarRow(app: app, highlighted: app.id == highlightedAppID)
-                        .tag(SidebarItem.app(app.id))
-                }
-            }
-            Section("System & tools") {
-                ForEach(apps.filter { $0.kind == .system }) { app in
-                    AppSidebarRow(app: app, highlighted: app.id == highlightedAppID)
-                        .tag(SidebarItem.app(app.id))
-                }
-            }
         }
         .listStyle(.sidebar)
+    }
+
+    private var connectionsSubtitle: String {
+        "\(monitor.apps.count) apps · \(monitor.liveConnectionCount) live"
     }
 
     private var persistenceSubtitle: String {
@@ -100,41 +87,5 @@ struct SidebarView: View {
         let countries = applied.blockedCountries.count
         guard blocking.isHelperReady else { return "Helper not installed" }
         return "\(rules) rules · \(countries) countr\(countries == 1 ? "y" : "ies")"
-    }
-}
-
-private struct AppSidebarRow: View {
-    let app: AppGroup
-    let highlighted: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            AppIcon(app: app, size: 26)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(app.name).fontWeight(.medium).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            Sparkline(values: app.activity, color: app.liveCount > 0 ? Color.hectorOK : Color.hectorNeutral)
-                .frame(width: 40, height: 16)
-        }
-        .padding(.vertical, 2)
-        .background {
-            // The app that owns the line hovered on the map or in the list.
-            if highlighted {
-                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                    .fill(Color.hectorOKWash)
-                    .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.hectorOK.opacity(0.6), lineWidth: 1))
-                    .padding(.horizontal, -6)
-                    .padding(.vertical, -2)
-            }
-        }
-        .motion(Motion.quick, value: highlighted)
-    }
-
-    private var subtitle: String {
-        let count = app.destinations.count
-        let live = app.liveCount
-        return "\(count) dest." + (live > 0 ? " · \(live) live" : "")
     }
 }
