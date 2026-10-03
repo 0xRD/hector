@@ -137,3 +137,21 @@ import Testing
         #expect(info.eventID == nil)
     }
 }
+
+@Suite struct ProcessVisibilityTests {
+    private func process(_ pid: Int32, user: UInt32) -> RunningProcess {
+        var process = RunningProcess(pid: pid, parentPID: 1, userID: user, name: "p\(pid)")
+        process.arguments = ["/bin/p\(pid)", "--token", "secret-\(pid)"]
+        return process
+    }
+
+    @Test func otherUsersArgumentsStayWithRoot() {
+        let snapshot = ProcessSnapshot(takenAt: Date(), processes: [process(1, user: 0), process(2, user: 501), process(3, user: 502)],
+                                       ranAsRoot: true)
+        let seenBy501 = snapshot.visible(to: 501)
+        #expect(seenBy501.processes.map(\.arguments.isEmpty) == [false, false, true])
+        #expect(seenBy501.processes.count == 3)
+        #expect(seenBy501.processes[2].name == "p3")
+        #expect(snapshot.visible(to: 0).processes.allSatisfy { !$0.arguments.isEmpty })
+    }
+}

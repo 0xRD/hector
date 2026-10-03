@@ -203,10 +203,11 @@ final class Enforcer {
         let fetch = BackgroundFetch(startedAt: now)
         backgroundFetch = fetch
         let pending: [BackgroundFetch.Request] = requests
-        Task.detached {
+        // A plain queue, not a task: each download blocks while its unprivileged child runs.
+        DispatchQueue.global(qos: .utility).async {
             for request in pending {
                 do {
-                    let outcome = try await HostsListDownloader.fetch(request.source, etag: request.etag, lastModified: request.lastModified)
+                    let outcome = try Unprivileged.hostsList(request.source, etag: request.etag, lastModified: request.lastModified)
                     fetch.add(request.source, .success(outcome))
                 } catch {
                     fetch.add(request.source, .failure(error))
@@ -300,23 +301,10 @@ final class Enforcer {
         return changed
     }
 
-    /// Waits for the download: the helper serves one request at a time, and the downloader's
-    /// timeouts bound the wait.
+    /// Waits for the download, made by an unprivileged child (see `Unprivileged`); its time
+    /// limit bounds the wait.
     private func fetch(_ source: HostsListSource, etag: String?, lastModified: String?) throws -> HostsListDownloader.Outcome {
-        let done = DispatchSemaphore(value: 0)
-        let box = FetchBox()
-        Task.detached {
-            do {
-                box.outcome = try await HostsListDownloader.fetch(source, etag: etag, lastModified: lastModified)
-            } catch {
-                box.error = error
-            }
-            done.signal()
-        }
-        done.wait()
-        if let error = box.error { throw error }
-        guard let outcome = box.outcome else { throw CommandError(description: "The download of \(source.name) ended without a result.") }
-        return outcome
+        try Unprivileged.hostsList(source, etag: etag, lastModified: lastModified)
     }
 
     /// The state of every catalog list that is subscribed or has been downloaded, catalog order.
@@ -391,16 +379,8 @@ final class Enforcer {
         if !FileManager.default.fileExists(atPath: geoFile.path) {
             guard download else { throw CocoaError(.fileNoSuchFile) }
             log("Downloading the DB-IP country database…")
-            // The helper serves one request at a time, so waiting here is fine.
-            let done = DispatchSemaphore(value: 0)
-            let outcome = Outcome()
-            let destination = geoFile
-            Task.detached {
-                do { try await GeoIPUpdater.update(to: destination) } catch { outcome.error = error }
-                done.signal()
-            }
-            done.wait()
-            if let error = outcome.error { throw error }
+            // Downloaded, decompressed and checked by an unprivileged child; parsed again below.
+            try writeFile(try Unprivileged.countriesCSV(), to: geoFile, mode: 0o644)
         }
         return try GeoIPDatabase(contentsOf: geoFile)
     }
@@ -438,6 +418,8 @@ final class Enforcer {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
+        // A fixed environment, whatever the helper was started with.
+        process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8"]
         let out = Pipe()
         let err = Pipe()
         process.standardOutput = out
@@ -460,16 +442,6 @@ final class Enforcer {
 
 private final class ErrorBuffer: @unchecked Sendable {
     var data = Data()
-}
-
-private final class Outcome: @unchecked Sendable {
-    var error: Error?
-}
-
-/// Written by the download task before it signals, read after the wait.
-private final class FetchBox: @unchecked Sendable {
-    var outcome: HostsListDownloader.Outcome?
-    var error: Error?
 }
 
 /// Scheduled downloads running in the background. The task only downloads and parses; the

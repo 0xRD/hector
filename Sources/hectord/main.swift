@@ -150,7 +150,7 @@ func respond(to request: HelperRequest, peer: uid_t, gate: EnforcerGate, dryRun:
     case .snapshot:
         return .snapshot(SocketCollector().snapshot())
     case .processes:
-        return .processes(ProcessCollector().snapshot())
+        return .processes(ProcessCollector().snapshot().visible(to: peer))
     case .backgroundTasks:
         // Fixed path and arguments: nothing from the request reaches the command line.
         guard let output = ToolRunner.live.run("/usr/bin/sfltool", ["dumpbtm"]), output.succeeded else {
@@ -330,6 +330,9 @@ do {
             try requireRoot()
         }
         try await serve(dryRunRoot: root, socketPath: socketPath)
+    // Internal: started by the helper itself, give up root first (see Unprivileged.swift).
+    case "fetch-list": try await Unprivileged.runListChild(Array(arguments.dropFirst()))
+    case "fetch-countries": try await Unprivileged.runCountriesChild()
     case "install": try install()
     case "uninstall": try uninstall(purge: arguments.dropFirst().contains("--purge"))
     case "version", "--version": print("hectord \(HectorVersion.current)")

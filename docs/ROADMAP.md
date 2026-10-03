@@ -5,18 +5,20 @@
 Hector is meant to run all the time and its helper runs as root, so these come before new features, and before the repository goes public.
 
 - [ ] **Performance.** Measured on 2026-10-04 (M-series MacBook Pro, about 70 live connections): the app uses about 146 MB and 0 to 9% CPU while its window is open; the root helper uses about 2.5% CPU while idle, which is too much for a background service.
-  - [ ] Profile the helper (Instruments or `sample`) and make it idle at 0%: no polling of its own; serve `processes` and `snapshot` only when asked, and cheaply
-  - [ ] The app: slow the connection refresh (or stop it) when the window is hidden, minimized or the Connections screen is not shown; stop the camera and microphone poll when nothing needs it
-  - [ ] Memory: a compact binary format for the country and network databases instead of parsed CSV (about 1.2 million ranges), loaded lazily
+  - [x] The helper only works when asked; snapshots are now requested every second only while Connections is on screen (5 s on other screens, 10 s with no window), and app bundles are cached across snapshots
+  - [x] The app: slower refresh when the window is hidden, minimized or on another screen (0% CPU hidden)
+  - [ ] Stop the camera and microphone poll when nothing needs it; measure the helper again as root once updated
+  - [x] Memory: the country and network databases are parsed once into a checked binary cache and mapped (76 + 33 MB → about 4 MB each, 1.5 s → 10 ms)
+  - [ ] The window's own rendering (about 100 MB of graphics buffers): fewer blur layers, smaller map backing
   - [ ] Avoid re-rendering the whole window every second: diff the snapshot, update only what changed
   - [ ] A budget, checked before each release: idle helper 0% CPU and under 15 MB; app under 1% CPU with the window closed
 - [ ] **Security of the root helper.** It must not be a way to escalate privileges, even for a malicious process of the logged-in user.
-  - [ ] An outside-view review of everything 0.4 added to the helper (written without a Mac): `processes`, `backgroundTasks`, hosts list downloads and parsing as root, the `hello` handshake, concurrent connections
-  - [ ] Least privilege: download and parse hosts lists and DB-IP files as an unprivileged user (a dedicated `_hector` account or a child process that drops privileges), and keep only the final, validated write as root
+  - [x] Review of what 0.4 added to the helper (2026-10-04): `processes` no longer gives other users' arguments to administrators; see SECURITY.md
+  - [x] Least privilege: hosts lists and the country database are downloaded and parsed by a child that drops to `nobody`; root re-checks the output (to verify as root: update the helper, then refresh the lists)
   - [ ] A sandbox profile for the helper (`sandbox_init` with the few paths it writes: its data folder, /etc/hosts, the pf anchor)
   - [ ] Authenticate the client beyond `getpeereid`: check the peer's code signature (audit token, designated requirement of Hector's own signature)
-  - [ ] Fuzz the request decoder and every parser that sees outside data (hosts lists, DB-IP CSV, `sfltool` output, rules), with size and time limits
-  - [ ] Hardened runtime and library validation for the helper; check every subprocess it starts uses an absolute path and a fixed environment
+  - [x] Fuzz tests for the request decoder and the parsers that see outside data (hosts lists, DB-IP CSV and cache, `sfltool` output, blocklists)
+  - [x] Hardened runtime for the helper and the CLI; every subprocess by absolute path with a fixed environment
   - [ ] Update SECURITY.md with the result, then make the repository public
 
 ## 0.1: core and CLI

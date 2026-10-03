@@ -46,7 +46,8 @@ public enum GeoIPUpdater {
     @discardableResult
     public static func update(to destination: URL = defaultDatabaseURL) async throws -> URL {
         try await DBIPDownload.install(from: candidateURLs(), to: destination) { csv in
-            let database = try GeoIPDatabase(contentsOf: csv)
+            // Parsed without the cache: it would be written next to this temporary file.
+            let database = try GeoIPDatabase(csv: Data(contentsOf: csv, options: .mappedIfSafe))
             guard database.rangeCount >= minimumRanges, database.countries.count >= minimumCountries else {
                 throw UpdateError.implausible(ranges: database.rangeCount, countries: database.countries.count)
             }

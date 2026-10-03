@@ -116,7 +116,7 @@ public enum HostsListDownloader {
     }
 
     /// A validator is echoed back in a header later: keep it short and printable.
-    static func validator(_ value: String) -> String? {
+    public static func validator(_ value: String) -> String? {
         guard (1...256).contains(value.utf8.count), value.utf8.allSatisfy({ (32...126).contains($0) }) else { return nil }
         return value
     }

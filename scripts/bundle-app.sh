@@ -54,7 +54,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 # Inner code first, then the bundle that seals it.
-codesign --force --sign - "$APP/Contents/Helpers/hector" "$APP/Contents/Helpers/hectord"
+# Hardened runtime for the helper (it runs as root) and the CLI: no injected libraries, no
+# DYLD_* variables honored. Ad hoc signing allows it; no entitlement is needed.
+codesign --force --sign - --options runtime "$APP/Contents/Helpers/hector" "$APP/Contents/Helpers/hectord"
 codesign --force --sign - "$APP"
 codesign --verify --strict "$APP"
 echo "Built $APP ($VERSION)"

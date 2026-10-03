@@ -45,6 +45,19 @@ public struct RunningProcess: Codable, Hashable, Identifiable, Sendable {
 
 /// The result of `ProcessCollector.snapshot()`.
 public struct ProcessSnapshot: Codable, Sendable {
+    /// What the helper may show to the user `peer`: every process, but command-line arguments only
+    /// for that user's own processes and the system's (root). macOS hides other users' arguments
+    /// from everyone but root, and they can hold passwords or tokens; an administrator account
+    /// must not read them through the helper without a password. Root sees everything.
+    public func visible(to peer: UInt32) -> ProcessSnapshot {
+        guard peer != 0 else { return self }
+        var copy = self
+        for index in copy.processes.indices where copy.processes[index].userID != peer && copy.processes[index].userID != 0 {
+            copy.processes[index].arguments = []
+        }
+        return copy
+    }
+
     public var takenAt: Date
     /// Sorted by PID.
     public var processes: [RunningProcess]
