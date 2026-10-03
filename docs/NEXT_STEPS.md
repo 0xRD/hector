@@ -6,7 +6,7 @@ Hand-off notes for the next working session. The roadmap ([ROADMAP.md](ROADMAP.m
 
 - `main` holds 0.3 (helper, blocking, security review, uninstall) plus the merged 0.4 groundwork (code signatures, VirusTotal client, persistence scanner, all CLI and library, no UI yet).
 - `swift build` has no warnings; `scripts/test.sh` runs 87 tests, all passing.
-- Local `main` is **ahead of `origin/main` and not pushed** on purpose: history must be cleaned first (step 2).
+- `main` is pushed to GitHub. Every commit on it has the GitHub noreply address as author and committer (checked with `git log --format="%ae %ce"`).
 - This repository's git identity is set to the GitHub noreply address (`git config --local user.email`), so new commits carry no personal e-mail.
 
 ## In order
