@@ -8,6 +8,7 @@ import AppKit
 /// - `HECTOR_DEBUG_HOVER=N` pretends the pointer hovers the N-th line of the map.
 /// - `HECTOR_DEBUG_SELECT=N` selects the N-th line of the map.
 /// - `HECTOR_DEBUG_BLOCKLISTS=1` opens the Blocklists screen.
+/// - `HECTOR_DEBUG_SETTINGS=1` opens the Settings window.
 /// - `HECTOR_DEBUG_SCREEN=NAME` opens a screen: blocklists, persistence, processes, checkup,
 ///   taps or devices.
 @MainActor
@@ -30,6 +31,8 @@ enum DebugSnapshot {
         default: return nil
         }
     }
+
+    static var opensSettings: Bool { environment["HECTOR_DEBUG_SETTINGS"] != nil }
 
     static func scheduleIfRequested() {
         guard let path = environment["HECTOR_SNAPSHOT"] else { return }

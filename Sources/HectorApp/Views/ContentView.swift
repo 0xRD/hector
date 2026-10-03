@@ -6,6 +6,9 @@ struct ContentView: View {
     @Environment(BlockingController.self) private var blocking
     @Environment(WindowState.self) private var state
     @Environment(SecurityController.self) private var security
+    #if DEBUG
+    @Environment(\.openSettings) private var openSettings
+    #endif
 
     /// The network screens (map and list) as opposed to Blocklists and the security screens.
     private var isNetworkScreen: Bool {
@@ -100,11 +103,16 @@ struct ContentView: View {
                     Label("Details", systemImage: "sidebar.trailing")
                 }
                 .help("Show or hide the details panel")
+                SettingsLink {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .help("Settings: VirusTotal key, downloaded data, uninstall")
             }
         }
         #if DEBUG
         .task {
             if let screen = DebugSnapshot.screen { state.sidebarSelection = screen }
+            if DebugSnapshot.opensSettings { openSettings() }
             guard DebugSnapshot.hoverIndex != nil || DebugSnapshot.selectIndex != nil else { return }
             try? await Task.sleep(for: .seconds(4))
             let rows = visibleRows.filter { $0.destination.country != nil }

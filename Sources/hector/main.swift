@@ -75,8 +75,8 @@ USAGE
   hector devices [--json] [--watch]
       Cameras and audio inputs, whether they are in use, and which processes record audio.
       --watch     print each change (on, off, app started or stopped) until Ctrl-C
-      Nothing is opened: no camera or microphone permission is asked. Which app uses a camera
-      cannot be determined.
+      Nothing is opened: no camera or microphone permission is asked. The app using a camera
+      comes from Control Center's indicator log, readable without a permission.
 
   hector version | help
 

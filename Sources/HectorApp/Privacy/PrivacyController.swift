@@ -20,6 +20,8 @@ final class PrivacyController {
     private(set) var devices: [CaptureDevice] = []
     /// Processes recording audio now; `nil` when Core Audio did not say.
     private(set) var microphoneUsers: [ProcessIdentity]?
+    /// From Control Center's indicator log; `nil` when unknown.
+    private(set) var cameraUsers: [ProcessIdentity]?
     /// Newest first, at most `maximumEvents`.
     private(set) var events: [CaptureEvent] = []
     private(set) var isMonitoring = false
@@ -86,6 +88,7 @@ final class PrivacyController {
         // Read every 2 s: assign only what changed, so the screens do not redraw for nothing.
         if devices != snapshot.devices { devices = snapshot.devices }
         if microphoneUsers != snapshot.microphoneUsers { microphoneUsers = snapshot.microphoneUsers }
+        if cameraUsers != snapshot.cameraUsers { cameraUsers = snapshot.cameraUsers }
         guard !newEvents.isEmpty else { return }
         events.insert(contentsOf: newEvents.reversed(), at: 0)
         if events.count > Self.maximumEvents { events.removeLast(events.count - Self.maximumEvents) }

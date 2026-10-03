@@ -54,7 +54,12 @@ Based on the design mockup (main window and blocklist editor).
 Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbite stays the name of its network module. Everything keeps working without a paid Apple Developer account.
 
 - [x] Helper: connections served concurrently (rule changes serialized), and a `hello` handshake with version, protocol and capabilities so the app and the CLI name an outdated helper instead of failing to decode
-- [ ] **Blocking before release:** on macOS 26 the sidebar is drawn above the window and the top of the map is cut off; to fix in a local session on a Mac (details and leads in NEXT_STEPS.md, item 0)
+- [x] Layout on macOS 26: the sidebar was drawn above the window and the top of the map cut off (split panes took a list's full height as their minimum; `fillsSplitPane()`)
+- [ ] **High priority: an interactive map.** Today every destination sits on its country's center with a small offset; arcs to nearby countries pile up on "You", and nothing can be filtered by country. Keep the drawn map (MapKit would fetch tiles from Apple and lose the style); everything already goes through `MapGeometry`, so:
+  - [ ] Filter by country: the "N countries" figure opens a list of countries with their counts; picking one (or clicking a country on the map) filters the map and the list, like the app filter, with a removable chip; the search also matches country names
+  - [ ] One node per country, with a count bubble, lines thicker for more destinations, and a hover card listing the apps; individual destinations fan out only when zoomed in
+  - [ ] Zoom and pan: pinch and drag on the trackpad, scroll with ⌘, buttons for Fit (frame what is visible), World and the region around you; dots and lines keep their size on screen
+  - [ ] Later: city-level points would need a city database (DB-IP City Lite is about 130 MB); decide whether the gain is worth the size
 
 - [x] Rename the app, the bundle, the helper, the CLI and the docs to Hector, with migration from Netbite 0.3 (helper, blocklist, data, VirusTotal key)
 - [ ] Rename the GitHub repository to `hector` (owner, in Settings; GitHub redirects the old URL)
@@ -71,7 +76,7 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 - [x] **Keyboard taps** (in the spirit of ReiKey): apps that intercept keystrokes, through the public event tap list (`hector taps`, Privacy → Keyboard taps)
 - [x] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined (`hector devices --watch`, Privacy → Camera & mic)
   - [ ] Check on a real Mac (see [NEXT_STEPS.md](NEXT_STEPS.md)): built-in and USB cameras, headsets, AirPods, Continuity Camera, virtual devices
-  - [ ] Which app uses a camera: research the unified log (`com.apple.cmio`, Control Center's privacy indicator) and keep it optional if it holds
+  - [x] Which app uses a camera: Control Center's `sensor-indicators` log names the bundle ID behind the green indicator, readable by a normal user; trusted only when the sender is Control Center's own executable
   - [ ] Notifications when a device turns on, and a log kept across launches
 - [x] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it (`hector checkup`, Checkup screen)
 - [ ] Check the checkup's parsers and verdicts against real output on macOS 15 and 26/27 (see NEXT_STEPS.md)
