@@ -27,7 +27,7 @@ func signCommand(_ args: Arguments) throws {
         let url = URL(fileURLWithPath: path)
         do {
             let signature = try CodeSignature.analyze(url)
-            let sha256 = try? FileHash.sha256(of: hashTarget(for: url, signature: signature))
+            let sha256 = try? FileHash.sha256(of: FileHash.hashTarget(for: url, signature: signature))
             entries.append(SignEntry(path: path, signature: signature, sha256: sha256, error: nil))
         } catch {
             entries.append(SignEntry(path: path, signature: nil, sha256: nil, error: "\(error)"))
@@ -104,7 +104,7 @@ func virusTotalCommand(_ args: Arguments) async throws {
         let url = URL(fileURLWithPath: path)
         let sha256: String
         do {
-            sha256 = try FileHash.sha256(of: hashTarget(for: url, signature: nil))
+            sha256 = try FileHash.sha256(of: FileHash.hashTarget(for: url, signature: nil))
         } catch {
             entries.append(VTEntry(path: path, sha256: nil, lookup: nil, error: "\(error)"))
             continue
@@ -153,12 +153,6 @@ func virusTotalCommand(_ args: Arguments) async throws {
 // MARK: - Helpers
 
 /// The file to hash for a path: a bundle's main executable, otherwise the file itself.
-private func hashTarget(for url: URL, signature: CodeSignatureInfo?) -> URL {
-    if let executable = signature?.mainExecutable { return URL(fileURLWithPath: executable) }
-    if let executable = Bundle(url: url)?.executableURL { return executable }
-    return url
-}
-
 /// Reads one line from stdin without echoing it when stdin is a terminal.
 private func readSecret(prompt: String) -> String? {
     guard isatty(STDIN_FILENO) == 1 else { return readLine(strippingNewline: true) }

@@ -164,7 +164,7 @@ struct DestinationDetailView: View {
     }
 }
 
-private struct SectionTitle: View {
+struct SectionTitle: View {
     let title: String
     init(_ title: String) { self.title = title }
 

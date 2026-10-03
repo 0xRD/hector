@@ -49,6 +49,19 @@ import Testing
         #expect(snapshot.processes.map(\.pid) == snapshot.processes.map(\.pid).sorted())
     }
 
+    @Test func ordersTheTreeDepthFirst() {
+        func process(_ pid: Int32, _ parent: Int32) -> RunningProcess {
+            RunningProcess(pid: pid, parentPID: parent, userID: 501, name: "p\(pid)")
+        }
+        // 1 → (5 → 9), 3; 7's parent is gone; 11 and 12 are each other's parent.
+        let snapshot = ProcessSnapshot(takenAt: Date(), processes: [
+            process(1, 0), process(3, 1), process(5, 1), process(7, 42), process(9, 5), process(11, 12), process(12, 11),
+        ], ranAsRoot: false)
+        let tree = snapshot.treeOrdered()
+        #expect(tree.map { $0.process.pid } == [1, 3, 5, 9, 7, 11, 12])
+        #expect(tree.map { $0.depth } == [0, 1, 1, 2, 0, 0, 0])
+    }
+
     @Test func flagsSuspiciousLocations() {
         let present: (String) -> Bool = { _ in true }
         #expect(ProcessFlag.flags(forExecutable: "/Applications/Safari.app/Contents/MacOS/Safari", exists: present).isEmpty)

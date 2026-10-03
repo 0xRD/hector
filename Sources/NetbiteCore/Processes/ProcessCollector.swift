@@ -58,6 +58,35 @@ public struct ProcessSnapshot: Codable, Sendable {
     }
 }
 
+extension ProcessSnapshot {
+    /// Processes depth-first under their parents, each with its depth in the tree. A process whose
+    /// parent is not in the snapshot is a root; siblings keep their PID order.
+    public func treeOrdered() -> [(process: RunningProcess, depth: Int)] {
+        let pids = Set(processes.map(\.pid))
+        var children: [Int32: [RunningProcess]] = [:]
+        var roots: [RunningProcess] = []
+        for process in processes {
+            if process.parentPID != process.pid, pids.contains(process.parentPID) {
+                children[process.parentPID, default: []].append(process)
+            } else {
+                roots.append(process)
+            }
+        }
+        var ordered: [(process: RunningProcess, depth: Int)] = []
+        var visited: Set<Int32> = []
+        // Iterative, so a deep or malformed parent chain cannot overflow the stack.
+        var stack = roots.reversed().map { ($0, 0) }
+        while let (process, depth) = stack.popLast() {
+            guard visited.insert(process.pid).inserted else { continue }
+            ordered.append((process, depth))
+            for child in (children[process.pid] ?? []).reversed() { stack.append((child, depth + 1)) }
+        }
+        // A parent cycle has no root: list what is left flat rather than dropping it.
+        for process in processes where !visited.contains(process.pid) { ordered.append((process, 0)) }
+        return ordered
+    }
+}
+
 /// Lists running processes through libproc and sysctl. Nothing is executed.
 ///
 /// As a normal user every process is listed with its name, path, parent and owner; arguments and
@@ -71,7 +100,7 @@ public struct ProcessCollector: Sendable {
         var processes: [RunningProcess] = []
 
         for pid in SocketCollector.allPIDs() where pid > 0 {
-            guard let info = Self.bsdInfo(of: pid) else { continue }
+            guard let info = Self.basicInfo(of: pid) else { continue }
             let path = SocketCollector.executablePath(of: pid)
             var bundle = SocketCollector.AppBundle()
             if let path {
@@ -82,7 +111,7 @@ public struct ProcessCollector: Sendable {
                     bundles[path] = bundle
                 }
             }
-            let uid = info.pbi_uid
+            let uid = info.userID
             if userNames[uid] == nil, let entry = getpwuid(uid) {
                 userNames[uid] = String(cString: entry.pointee.pw_name)
             }
@@ -92,23 +121,42 @@ public struct ProcessCollector: Sendable {
                     .filter(\.hasRemote)
             }
             let name = SocketCollector.name(of: pid) ?? path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "pid \(pid)"
-            let started = info.pbi_start_tvsec > 0
-                ? Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec)) : nil
             processes.append(RunningProcess(
-                pid: pid, parentPID: Int32(bitPattern: info.pbi_ppid), userID: uid, userName: userNames[uid],
+                pid: pid, parentPID: info.parentPID, userID: uid, userName: userNames[uid],
                 name: name, executablePath: path, arguments: Self.arguments(of: pid)?.arguments ?? [],
-                startedAt: started, appBundlePath: bundle.path, appName: bundle.name, connections: sockets
+                startedAt: info.startedAt, appBundlePath: bundle.path, appName: bundle.name, connections: sockets
             ))
         }
         processes.sort { $0.pid < $1.pid }
         return ProcessSnapshot(takenAt: Date(), processes: processes, ranAsRoot: geteuid() == 0)
     }
 
-    static func bsdInfo(of pid: pid_t) -> proc_bsdinfo? {
-        var info = proc_bsdinfo()
+    struct BasicInfo {
+        var parentPID: Int32
+        var userID: UInt32
+        var startedAt: Date?
+    }
+
+    /// Parent, owner and start time. libproc refuses other users' processes unless root, so fall
+    /// back on `sysctl(KERN_PROC_PID)`, which `ps` uses and which works for every process.
+    static func basicInfo(of pid: pid_t) -> BasicInfo? {
+        var bsd = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
-        return info
+        if proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &bsd, size) == size {
+            return BasicInfo(parentPID: Int32(bitPattern: bsd.pbi_ppid), userID: bsd.pbi_uid,
+                             startedAt: date(seconds: Int(bsd.pbi_start_tvsec)))
+        }
+        var kinfo = kinfo_proc()
+        var length = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &kinfo, &length, nil, 0) == 0, length == MemoryLayout<kinfo_proc>.stride,
+              kinfo.kp_proc.p_pid == pid else { return nil }
+        return BasicInfo(parentPID: kinfo.kp_eproc.e_ppid, userID: kinfo.kp_eproc.e_ucred.cr_uid,
+                         startedAt: date(seconds: Int(kinfo.kp_proc.p_un.__p_starttime.tv_sec)))
+    }
+
+    private static func date(seconds: Int) -> Date? {
+        seconds > 0 ? Date(timeIntervalSince1970: TimeInterval(seconds)) : nil
     }
 
     /// The executable path the kernel recorded at exec time and the argument vector.

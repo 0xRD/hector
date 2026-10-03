@@ -24,7 +24,12 @@ func processes(_ args: Arguments) throws {
         return
     }
 
-    let depth = args.flags.contains("--tree") && !args.flags.contains("--flagged") ? treeOrder(&shown) : [:]
+    var depth: [Int32: Int] = [:]
+    if args.flags.contains("--tree") && !args.flags.contains("--flagged") {
+        let tree = snapshot.treeOrdered()
+        shown = tree.map { $0.process }
+        depth = Dictionary(uniqueKeysWithValues: tree.map { ($0.process.pid, $0.depth) })
+    }
     print(pad("PID", 7) + pad("PPID", 7) + pad("USER", 12) + pad("CONN", 5) + "PROCESS")
     for process in shown {
         let indent = String(repeating: "  ", count: depth[process.pid] ?? 0)
@@ -41,29 +46,4 @@ func processes(_ args: Arguments) throws {
     if !throughHelper && geteuid() != 0 {
         print("Arguments and connections of other users' processes are hidden; install the helper or use sudo.")
     }
-}
-
-/// Reorders `processes` depth-first under their parents and returns each one's depth.
-private func treeOrder(_ processes: inout [RunningProcess]) -> [Int32: Int] {
-    let pids = Set(processes.map(\.pid))
-    var children: [Int32: [RunningProcess]] = [:]
-    var roots: [RunningProcess] = []
-    for process in processes {
-        if process.parentPID != process.pid, pids.contains(process.parentPID) {
-            children[process.parentPID, default: []].append(process)
-        } else {
-            roots.append(process)
-        }
-    }
-    var ordered: [RunningProcess] = []
-    var depth: [Int32: Int] = [:]
-    func visit(_ process: RunningProcess, _ level: Int) {
-        guard depth[process.pid] == nil else { return }
-        depth[process.pid] = level
-        ordered.append(process)
-        for child in children[process.pid] ?? [] { visit(child, level + 1) }
-    }
-    roots.forEach { visit($0, 0) }
-    processes = ordered
-    return depth
 }

@@ -45,6 +45,14 @@ public enum FileHash {
         return hex(hasher.finalize())
     }
 
+    /// The file to hash for `url`: the main executable of a bundle, else the file itself.
+    /// VirusTotal knows binaries, not folders.
+    public static func hashTarget(for url: URL, signature: CodeSignatureInfo? = nil) -> URL {
+        if let executable = signature?.mainExecutable { return URL(fileURLWithPath: executable) }
+        if let executable = Bundle(url: url)?.executableURL { return executable }
+        return url
+    }
+
     /// Lowercase hex SHA-256 of in-memory data.
     public static func sha256(_ data: Data) -> String {
         hex(SHA256.hash(data: data))
