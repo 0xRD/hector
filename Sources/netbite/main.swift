@@ -24,6 +24,11 @@ USAGE
       Write the pf ruleset, pf tables and the resulting hosts file into DIR.
       Nothing on the system is changed: this is what the privileged helper will apply.
 
+  netbite persistence [--json] [--include-apple] [--category NAME[,NAME]]
+      List what is configured to run automatically: launch agents and daemons, login items,
+      cron, periodic scripts, system and kernel extensions, profiles, browser extensions.
+      Nothing found is executed. Login items need root (the helper).
+
   netbite version | help
 
 Default GeoIP database: \(GeoIPUpdater.defaultDatabaseURL.path)
@@ -240,6 +245,7 @@ do {
     case "connections", "conn": try connections(args)
     case "geo": try await geo(args)
     case "rules": try rules(args)
+    case "persistence": try persistence(Arguments(argv.dropFirst(), valueOptions: ["--category"]))
     case "version", "--version": print("netbite \(version)")
     case "help", "--help", "-h": print(usage)
     default: throw CLIError("Unknown command: \(command)\n\n\(usage)")
