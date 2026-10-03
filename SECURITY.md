@@ -18,7 +18,7 @@ The privilege boundary is the helper's Unix socket, `/var/run/io.github.0xrd.net
 
 Who may do what:
 
-- **Read** (`status`, `snapshot`): root and members of the admin group. The socket is `0660 root:admin` and the helper also checks the peer with `getpeereid`. A snapshot lists every process's connections, which an administrator can already see with `sudo lsof -i`.
+- **Read** (`status`, `snapshot`, `processes`, `backgroundTasks`): root and members of the admin group. The socket is `0660 root:admin` and the helper also checks the peer with `getpeereid`. A snapshot lists every process's connections, which an administrator can already see with `sudo lsof -i`; `processes` adds every process's arguments (`ps -axww` shows them to anyone; the environment is never read); `backgroundTasks` returns the output of `sfltool dumpbtm`, the login items and background tasks of every user. These requests take no input: the helper runs a fixed tool path with fixed arguments and only reads.
 - **Change the firewall** (`apply`, `flush`): root, or a client holding the Authorization Services right `io.github.0xrd.netbite.modify-firewall`. The right requires an administrator's password in the system dialog and is remembered for five minutes by the process that asked for it. Belonging to the admin group is not enough: any process running as an administrator account, malware included, is in that group without knowing the password.
 
 What the helper does with root, and nothing else:
@@ -27,6 +27,7 @@ What the helper does with root, and nothing else:
 - loads the pf anchor `com.apple/250.Netbite`, takes and releases its own `pfctl -E` reference;
 - rewrites the Netbite section of `/etc/hosts` and flushes the DNS cache;
 - downloads the DB-IP country database over HTTPS when a country is blocked;
+- lists processes and runs `/usr/bin/sfltool dumpbtm` for the read requests above;
 - installs and uninstalls itself (`/Library/PrivilegedHelperTools`, `/Library/LaunchDaemons`, `/Library/Logs/Netbite`).
 
 It runs fixed executables (`/sbin/pfctl`, `/usr/bin/dscacheutil`, `/usr/bin/killall`, `/bin/launchctl`, `/usr/bin/gunzip`) with argument arrays, never through a shell, and no argument comes from a client except values that were parsed and re-printed as addresses or networks.

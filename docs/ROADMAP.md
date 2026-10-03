@@ -51,12 +51,13 @@ Netbite grows into **Hexorcist**, a small all-in-one security app for macOS. Net
 - [ ] Rename the app, the bundle, the repository and the docs
 - [x] Core library and CLI for code signatures, SHA-256 and VirusTotal hash lookups (`netbite sign`, `netbite vt`)
 - [x] Core library and CLI for the persistence scan (`netbite persistence`)
-- [ ] App screens for Persistence and Processes, with signature and VirusTotal columns; settings to store the API key
-- [ ] Login items and background tasks through the helper (`sfltool dumpbtm` needs root); check the parser against real output; pass the real user's home and uid to the scan
+- [x] App screens for Persistence and Processes, with signature and VirusTotal columns; settings to store the API key
+- [x] Login items and background tasks through the helper (`sfltool dumpbtm` needs root)
+- [ ] Check the `sfltool dumpbtm` parser against real output on macOS 15 and 26/27
 - [ ] Keychain: the API key item is tied to the binary that created it; decide how the app and the CLI share it without prompts
 - [ ] **VirusTotal**: personal API key stored in the Keychain; lookups by SHA-256 only, never uploading a file unless the user asks for that file; results cached; the free-tier limit (4 requests per minute, 500 per day) respected
 - [ ] **Persistence** (in the spirit of KnockKnock): launch agents and daemons, login items and background tasks, cron and periodic jobs, system extensions, configuration profiles, browser extensions. Each item with its code signature (Apple, Developer ID, ad hoc, unsigned), notarization, path, and VirusTotal score
-- [ ] **Processes** (in the spirit of TaskExplorer): process tree, signature, parent, arguments, open connections, VirusTotal score; flags for unsigned code and binaries running from temporary, Downloads or hidden folders, with the quarantine download URL
+- [x] **Processes** (in the spirit of TaskExplorer): process tree, signature, parent, arguments, open connections, VirusTotal score; flags for unsigned code and binaries running from temporary, Downloads or hidden folders, with the quarantine download URL
 - [ ] **Keyboard taps** (in the spirit of ReiKey): apps that intercept keystrokes, through the public event tap list
 - [ ] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined
 - [ ] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it

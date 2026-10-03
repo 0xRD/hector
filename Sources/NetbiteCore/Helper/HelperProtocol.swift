@@ -2,7 +2,7 @@ import Foundation
 
 public enum NetbiteVersion {
     /// The single version string of the app, the CLI and the helper. `scripts/bundle-app.sh` reads it.
-    public static let current = "0.3.0"
+    public static let current = "0.4.0"
 }
 
 /// Where the privileged helper lives once installed, and how to reach it.

@@ -103,6 +103,16 @@ private struct HelperCard: View {
             Text(status.pfEnabled && status.anchorLoaded ? "pf firewall enabled" : "Helper ready, nothing enforced yet")
                 .font(.headline)
             Text(summary(status)).foregroundStyle(.secondary)
+            if status.version != NetbiteVersion.current {
+                HStack {
+                    Label("The helper is version \(status.version); this app is \(NetbiteVersion.current). Update it to list login items and every process.",
+                          systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Update helper…") { Task { await blocking.installHelper() } }
+                        .disabled(blocking.isWorking)
+                }
+            }
             ForEach(status.warnings, id: \.self) { warning in
                 Label(warning, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
             }
