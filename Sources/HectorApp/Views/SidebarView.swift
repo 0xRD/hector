@@ -7,6 +7,8 @@ enum SidebarItem: Hashable {
     case persistence
     case processes
     case checkup
+    case keyboardTaps
+    case captureDevices
 }
 
 struct SidebarView: View {
@@ -37,6 +39,9 @@ struct SidebarView: View {
                     .tag(SidebarItem.processes)
                 SidebarLabel("Checkup", subtitle: checkupSubtitle, systemImage: "checklist")
                     .tag(SidebarItem.checkup)
+            }
+            Section("Privacy") {
+                PrivacySidebarRows()
             }
             Section("Apps") {
                 SidebarLabel("All apps", subtitle: "\(apps.count) apps · \(monitor.liveConnectionCount) live",

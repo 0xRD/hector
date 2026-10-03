@@ -59,6 +59,17 @@ USAGE
       automatic updates, sharing services, automatic login, guest account, MDM enrollment.
       Each finding comes with how to fix it. Read-only: nothing is changed, no password asked.
 
+  hector taps [--json]
+      Event taps that receive keystrokes (as ReiKey lists them): the app that installed each tap,
+      whether it is active (can change or drop keys) or listen-only, system-wide or for one app,
+      and its code signature. Needs no permission.
+
+  hector devices [--json] [--watch]
+      Cameras and audio inputs, whether they are in use, and which processes record audio.
+      --watch     print each change (on, off, app started or stopped) until Ctrl-C
+      Nothing is opened: no camera or microphone permission is asked. Which app uses a camera
+      cannot be determined.
+
   hector version | help
 
 Default GeoIP database: \(GeoIPUpdater.defaultDatabaseURL.path)
@@ -350,6 +361,8 @@ do {
     case "persistence": try persistence(Arguments(argv.dropFirst(), valueOptions: ["--category", "--socket"]))
     case "processes", "ps": try processes(Arguments(argv.dropFirst(), valueOptions: ["--socket"]))
     case "checkup": try checkup(args)
+    case "taps": try taps(args)
+    case "devices": try await devices(args)
     case "version", "--version": print("hector \(version)")
     case "help", "--help", "-h": print(usage)
     default: throw CLIError("Unknown command: \(command)\n\n\(usage)")

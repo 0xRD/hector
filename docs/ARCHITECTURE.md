@@ -16,6 +16,9 @@ Hector is meant to be built and used by anyone from source, so it does not depen
 | Network (ASN) of an IP | DB-IP IP to ASN Lite CSV, in memory, optional | none |
 | Block IPs, networks, countries | `pf` tables in an anchor | root |
 | Block domains | managed section of `/etc/hosts` | root |
+| Keyboard event taps | `CGGetEventTapList` (CoreGraphics) | none |
+| Camera on or off | CoreMediaIO `kCMIODevicePropertyDeviceIsRunningSomewhere` | none |
+| Audio input on or off, and which process records | Core Audio `kAudioDevicePropertyDeviceIsRunningSomewhere`, process objects | none |
 
 The consequence is the main trade-off of the project: **visibility is per app, blocking is system-wide.** `pf` and `/etc/hosts` have no notion of which process opened a socket.
 
@@ -128,6 +131,34 @@ Country blocking is **opt-in**: `Blocklist.blockedCountries` is empty by default
 9. `hectord uninstall` flushes every rule, removes the managed `/etc/hosts` section, unloads the daemon and deletes its files.
 
 `hectord serve --dry-run DIR` runs the whole flow without root: paths live under `DIR` and commands are only logged. This is how the helper is tested outside a VM.
+
+## Privacy monitors
+
+Both live in `HectorCore/Privacy`, run as the user, and need no entitlement, no helper and no permission prompt.
+
+### Keyboard taps
+
+`KeyboardTaps.list()` calls `CGGetEventTapList`, the public list of event taps the window server keeps (the source ReiKey uses), and keeps the taps whose event mask includes `keyDown`, `keyUp` or `flagsChanged`. For each tap it reports the tapping process (named through libproc), the tapped process (0 means every app), active or listen-only, enabled, and the tap location. The app adds the code signature of the tapping app.
+
+Limits: the list says who installed a tap and what it asked for, not what it does with the keys. Keystrokes can also be read without a tap (an input method, `IOHIDManager` with Input Monitoring permission, a kernel or DriverKit extension, or Secure Input being off in a terminal); those are not listed. The list is a snapshot: a tap installed for a few seconds between two refreshes is missed.
+
+### Camera and microphone
+
+`CaptureDeviceReader` reads, without opening any device:
+
+- cameras: every CoreMediaIO device and its `kCMIODevicePropertyDeviceIsRunningSomewhere` flag;
+- audio inputs: every Core Audio device with an input stream and its `kAudioDevicePropertyDeviceIsRunningSomewhere` flag;
+- which processes record: the Core Audio process objects (`kAudioHardwarePropertyProcessObjectList`, macOS 14), each with `kAudioProcessPropertyPID` and `kAudioProcessPropertyIsRunningInput`.
+
+`CaptureDeviceMonitor` registers block-based property listeners (device lists, each device's "running somewhere" flag, the process list) on a private serial queue. The blocks only signal an `AsyncStream`; the state is read again on the main actor and compared with the previous one by `CaptureActivityTracker`, which produces the events (on, off, already on at start, app started or stopped recording). A read every 2 s catches what has no listener: an app starting to record while the microphone is already on. `stop()` removes every listener.
+
+Limits, also stated in the app:
+
+- **Which app uses a camera is not known.** CoreMediaIO says a camera runs, not for whom. The unified log carries hints (the subsystem `com.apple.cmio`, Control Center's indicator), but its messages change between macOS releases and are partly private; this is left for later research rather than shipped as a guess.
+- **Microphone attribution is per Mac, not per device.** A process recording from any input is listed for every input device that is on. Hector does not read which device each process uses.
+- **Headsets.** A USB or Bluetooth headset is often one device for both directions, so music playback alone sets its "running" flag. Such a device counts as recording only when some process records audio input.
+- Virtual and aggregate devices (Zoom, Teams, Loopback, BlackHole) appear as audio inputs of their own.
+- The log lives in memory while the app runs; nothing is saved.
 
 ## Distribution
 

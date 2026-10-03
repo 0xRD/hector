@@ -40,6 +40,15 @@ Hand-off notes for the next working session. The roadmap ([ROADMAP.md](ROADMAP.m
    - **Light appearance.** System Settings → Appearance → Light, then every screen: the map (land dots and dimmed lines were made darker in light mode), pills on selected rows, banners, the inspector.
    - The country download now shares its code with the ASN one (`DBIPDownload`) and gained size limits; the helper uses it when a country is blocked, so check that blocking a country with no database installed still downloads it.
 
+8. **Privacy monitors (keyboard taps, camera and microphone).** Built on Linux without a Swift toolchain, so CI is the first compiler to see them; then check on a real Mac:
+   - `swift build` on Xcode 16.4 / Swift 6.1: the CoreGraphics (`CGGetEventTapList`, `CGEventTapInformation`), CoreMediaIO (`CMIOObjectAddPropertyListenerBlock`, `kCMIOObjectPropertyName`, `kCMIODevicePropertyDeviceUID`) and Core Audio process-object names (`kAudioHardwarePropertyProcessObjectList`, `kAudioProcessPropertyPID`, `kAudioProcessPropertyIsRunningInput`) were written from memory of the SDK headers.
+   - `hector taps` lists something real: install a tap with a known app (Karabiner-Elements, BetterTouchTool, Rectangle, an input method) and check the app, active or listen-only, and the signature. Check that it asks for no permission and works from a plain Terminal.
+   - `hector devices --watch`: Photo Booth or FaceTime turns the built-in camera on and off; Voice Memos or QuickTime audio recording turns the microphone on and is named as the app; a second app joining and leaving gives "started/stopped using"; plugging a USB camera or headset while monitoring; AirPods (input and output are separate devices) and a USB headset playing music only (must not count as recording); Continuity Camera; a virtual camera (OBS) and a virtual audio device.
+   - Confirm that no camera or microphone permission prompt appears, in the CLI or the app, and that the green or orange indicator never lights because of Hector.
+   - Does the process object list need any permission on macOS 15 for an ad-hoc signed app? If it answers nothing, the app shows "app unknown" for the microphone: note it here.
+   - In the app: the Privacy section of the sidebar, the "On" pill, the log while switching screens, Pause and Resume (listeners removed: no more events), and that monitoring costs nothing visible in Activity Monitor.
+   - Camera attribution: try `log stream --predicate 'subsystem == "com.apple.cmio"'` while FaceTime starts, as a normal user, and see whether a PID or bundle ID can be read reliably on macOS 15 and 26.
+
 ## Things to know about this machine and toolchain
 
 - Only the Command Line Tools are installed (27.0, Swift 6.4). With them:
