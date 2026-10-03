@@ -20,24 +20,12 @@ struct SidebarView: View {
         let apps = monitor.sortedApps
         List(selection: $selection) {
             Section {
-                HStack(spacing: 10) {
-                    Image(systemName: "nosign")
-                        .frame(width: 26, height: 26)
-                        .foregroundStyle(Color.netbiteBlock)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Blocklists").fontWeight(.medium)
-                        Text(blocklistSubtitle).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
+                SidebarLabel("Blocklists", subtitle: blocklistSubtitle, systemImage: "nosign", tint: .hexDanger) {
                     if blocking.pendingChanges > 0 {
-                        Text("\(blocking.pendingChanges)")
-                            .font(.caption.weight(.bold))
-                            .padding(.horizontal, 6)
-                            .background(Color.orange.opacity(0.25), in: Capsule())
+                        StatusPill("\(blocking.pendingChanges)", kind: .warning, systemImage: "clock", size: .small)
                             .help("Pending changes")
                     }
                 }
-                .padding(.vertical, 2)
                 .tag(SidebarItem.blocklists)
             }
             Section("Security") {
@@ -47,18 +35,8 @@ struct SidebarView: View {
                     .tag(SidebarItem.processes)
             }
             Section("Apps") {
-                HStack(spacing: 10) {
-                    Image(systemName: "square.grid.2x2")
-                        .frame(width: 26, height: 26)
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("All apps").fontWeight(.medium)
-                        Text("\(apps.count) apps · \(monitor.liveConnectionCount) live")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 2)
+                SidebarLabel("All apps", subtitle: "\(apps.count) apps · \(monitor.liveConnectionCount) live",
+                             systemImage: "square.grid.2x2", tint: .hexOK)
                 .tag(SidebarItem.allApps)
 
                 ForEach(apps.filter { $0.kind == .app }) { app in
@@ -74,6 +52,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) { ProtectionStatusFooter(selection: $selection) }
     }
 
     private var persistenceSubtitle: String {
@@ -109,20 +88,21 @@ private struct AppSidebarRow: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 4)
-            Sparkline(values: app.activity, color: app.liveCount > 0 ? .netbiteAccent : .secondary)
+            Sparkline(values: app.activity, color: app.liveCount > 0 ? Color.hexOK : Color.hexNeutral)
                 .frame(width: 40, height: 16)
         }
         .padding(.vertical, 2)
         .background {
+            // The app that owns the line hovered on the map or in the list.
             if highlighted {
-                RoundedRectangle(cornerRadius: 7)
-                    .strokeBorder(Color.netbiteAccent, lineWidth: 1.5)
-                    .background(Color.netbiteAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .fill(Color.hexOKWash)
+                    .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.hexOK.opacity(0.6), lineWidth: 1))
                     .padding(.horizontal, -6)
                     .padding(.vertical, -2)
             }
         }
-        .animation(.easeOut(duration: 0.12), value: highlighted)
+        .motion(Motion.quick, value: highlighted)
     }
 
     private var subtitle: String {

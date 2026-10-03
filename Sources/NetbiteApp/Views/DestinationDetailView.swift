@@ -12,93 +12,98 @@ struct DestinationDetailView: View {
         if let row {
             ScrollView {
                 content(row)
-                    .padding(18)
+                    .padding(Spacing.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .canvasBackground()
         } else {
-            ContentUnavailableView("No destination selected", systemImage: "globe",
-                                   description: Text("Pick a line on the map or a row in the list."))
+            EmptyStateView(
+                "Pick a destination",
+                systemImage: "scope",
+                message: "Click a line on the map or a row in the list to see where it goes, which apps use it, and to block it.",
+                tint: .hexOK
+            )
+            .canvasBackground()
         }
     }
 
-    @ViewBuilder
     private func content(_ row: DestinationRow) -> some View {
-        let destination = row.destination
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 6) {
-                SectionTitle("Destination")
-                Text(destination.title)
-                    .font(.title2.bold())
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("\(destination.key.address.description) · \(destination.key.portLabel)")
-                    .font(.system(.callout, design: .monospaced))
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            DestinationHero(row: row)
+            detailsCard(row.destination)
+            activityCard(row.destination)
+            usedByCard
+            actionsCard(row)
+        }
+    }
+
+    // MARK: - Cards
+
+    private func detailsCard(_ destination: Destination) -> some View {
+        Card(spacing: 9) {
+            SectionHeader("Details", style: .eyebrow)
+            DetailRow("Location") {
+                if destination.isLocal {
+                    Text("Local network")
+                } else {
+                    CountryBadge(code: destination.country)
+                }
+            }
+            DetailRow("Reverse DNS", value: destination.hostname ?? "None")
+            DetailRow("First seen") {
+                Text(destination.firstSeen, format: .dateTime.hour().minute().second())
+            }
+            DetailRow("Last activity") {
+                if destination.isLive {
+                    Text("Now")
+                } else {
+                    Text(destination.lastSeen, format: .relative(presentation: .named))
+                }
+            }
+            DetailRow("Connections", value: connectionsText(destination))
+        }
+    }
+
+    private func connectionsText(_ destination: Destination) -> String {
+        guard !destination.tcpStates.isEmpty else { return "\(destination.liveConnections)" }
+        let states = Set(destination.tcpStates).sorted().joined(separator: ", ")
+        return "\(destination.liveConnections) · \(states)"
+    }
+
+    private func activityCard(_ destination: Destination) -> some View {
+        Card(spacing: Spacing.sm) {
+            SectionHeader("Activity", style: .eyebrow) {
+                Text("last \(ConnectionMonitor.historyLength) s")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                StatusBadge(destination: destination, blockReason: row.blockReason)
             }
+            ActivityChart(activity: destination.activity)
+        }
+    }
 
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 9) {
-                detail("Location") {
-                    if destination.isLocal {
-                        Text("Local network")
-                    } else {
-                        CountryBadge(code: destination.country)
+    private var usedByCard: some View {
+        Card(spacing: Spacing.sm) {
+            SectionHeader("Used by", style: .eyebrow)
+            ForEach(usedBy) { app in
+                HStack(spacing: 10) {
+                    AppIcon(app: app, size: 26)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(app.name).fontWeight(.medium)
+                        Text(app.identityLabel)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                 }
-                detail("Reverse DNS") { Text(destination.hostname ?? "None").textSelection(.enabled) }
-                detail("First seen") { Text(destination.firstSeen, format: .dateTime.hour().minute().second()) }
-                detail("Last activity") {
-                    if destination.isLive {
-                        Text("Now")
-                    } else {
-                        Text(destination.lastSeen, format: .relative(presentation: .named))
-                    }
-                }
-                detail("Connections") {
-                    Text(destination.tcpStates.isEmpty
-                         ? "\(destination.liveConnections)"
-                         : "\(destination.liveConnections) · \(Set(destination.tcpStates).sorted().joined(separator: ", "))")
-                }
+                .accessibilityElement(children: .combine)
             }
-            .font(.callout)
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    SectionTitle("Activity")
-                    Spacer()
-                    Text("last \(ConnectionMonitor.historyLength) s").font(.caption).foregroundStyle(.secondary)
-                }
-                // Newest sample on the right edge, like the sidebar sparklines.
-                let offset = ConnectionMonitor.historyLength - destination.activity.count
-                Chart(Array(destination.activity.enumerated()), id: \.offset) { sample in
-                    BarMark(x: .value("Second", offset + sample.offset), y: .value("Connections", sample.element), width: .fixed(3))
-                        .foregroundStyle(Color.netbiteAccent)
-                }
-                .chartXAxis(.hidden)
-                .chartXScale(domain: -0.5...(Double(ConnectionMonitor.historyLength) - 0.5))
-                .chartYAxis { AxisMarks(values: .automatic(desiredCount: 2)) }
-                .frame(height: 70)
-                .accessibilityLabel("Live connections over the last minute")
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                SectionTitle("Used by")
-                ForEach(usedBy) { app in
-                    HStack(spacing: 10) {
-                        AppIcon(app: app, size: 24)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(app.name).fontWeight(.medium)
-                            Text(app.identityLabel)
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                    }
-                }
-            }
-
+    private func actionsCard(_ row: DestinationRow) -> some View {
+        Card(spacing: Spacing.md) {
+            SectionHeader("Actions", style: .eyebrow)
             actions(row)
         }
     }
@@ -108,53 +113,49 @@ struct DestinationDetailView: View {
         let destination = row.destination
         let address = destination.key.address
         let addressRule = blocking.addressRule(address)
-        VStack(alignment: .leading, spacing: 10) {
-            if destination.isLocal {
-                Text("Local and private addresses are never blocked: it would cut this Mac off its own network.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
+        if destination.isLocal {
+            Label("Local and private addresses are never blocked: it would cut this Mac off its own network.",
+                  systemImage: "house")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Button {
+                blocking.toggleAddress(address, note: "\(row.app.name) · \(destination.title)")
+            } label: {
+                Label(addressRule == nil ? "Block This Destination" : "Unblock This Destination",
+                      systemImage: addressRule == nil ? "nosign" : "arrow.uturn.backward")
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.large)
+            .tint(addressRule == nil ? Color.hexDangerTint : nil)
+            .buttonStyle(.borderedProminent)
+            .help("Adds \(address.description) to your blocklist. Nothing changes until you apply.")
+            if let country = destination.country {
+                let blocked = blocking.isCountryBlocked(country)
                 Button {
-                    blocking.toggleAddress(address, note: "\(row.app.name) · \(destination.title)")
+                    blocking.setCountry(country, blocked: !blocked)
                 } label: {
-                    Label(addressRule == nil ? "Block this destination" : "Unblock this destination",
-                          systemImage: addressRule == nil ? "nosign" : "arrow.uturn.backward")
+                    Label(blocked ? "Unblock \(Countries.name(country))" : "Block All of \(Countries.name(country))", systemImage: "flag")
                         .frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
-                .tint(addressRule == nil ? .netbiteBlock : nil)
-                .buttonStyle(.borderedProminent)
-                if let country = destination.country {
-                    let blocked = blocking.isCountryBlocked(country)
-                    Button {
-                        blocking.setCountry(country, blocked: !blocked)
-                    } label: {
-                        Label(blocked ? "Unblock \(Countries.name(country))" : "Block all of \(Countries.name(country))", systemImage: "flag")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .controlSize(.large)
-                }
-                if blocking.pendingChanges > 0 {
-                    PendingBar()
-                }
-                Text("Blocking applies to every app on this Mac: \(address.description) goes to the pf table, a country to its own table." as String)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            HStack {
-                Button("Copy IP") { copy(address.description) }
-                if let hostname = destination.hostname {
-                    Button("Copy host") { copy(hostname) }
-                }
+            if blocking.pendingChanges > 0 {
+                PendingBar(compact: true)
             }
+            Text("Blocking applies to every app on this Mac: \(address.description) goes to the pf table, a country to its own table." as String)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private func detail<Content: View>(_ label: String, @ViewBuilder _ value: () -> Content) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
-            value()
+        HStack {
+            Button("Copy IP") { copy(address.description) }
+                .help("Copy \(address.description)")
+            if let hostname = destination.hostname {
+                Button("Copy Host") { copy(hostname) }
+                    .help("Copy \(hostname)")
+            }
         }
     }
 
@@ -169,9 +170,64 @@ struct SectionTitle: View {
     init(_ title: String) { self.title = title }
 
     var body: some View {
-        Text(title)
-            .font(.caption.weight(.semibold))
-            .textCase(.uppercase)
-            .foregroundStyle(.secondary)
+        // Legacy name: the small uppercase heading of a group in an inspector.
+        SectionHeader(title, style: .eyebrow)
+    }
+}
+
+/// Name, address and verdict of the selected destination.
+private struct DestinationHero: View {
+    let row: DestinationRow
+
+    var body: some View {
+        let destination = row.destination
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(alignment: .top, spacing: Spacing.md) {
+                SymbolTile(symbol, tint: tint, size: 40)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(destination.title)
+                        .font(.system(.title2, design: .serif, weight: .semibold))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("\(destination.key.address.description) · \(destination.key.portLabel)")
+                        .font(.dataMonoCallout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+            StatusBadge(destination: destination, blockReason: row.blockReason)
+        }
+    }
+
+    private var symbol: String {
+        if row.isBlocked { return "nosign" }
+        return row.destination.isLocal ? "house" : "globe"
+    }
+
+    private var tint: Color {
+        if row.isBlocked { return .hexDanger }
+        return row.destination.isLive ? .hexOK : .hexNeutral
+    }
+}
+
+/// Live connections per second over the last minute, newest on the right.
+private struct ActivityChart: View {
+    let activity: [Int]
+
+    var body: some View {
+        // Newest sample on the right edge, like the sidebar sparklines.
+        let offset = ConnectionMonitor.historyLength - activity.count
+        let upper = Double(ConnectionMonitor.historyLength) - 0.5
+        Chart(Array(activity.enumerated()), id: \.offset) { sample in
+            BarMark(x: .value("Second", offset + sample.offset), y: .value("Connections", sample.element), width: .fixed(3))
+                .foregroundStyle(Color.hexOK)
+                .cornerRadius(1.5)
+        }
+        .chartXAxis(.hidden)
+        .chartXScale(domain: -0.5...upper)
+        .chartYAxis { AxisMarks(values: .automatic(desiredCount: 2)) }
+        .frame(height: 70)
+        .accessibilityLabel("Live connections over the last minute")
     }
 }

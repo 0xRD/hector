@@ -2,85 +2,59 @@ import AppKit
 import NetbiteCore
 import SwiftUI
 
-extension Color {
-    /// Teal accent: allowed traffic, live state, selection.
-    static let netbiteAccent = dynamic(light: (0.04, 0.50, 0.45), dark: (0.24, 0.81, 0.75))
-    /// Red: blocked traffic.
-    static let netbiteBlock = dynamic(light: (0.77, 0.24, 0.24), dark: (1.00, 0.48, 0.42))
-    /// Land dots of the map.
-    static let mapLand = dynamic(light: (0.79, 0.81, 0.85), dark: (0.25, 0.27, 0.33))
-    /// Land dots of countries the Mac currently talks to.
-    static let mapLandContacted = dynamic(light: (0.62, 0.78, 0.76), dark: (0.20, 0.36, 0.37))
+// Network-specific pieces of the interface. The design tokens (colors, spacing, type) and the
+// generic components live in Sources/NetbiteApp/Design; the brand mark in Design/BrandMark.swift.
 
-    private static func dynamic(light: (Double, Double, Double), dark: (Double, Double, Double)) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let (r, g, b) = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
-            return NSColor(srgbRed: r, green: g, blue: b, alpha: 1)
-        })
-    }
-}
-
-/// The Netbite mark: a network globe with a bite taken out of its top-right edge.
-struct NetbiteLogo: View {
-    var lineWidth: CGFloat = 1.7
-
-    var body: some View {
-        Canvas { context, size in
-            let s = min(size.width, size.height)
-            let scale = s / 24
-            var globe = Path()
-            globe.addEllipse(in: CGRect(x: 2.5, y: 2.5, width: 19, height: 19))
-            globe.addEllipse(in: CGRect(x: 7.8, y: 2.5, width: 8.4, height: 19))
-            globe.move(to: CGPoint(x: 2.5, y: 12)); globe.addLine(to: CGPoint(x: 21.5, y: 12))
-            globe.move(to: CGPoint(x: 4.2, y: 7.3)); globe.addLine(to: CGPoint(x: 19.8, y: 7.3))
-            globe.move(to: CGPoint(x: 4.2, y: 16.7)); globe.addLine(to: CGPoint(x: 19.8, y: 16.7))
-
-            var bite = Path(CGRect(x: 0, y: 0, width: 24, height: 24))
-            bite.addEllipse(in: CGRect(x: 16.5, y: -0.5, width: 10, height: 10))
-
-            context.scaleBy(x: scale, y: scale)
-            context.clip(to: bite, style: FillStyle(eoFill: true))
-            context.stroke(globe, with: .color(.netbiteAccent), lineWidth: lineWidth)
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .accessibilityHidden(true)
-    }
-}
-
-/// A small line chart of recent activity.
+/// A small line chart of recent activity, with a soft wash under the line.
 struct Sparkline: View {
     let values: [Int]
-    var color: Color = .netbiteAccent
+    var color: Color = .hexOK
 
     var body: some View {
         Canvas { context, size in
             guard values.count > 1 else { return }
-            let peak = CGFloat(max(values.max() ?? 1, 1))
-            // The available history (up to a minute) always spans the full width.
-            let step = size.width / CGFloat(values.count - 1)
-            let start: CGFloat = 0
-            var path = Path()
-            for (index, value) in values.enumerated() {
-                let point = CGPoint(x: start + step * CGFloat(index), y: size.height - 1 - CGFloat(value) / peak * (size.height - 2))
-                index == 0 ? path.move(to: point) : path.addLine(to: point)
-            }
-            context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+            let line = linePath(size: size)
+            var area = line
+            area.addLine(to: CGPoint(x: size.width, y: size.height))
+            area.addLine(to: CGPoint(x: 0, y: size.height))
+            area.closeSubpath()
+            let wash = Gradient(colors: [color.opacity(0.22), color.opacity(0)])
+            context.fill(area, with: .linearGradient(wash, startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
+            context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
         }
         .accessibilityHidden(true)
     }
+
+    private func linePath(size: CGSize) -> Path {
+        let peak = CGFloat(max(values.max() ?? 1, 1))
+        // The available history (up to a minute) always spans the full width.
+        let step: CGFloat = size.width / CGFloat(values.count - 1)
+        let usable: CGFloat = size.height - 2
+        var path = Path()
+        for (index, value) in values.enumerated() {
+            let x: CGFloat = step * CGFloat(index)
+            let y: CGFloat = size.height - 1 - CGFloat(value) / peak * usable
+            if index == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        return path
+    }
 }
 
+/// The status of a destination: blocked, live, or how long ago it was seen.
 struct StatusBadge: View {
     let destination: Destination
     var blockReason: BlockReason? = nil
 
     var body: some View {
         if let blockReason {
-            Label(blockReason.label, systemImage: "nosign")
-                .labelStyle(BadgeLabelStyle(color: .netbiteBlock, iconSize: 9))
+            StatusPill(blockReason.label, kind: .danger, systemImage: "nosign")
         } else if destination.isLive {
-            Label(destination.liveConnections > 1 ? "Live · \(destination.liveConnections)" : "Live", systemImage: "circle.fill")
-                .labelStyle(BadgeLabelStyle(color: .netbiteAccent))
+            StatusPill(destination.liveConnections > 1 ? "Live · \(destination.liveConnections)" : "Live",
+                       kind: .ok, systemImage: "circle.fill")
         } else {
             Text(destination.lastSeen, format: .relative(presentation: .named))
                 .font(.callout)
@@ -89,20 +63,26 @@ struct StatusBadge: View {
     }
 }
 
+/// Renders a `Label` as a status pill of any color.
+///
+/// Kept for existing call sites; prefer `StatusPill`, which picks ink, wash and symbol from a
+/// `StatusKind` and stays readable on selected rows.
 struct BadgeLabelStyle: LabelStyle {
     let color: Color
     var iconSize: CGFloat = 6
 
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 5) {
-            configuration.icon.font(.system(size: iconSize, weight: .bold))
-            configuration.title
+        HStack(spacing: 4) {
+            configuration.icon.font(.system(size: min(iconSize, 9), weight: .bold))
+            configuration.title.monospacedDigit()
         }
         .font(.caption.weight(.semibold))
         .foregroundStyle(color)
         .padding(.horizontal, 8)
-        .padding(.vertical, 2)
-        .background(color.opacity(0.13), in: Capsule())
+        .padding(.vertical, 2.5)
+        .background(color.opacity(0.14), in: Capsule())
+        .overlay(Capsule().strokeBorder(color.opacity(0.18), lineWidth: 0.5))
+        .fixedSize()
     }
 }
 
@@ -115,22 +95,20 @@ extension BlockReason {
     }
 }
 
+/// A country code tag, optionally followed by the country name.
 struct CountryBadge: View {
     let code: String?
     var showName = true
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(code ?? "--")
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.separator))
+            CodeTag(code ?? "--")
             if showName {
                 Text(Countries.name(code)).lineLimit(1)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Countries.name(code))
     }
 }
 
@@ -148,9 +126,9 @@ struct AppIcon: View {
                 Image(systemName: app.executablePath?.contains("/bin/") == true ? "terminal" : "gearshape.2")
                     .resizable()
                     .scaledToFit()
-                    .padding(size * 0.18)
-                    .foregroundStyle(.secondary)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: size * 0.22))
+                    .padding(size * 0.2)
+                    .foregroundStyle(Color.hexNeutral)
+                    .background(Color.hexNeutralWash, in: RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
             }
         }
         .frame(width: size, height: size)

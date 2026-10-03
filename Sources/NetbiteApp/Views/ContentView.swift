@@ -108,25 +108,15 @@ struct ContentView: View {
                 state.selectedDestination = nil
             }
         }
+        // Control tint: deeper than the sage ink in dark mode, so white labels stay readable.
+        .tint(.hexTint)
     }
 
     // MARK: - Map
 
     private func mapCard(rows: [DestinationRow]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Destination map").font(.headline)
-                    let countries = Set(rows.compactMap(\.destination.country)).count
-                    Text("\(rows.count) destinations · \(countries) countries · hover a line to see which app owns it")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                MapLegend()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            MapCardHeader(rows: rows)
             WorldMapView(
                 rows: rows,
                 focusAppID: selectedAppID,
@@ -139,10 +129,13 @@ struct ContentView: View {
                     state.showInspector = true
                 }
             )
-            .padding(.horizontal, 10)
-            .padding(.bottom, 10)
+            .padding(Spacing.sm)
+            .insetSurface(cornerRadius: Radius.lg)
         }
-        .background(.background.secondary)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.top, Spacing.md)
+        .padding(.bottom, Spacing.md)
+        .canvasBackground()
     }
 
     // MARK: - Data
@@ -209,28 +202,69 @@ struct ContentView: View {
     }
 }
 
+/// Title, counts and legend above the map. Drops the counts when the column is narrow.
+private struct MapCardHeader: View {
+    let rows: [DestinationRow]
+
+    var body: some View {
+        let countries = Set(rows.compactMap(\.destination.country)).count
+        HStack(alignment: .center, spacing: Spacing.md) {
+            // The Netbite module glyph: this is the network part of the app.
+            NetbiteLogo(lineWidth: 2)
+                .frame(width: 26, height: 26)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("Destination map")
+                    .font(.sectionTitle)
+                    .fixedSize()
+                    .accessibilityAddTraits(.isHeader)
+                Text("Hover a line to see which app owns it. Click it for details.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: Spacing.sm)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.lg) {
+                    Metric("\(rows.count)", label: rows.count == 1 ? "destination" : "destinations")
+                    Metric("\(countries)", label: countries == 1 ? "country" : "countries")
+                    Divider().frame(height: 30)
+                    MapLegend()
+                }
+                MapLegend()
+            }
+            .layoutPriority(1)
+        }
+    }
+}
+
 private struct MapLegend: View {
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Spacing.md) {
             legend("Live") { path in
-                path.stroke(Color.netbiteAccent, lineWidth: 2)
+                path.stroke(Color.hexOK, lineWidth: 2)
             }
             legend("Recent") { path in
-                path.stroke(Color.netbiteAccent.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                path.stroke(Color.hexOK.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+            }
+            legend("Blocked") { path in
+                path.stroke(Color.hexDanger, style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
             }
             HStack(spacing: 5) {
-                Circle().fill(.primary).frame(width: 8, height: 8)
+                Circle().fill(.primary).frame(width: 7, height: 7)
                 Text("You")
             }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Legend: solid lines are live, dashed lines are recent, red dashed lines are blocked, the dot is this Mac")
     }
 
     private func legend(_ title: String, stroke: @escaping (Path) -> some View) -> some View {
         HStack(spacing: 5) {
-            stroke(Path { $0.move(to: CGPoint(x: 0, y: 3)); $0.addLine(to: CGPoint(x: 20, y: 3)) })
-                .frame(width: 20, height: 6)
+            stroke(Path { $0.move(to: CGPoint(x: 0, y: 3)); $0.addLine(to: CGPoint(x: 18, y: 3)) })
+                .frame(width: 18, height: 6)
             Text(title)
         }
     }
@@ -245,29 +279,36 @@ private struct GeoBanner: View {
         case .ready, .loading:
             EmptyView()
         case .missing:
-            banner("Countries need the free DB-IP Lite database (about 25 MB, updated monthly).", button: "Download")
-        case .downloading:
-            HStack(spacing: 10) {
-                ProgressView().controlSize(.small)
-                Text("Downloading the country database…")
-                Spacer()
+            framed {
+                Banner("Countries are not installed yet",
+                       message: "The map needs the free DB-IP Lite database: about 25 MB, updated monthly, and every lookup stays on this Mac.",
+                       kind: .info,
+                       systemImage: "globe.badge.chevron.backward") {
+                    Button("Download") { Task { await monitor.downloadGeo() } }
+                        .buttonStyle(.borderedProminent)
+                }
             }
-            .padding(10)
-            .background(.yellow.opacity(0.12))
+        case .downloading:
+            framed {
+                Banner("Downloading the country database…", kind: .info, systemImage: "arrow.down.circle") {
+                    ProgressView().controlSize(.small)
+                }
+            }
         case .failed(let message):
-            banner("The country database could not be loaded: \(message)", button: "Download again")
+            framed {
+                Banner("The country database could not be loaded", message: message, kind: .warning) {
+                    Button("Download Again") { Task { await monitor.downloadGeo() } }
+                }
+            }
         }
     }
 
-    private func banner(_ text: String, button: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "globe.badge.chevron.backward")
-            Text(text).lineLimit(2)
-            Spacer()
-            Button(button) { Task { await monitor.downloadGeo() } }
-        }
-        .padding(10)
-        .background(.yellow.opacity(0.12))
+    private func framed(@ViewBuilder _ content: () -> some View) -> some View {
+        content()
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.md)
+            .frame(maxWidth: .infinity)
+            .canvasBackground()
     }
 }
 
@@ -275,28 +316,37 @@ private struct StatusBar: View {
     @Environment(ConnectionMonitor.self) private var monitor
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Spacing.md) {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(monitor.isPaused ? Color.secondary : Color.netbiteAccent)
-                    .frame(width: 7, height: 7)
-                Text(monitor.isPaused ? "Paused" : "Live · libproc every 1 s")
+                StatusDot(kind: monitor.isPaused ? .neutral : .ok, pulsing: !monitor.isPaused, size: 7)
+                Text(monitor.isPaused ? "Paused" : "Live · refreshed every second")
             }
-            Text(geoText)
+            .help(monitor.isPaused ? "Updates are frozen. Resume from the toolbar." : "Connections are read with libproc every second.")
+            separator
+            Label(geoText, systemImage: "globe")
             if monitor.seesAllProcesses {
-                Text("All processes, through the helper")
+                separator
+                Label("All processes, through the helper", systemImage: "checkmark.shield")
             } else if monitor.unreadableProcessCount > 0 {
-                Text("\(monitor.unreadableProcessCount) processes of other users are hidden")
+                separator
+                Label("\(monitor.unreadableProcessCount) processes of other users are hidden", systemImage: "eye.slash")
                     .help("System daemons belong to root. Install the helper (Blocklists) to see them.")
             }
             Spacer()
             Text("Netbite \(NetbiteVersion.current)")
+                .foregroundStyle(.tertiary)
         }
+        .labelStyle(StatusBarLabelStyle())
         .font(.caption)
         .foregroundStyle(.secondary)
         .lineLimit(1)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, Spacing.lg)
         .padding(.vertical, 6)
+        .background(Color.surfaceCanvas)
+    }
+
+    private var separator: some View {
+        Divider().frame(height: 10)
     }
 
     private var geoText: String {
@@ -306,6 +356,16 @@ private struct StatusBar: View {
         case .downloading: "GeoIP: downloading…"
         case .missing: "GeoIP: not installed"
         case .failed: "GeoIP: error"
+        }
+    }
+}
+
+/// Small icon, tight spacing.
+private struct StatusBarLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon.imageScale(.small)
+            configuration.title
         }
     }
 }
