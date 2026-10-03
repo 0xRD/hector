@@ -15,4 +15,17 @@ final class WindowState {
     var filter: DestinationFilter = .all
     var search = ""
     var showInspector = true
+    // Blocklists screen
+    var countrySearch = ""
+    var showAllCountries = false
+    var newRule = ""
+    var newRuleNote = ""
+    var showUninstall = false
+    var uninstallPhase = UninstallPhase.confirm
+}
+
+enum UninstallPhase: Equatable {
+    case confirm
+    case working
+    case failed(String)
 }

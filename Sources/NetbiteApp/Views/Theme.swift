@@ -1,4 +1,5 @@
 import AppKit
+import NetbiteCore
 import SwiftUI
 
 extension Color {
@@ -71,9 +72,13 @@ struct Sparkline: View {
 
 struct StatusBadge: View {
     let destination: Destination
+    var blockReason: BlockReason? = nil
 
     var body: some View {
-        if destination.isLive {
+        if let blockReason {
+            Label(blockReason.label, systemImage: "nosign")
+                .labelStyle(BadgeLabelStyle(color: .netbiteBlock, iconSize: 9))
+        } else if destination.isLive {
             Label(destination.liveConnections > 1 ? "Live · \(destination.liveConnections)" : "Live", systemImage: "circle.fill")
                 .labelStyle(BadgeLabelStyle(color: .netbiteAccent))
         } else {
@@ -86,10 +91,11 @@ struct StatusBadge: View {
 
 struct BadgeLabelStyle: LabelStyle {
     let color: Color
+    var iconSize: CGFloat = 6
 
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 5) {
-            configuration.icon.font(.system(size: 6))
+            configuration.icon.font(.system(size: iconSize, weight: .bold))
             configuration.title
         }
         .font(.caption.weight(.semibold))
@@ -97,6 +103,15 @@ struct BadgeLabelStyle: LabelStyle {
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
         .background(color.opacity(0.13), in: Capsule())
+    }
+}
+
+extension BlockReason {
+    var label: String {
+        switch self {
+        case .network: "Blocked"
+        case .country(let code): "Blocked · \(code)"
+        }
     }
 }
 

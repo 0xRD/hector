@@ -103,6 +103,11 @@ public struct Blocklist: Codable, Sendable {
         self.blockedCountries = Set(blockedCountries.map { $0.uppercased() })
     }
 
+    /// ISO 3166-1 alpha-2 shape: exactly two ASCII letters A–Z.
+    public static func isCountryCode(_ code: String) -> Bool {
+        code.utf8.count == 2 && code.utf8.allSatisfy { (65...90).contains($0) }
+    }
+
     public mutating func setCountry(_ code: String, blocked: Bool) {
         if blocked {
             blockedCountries.insert(code.uppercased())
@@ -120,6 +125,10 @@ public struct Blocklist: Codable, Sendable {
         rules = try container.decodeIfPresent([Rule].self, forKey: .rules) ?? []
         let countries = try container.decodeIfPresent([String].self, forKey: .blockedCountries) ?? []
         blockedCountries = Set(countries.map { $0.uppercased() })
+        guard blockedCountries.allSatisfy(Self.isCountryCode) else {
+            throw DecodingError.dataCorruptedError(forKey: .blockedCountries, in: container,
+                                                   debugDescription: "Country codes are two letters, A to Z.")
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -142,6 +151,16 @@ extension JSONEncoder {
     public static var netbite: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+}
+
+extension JSONEncoder {
+    /// Single-line JSON for the helper socket, where a newline ends a message.
+    public static var netbiteWire: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }

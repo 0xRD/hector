@@ -105,29 +105,31 @@ struct WorldMapView: View {
 
         let focus = hovered?.appID ?? focusAppID
         let hot = hovered ?? selected
-        let dashed = StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [4, 4])
 
         // Dimmed arcs first, emphasized ones on top, the hovered or selected one last.
+        // Blocked destinations are red and dashed; recent ones dashed; live ones solid.
+        func color(_ row: DestinationRow) -> Color { row.isBlocked ? .netbiteBlock : .netbiteAccent }
+        func style(_ row: DestinationRow, width: CGFloat) -> StrokeStyle {
+            row.isBlocked || !row.destination.isLive ? StrokeStyle(lineWidth: width, lineCap: .round, dash: [4, 4]) : StrokeStyle(lineWidth: width)
+        }
         for item in arcs where focus != nil && item.row.app.id != focus {
-            let style = item.row.destination.isLive ? StrokeStyle(lineWidth: 1) : StrokeStyle(lineWidth: 1, dash: [4, 4])
-            context.stroke(Path(item.arc.path), with: .color(.netbiteAccent.opacity(0.12)), style: style)
+            context.stroke(Path(item.arc.path), with: .color(color(item.row).opacity(0.12)), style: style(item.row, width: 1))
         }
         for item in arcs where focus == nil || item.row.app.id == focus {
-            let live = item.row.destination.isLive
-            context.stroke(Path(item.arc.path), with: .color(.netbiteAccent.opacity(live ? 0.6 : 0.4)),
-                           style: live ? StrokeStyle(lineWidth: 1.5) : dashed)
+            let strong = item.row.destination.isLive || item.row.isBlocked
+            context.stroke(Path(item.arc.path), with: .color(color(item.row).opacity(strong ? 0.65 : 0.4)), style: style(item.row, width: 1.5))
         }
         for item in arcs {
             let emphasized = focus == nil || item.row.app.id == focus
             let size: CGFloat = emphasized ? 6 : 4
             let dot = CGRect(x: item.arc.end.x - size / 2, y: item.arc.end.y - size / 2, width: size, height: size)
-            let color: Color = item.row.destination.isLive ? .netbiteAccent : .secondary
-            context.fill(Path(ellipseIn: dot), with: .color(color.opacity(emphasized ? 1 : 0.35)))
+            let fill: Color = item.row.isBlocked ? .netbiteBlock : (item.row.destination.isLive ? .netbiteAccent : .secondary)
+            context.fill(Path(ellipseIn: dot), with: .color(fill.opacity(emphasized ? 1 : 0.35)))
         }
         if let hot, let item = arcs.first(where: { $0.row.id == hot }) {
-            context.stroke(Path(item.arc.path), with: .color(.netbiteAccent), style: StrokeStyle(lineWidth: 2.8, lineCap: .round))
+            context.stroke(Path(item.arc.path), with: .color(color(item.row)), style: StrokeStyle(lineWidth: 2.8, lineCap: .round))
             let ring = CGRect(x: item.arc.end.x - 8, y: item.arc.end.y - 8, width: 16, height: 16)
-            context.stroke(Path(ellipseIn: ring), with: .color(.netbiteAccent), lineWidth: 2)
+            context.stroke(Path(ellipseIn: ring), with: .color(color(item.row)), lineWidth: 2)
         }
 
         if let origin = geometry.point(country: originCountry) {
@@ -156,7 +158,11 @@ struct MapTooltip: View {
             Text("\(Countries.name(row.destination.country)) · \(row.destination.key.portLabel)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if row.destination.isLive {
+            if let reason = row.blockReason {
+                Text("\(reason.label) by pf")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.netbiteBlock)
+            } else if row.destination.isLive {
                 Text(row.destination.liveConnections > 1 ? "Live · \(row.destination.liveConnections) connections" : "Live · 1 connection")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.netbiteAccent)

@@ -7,20 +7,28 @@ struct NetbiteApp: App {
     // Created once with the app; see WindowState for why this is not `@State`.
     private let monitor = ConnectionMonitor()
     private let windowState = WindowState()
+    private let blocking = BlockingController()
 
     var body: some Scene {
         Window("Netbite", id: "main") {
             ContentView()
                 .environment(monitor)
                 .environment(windowState)
+                .environment(blocking)
                 .tint(.netbiteAccent)
                 .frame(minWidth: 1060, minHeight: 660)
-                .task { monitor.start() }
+                .task {
+                    monitor.start()
+                    await blocking.refresh()
+                }
         }
         .defaultSize(width: 1440, height: 920)
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .appInfo) {
+                Button("Uninstall Netbite…") { windowState.showUninstall = true }
+            }
         }
     }
 }

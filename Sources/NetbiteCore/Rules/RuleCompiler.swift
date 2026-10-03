@@ -29,7 +29,7 @@ public enum RuleCompiler {
                 let widest = cidr.network.isV4 ? widestIPv4Prefix : widestIPv6Prefix
                 if cidr.prefixLength < widest {
                     warnings.append("Skipped \(cidr): networks wider than /\(widest) are refused.")
-                } else if cidr.network.isLocalOrPrivate {
+                } else if !isSafeToBlock(cidr) {
                     warnings.append("Skipped \(cidr): local and private networks are never blocked.")
                 } else {
                     block.insert(cidr)
@@ -51,7 +51,13 @@ public enum RuleCompiler {
                     if networks.isEmpty {
                         warnings.append("Country \(code) has no range in the GeoIP database.")
                     }
-                    geoTable += networks
+                    // The same rails as user rules: a corrupted or forged database must not be able
+                    // to block the whole internet or the local network.
+                    let safe = networks.filter { isSafeToBlock($0) }
+                    if safe.count < networks.count {
+                        warnings.append("Country \(code): \(networks.count - safe.count) networks skipped (too wide, or local).")
+                    }
+                    geoTable += safe
                 }
             } else {
                 warnings.append("Countries \(countries.joined(separator: ", ")) are not blocked: no GeoIP database. Run `netbite geo update`.")
@@ -64,5 +70,14 @@ public enum RuleCompiler {
             hostsDomains: domains.sorted(),
             warnings: warnings
         )
+    }
+
+    /// Not wider than the limits, and neither inside nor covering a local or private range.
+    static func isSafeToBlock(_ cidr: CIDR) -> Bool {
+        let widest = cidr.network.isV4 ? widestIPv4Prefix : widestIPv6Prefix
+        guard cidr.prefixLength >= widest else { return false }
+        return !IPAddress.localNetworks.contains { local in
+            local.contains(cidr.network) || cidr.contains(local.network)
+        }
     }
 }

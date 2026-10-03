@@ -7,12 +7,14 @@ import AppKit
 ///   `NETBITE_SNAPSHOT_DELAY` seconds (default 6), then quits.
 /// - `NETBITE_DEBUG_HOVER=N` pretends the pointer hovers the N-th line of the map.
 /// - `NETBITE_DEBUG_SELECT=N` selects the N-th line of the map.
+/// - `NETBITE_DEBUG_BLOCKLISTS=1` opens the Blocklists screen.
 @MainActor
 enum DebugSnapshot {
     static var environment: [String: String] { ProcessInfo.processInfo.environment }
 
     static var hoverIndex: Int? { environment["NETBITE_DEBUG_HOVER"].flatMap(Int.init) }
     static var selectIndex: Int? { environment["NETBITE_DEBUG_SELECT"].flatMap(Int.init) }
+    static var opensBlocklists: Bool { environment["NETBITE_DEBUG_BLOCKLISTS"] != nil }
 
     static func scheduleIfRequested() {
         guard let path = environment["NETBITE_SNAPSHOT"] else { return }

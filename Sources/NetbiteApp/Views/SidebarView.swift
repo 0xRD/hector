@@ -3,10 +3,12 @@ import SwiftUI
 enum SidebarItem: Hashable {
     case allApps
     case app(AppGroup.ID)
+    case blocklists
 }
 
 struct SidebarView: View {
     @Environment(ConnectionMonitor.self) private var monitor
+    @Environment(BlockingController.self) private var blocking
     @Binding var selection: SidebarItem?
     /// App owning the line hovered on the map or in the list.
     let highlightedAppID: AppGroup.ID?
@@ -14,6 +16,27 @@ struct SidebarView: View {
     var body: some View {
         let apps = monitor.sortedApps
         List(selection: $selection) {
+            Section {
+                HStack(spacing: 10) {
+                    Image(systemName: "nosign")
+                        .frame(width: 26, height: 26)
+                        .foregroundStyle(Color.netbiteBlock)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Blocklists").fontWeight(.medium)
+                        Text(blocklistSubtitle).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if blocking.pendingChanges > 0 {
+                        Text("\(blocking.pendingChanges)")
+                            .font(.caption.weight(.bold))
+                            .padding(.horizontal, 6)
+                            .background(Color.orange.opacity(0.25), in: Capsule())
+                            .help("Pending changes")
+                    }
+                }
+                .padding(.vertical, 2)
+                .tag(SidebarItem.blocklists)
+            }
             Section("Apps") {
                 HStack(spacing: 10) {
                     Image(systemName: "square.grid.2x2")
@@ -42,6 +65,14 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+    }
+
+    private var blocklistSubtitle: String {
+        let applied = blocking.applied
+        let rules = applied.rules.filter(\.isEnabled).count
+        let countries = applied.blockedCountries.count
+        guard blocking.isHelperReady else { return "Helper not installed" }
+        return "\(rules) rules · \(countries) countr\(countries == 1 ? "y" : "ies")"
     }
 }
 

@@ -3,6 +3,7 @@ import Charts
 import SwiftUI
 
 struct DestinationDetailView: View {
+    @Environment(BlockingController.self) private var blocking
     let row: DestinationRow?
     /// Every app that talks to the same address, on any port.
     let usedBy: [AppGroup]
@@ -34,7 +35,7 @@ struct DestinationDetailView: View {
                     .font(.system(.callout, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                StatusBadge(destination: destination)
+                StatusBadge(destination: destination, blockReason: row.blockReason)
             }
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 9) {
@@ -98,28 +99,53 @@ struct DestinationDetailView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Button {} label: {
-                    Label("Block this destination", systemImage: "nosign").frame(maxWidth: .infinity)
+            actions(row)
+        }
+    }
+
+    @ViewBuilder
+    private func actions(_ row: DestinationRow) -> some View {
+        let destination = row.destination
+        let address = destination.key.address
+        let addressRule = blocking.addressRule(address)
+        VStack(alignment: .leading, spacing: 10) {
+            if destination.isLocal {
+                Text("Local and private addresses are never blocked: it would cut this Mac off its own network.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    blocking.toggleAddress(address, note: "\(row.app.name) · \(destination.title)")
+                } label: {
+                    Label(addressRule == nil ? "Block this destination" : "Unblock this destination",
+                          systemImage: addressRule == nil ? "nosign" : "arrow.uturn.backward")
+                        .frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
-                .disabled(true)
+                .tint(addressRule == nil ? .netbiteBlock : nil)
+                .buttonStyle(.borderedProminent)
                 if let country = destination.country {
-                    Button {} label: {
-                        Label("Block all of \(Countries.name(country))", systemImage: "flag").frame(maxWidth: .infinity)
+                    let blocked = blocking.isCountryBlocked(country)
+                    Button {
+                        blocking.setCountry(country, blocked: !blocked)
+                    } label: {
+                        Label(blocked ? "Unblock \(Countries.name(country))" : "Block all of \(Countries.name(country))", systemImage: "flag")
+                            .frame(maxWidth: .infinity)
                     }
                     .controlSize(.large)
-                    .disabled(true)
                 }
-                Text("Blocking arrives with the privileged helper in Netbite 0.3. Until then, `netbite rules render` shows what a blocklist would apply.")
+                if blocking.pendingChanges > 0 {
+                    PendingBar()
+                }
+                Text("Blocking applies to every app on this Mac: \(address.description) goes to the pf table, a country to its own table." as String)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Button("Copy IP") { copy(destination.key.address.description) }
-                    if let hostname = destination.hostname {
-                        Button("Copy host") { copy(hostname) }
-                    }
+            }
+            HStack {
+                Button("Copy IP") { copy(address.description) }
+                if let hostname = destination.hostname {
+                    Button("Copy host") { copy(hostname) }
                 }
             }
         }

@@ -74,21 +74,24 @@ struct AppGroup: Identifiable {
 struct DestinationRow: Identifiable {
     let app: AppGroup
     let destination: Destination
+    /// Set when the applied blocklist cuts this destination off.
+    var blockReason: BlockReason?
     var id: DestinationRef { DestinationRef(appID: app.id, key: destination.key) }
+    var isBlocked: Bool { blockReason != nil }
 }
 
 enum DestinationFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case live = "Live"
-    case recent = "Recent"
+    case blocked = "Blocked"
 
     var id: String { rawValue }
 
-    func includes(_ destination: Destination) -> Bool {
+    func includes(_ row: DestinationRow) -> Bool {
         switch self {
         case .all: true
-        case .live: destination.isLive
-        case .recent: !destination.isLive
+        case .live: row.destination.isLive && !row.isBlocked
+        case .blocked: row.isBlocked
         }
     }
 }
@@ -96,8 +99,11 @@ enum DestinationFilter: String, CaseIterable, Identifiable {
 enum Countries {
     private static let english = Locale(identifier: "en_US")
 
+    /// Plain short names where the system's are long or political qualifiers get in the way of a list.
+    private static let overrides = ["CN": "China", "HK": "Hong Kong", "MO": "Macao"]
+
     static func name(_ code: String?) -> String {
         guard let code else { return "Unknown" }
-        return english.localizedString(forRegionCode: code) ?? code
+        return overrides[code] ?? english.localizedString(forRegionCode: code) ?? code
     }
 }

@@ -37,19 +37,19 @@ A Network Extension can be added later as an optional component for people who h
 │  Rules ────── Blocklist (JSON) → RuleCompiler → CompiledBlock- │
 │               list → PFAnchor (ruleset, tables) + HostsFile    │
 └────────────────────────────────────────────────────────────────┘
-             │ compiled blocklist (planned: XPC)
+             │ blocklist as JSON over a Unix socket
              ▼
 ┌──────────────────────────┐
-│ netbited (root, planned) │──► pfctl -a com.apple/250.Netbite …
+│ netbited (root)          │──► pfctl -a com.apple/250.Netbite …
 │ applies, verifies, rolls │──► /etc/hosts managed section
 │ back                     │
 └──────────────────────────┘
 ```
 
-- **NetbiteCore** has no UI and no privileged code. Everything in it is unit tested.
+- **NetbiteCore** has no UI and no privileged code. Most of it is unit tested.
 - **netbite** is the command-line front end. It is also the reference client while the app is being built.
-- **Netbite.app** (planned) is a SwiftUI app with the connections list, the world map, the details panel and the blocklist editor. The design mockup covers both screens.
-- **netbited** (planned) is the only component that runs as root. It is deliberately small: it receives a blocklist, compiles it with NetbiteCore, writes the files and runs `pfctl`.
+- **Netbite.app** is a SwiftUI app with the connections list, the world map, the details panel and the blocklist editor. The design mockup covers both screens.
+- **netbited** is the only component that runs as root. It is deliberately small: it receives a blocklist, compiles it with NetbiteCore, writes the files and runs `pfctl`.
 
 ## Collector
 
@@ -110,19 +110,24 @@ Limits of this approach, documented in the UI as well:
 
 Country blocking is **opt-in**: `Blocklist.blockedCountries` is empty by default.
 
-## Privileged helper (planned)
+## Privileged helper
 
-Running pfctl and writing `/etc/hosts` needs root. Without a developer account, `SMAppService` daemons and `SMJobBless` are not usable in a distributable way. The plan:
+`netbited` is the only component that runs as root. Without a developer account, `SMAppService` daemons and `SMJobBless` cannot be used in a distributable way, so it installs itself:
 
-1. On first use, the app asks for an administrator password once, then installs `netbited` and its LaunchDaemon plist under `/Library`.
-2. The app talks to `netbited` over a Unix domain socket owned by root, mode 0660, group `admin`. The protocol is a small JSON message: "apply this blocklist" or "remove everything".
-3. `netbited` revalidates everything it receives. It never trusts compiled output from the client and compiles the blocklist itself with NetbiteCore.
-4. Every apply keeps the previous state, so it can roll back if `pfctl` fails.
-5. Uninstalling runs the flush command and removes the managed `/etc/hosts` section.
+1. The app runs `Netbite.app/Contents/Helpers/netbited install` through `do shell script … with administrator privileges`; macOS shows its own password prompt. `install` copies the binary to `/Library/PrivilegedHelperTools/io.github.0xrd.netbited`, writes a LaunchDaemon plist and bootstraps it.
+2. The helper listens on `/var/run/io.github.0xrd.netbited.sock`, mode 0660, owner root, group admin, and also checks the peer with `getpeereid`: only administrators can talk to it.
+3. The protocol is one line of JSON per request (`status`, `apply(Blocklist, authorization)`, `flush(authorization)`, `snapshot`) and one line of JSON in reply, at most 4 MB and within 5 s. Types are in `NetbiteCore/Helper`.
+4. Changing the firewall needs more than the admin group: the client obtains the Authorization Services right `io.github.0xrd.netbite.modify-firewall` (administrator password, remembered five minutes) and sends its external form; the helper checks it without interaction. Root clients are exempt.
+5. On `apply`, the helper recompiles the blocklist itself with NetbiteCore: nothing compiled by the client is trusted. It writes the pf files under `/Library/Application Support/Netbite/pf`, loads the anchor, and restores the previous files if `pfctl` fails. It downloads its own copy of the GeoIP database when a country is blocked.
+6. pf rules do not survive a reboot. The helper stores the applied blocklist and applies it again when launchd starts it.
+7. pf is enabled with `pfctl -E`, which returns a reference token; `flush` releases it with `pfctl -X`, so Netbite never disables pf for other software. If pf has no main ruleset at all, the stock `/etc/pf.conf` is loaded so that `anchor "com.apple/*"` is evaluated.
+8. Files are written as root through `SecureFiles` (no symlink followed, root-owned, temp file then rename) and every log line is sanitized. See [SECURITY.md](../SECURITY.md) for the threat model.
+9. `netbited uninstall` flushes every rule, removes the managed `/etc/hosts` section, unloads the daemon and deletes its files.
+
+`netbited serve --dry-run DIR` runs the whole flow without root: paths live under `DIR` and commands are only logged. This is how the helper is tested outside a VM.
 
 ## Distribution
 
-Without notarization, Gatekeeper blocks downloaded binaries. Two ways to install:
+Releases are built by GitHub Actions from a tag: a universal (Apple silicon and Intel) `Netbite.app`, ad-hoc signed, zipped with `ditto`, published with its SHA-256.
 
-- build from source (recommended, a single `swift build`);
-- use ad-hoc signed release builds, which users open with a right click → Open the first time.
+Without notarization, Gatekeeper blocks the first launch of a downloaded app. Users allow it once in System Settings → Privacy & Security → Open Anyway, or remove the quarantine attribute. Building from source avoids the prompt entirely.

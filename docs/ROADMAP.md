@@ -24,14 +24,30 @@ Based on the design mockup (main window and blocklist editor).
 - [ ] Fix the AppKit "reentrant operation in its NSTableView delegate" warning logged at launch
 - [ ] Network name (ASN) per destination
 
-## 0.3: blocking from the app
+## 0.3: blocking from the app, downloadable release
 
-- [ ] `netbited` privileged helper: install, apply, verify, roll back, uninstall
-- [ ] "Block this destination" and "Block all of <country>" from the details panel
-- [ ] Blocklist editor: rules, imported lists, a per-country toggle (all off by default), pending changes with Apply / Discard
+- [x] `netbited` privileged helper: LaunchDaemon, Unix socket for administrators only, apply with roll back on pfctl failure, re-apply at boot, flush, uninstall
+- [x] "Block this destination" and "Block all of <country>" from the details panel
+- [x] Blocklists screen: per-country switches (all off by default), personal rules, pending changes with Apply / Discard
+- [x] Blocked destinations in red on the map and in the list, "Blocked" filter
+- [x] System processes visible through the helper
+- [x] `netbite helper status | apply | flush`, and a dry-run mode for the helper (`netbited serve --dry-run DIR`)
+- [x] GitHub Actions: CI on every push, universal `Netbite.app` published on every `v*` tag
 - [ ] Imported hosts lists (StevenBlack Unified, EasyPrivacy converted), with periodic updates
 
-## 0.4: better names and numbers
+## 0.4: Hexorcist
+
+Netbite grows into **Hexorcist**, a small all-in-one security app for macOS. Netbite stays the name of its network module. Everything keeps working without a paid Apple Developer account.
+
+- [ ] Rename the app, the bundle, the repository and the docs
+- [ ] **VirusTotal**: personal API key stored in the Keychain; lookups by SHA-256 only, never uploading a file unless the user asks for that file; results cached; the free-tier limit (4 requests per minute, 500 per day) respected
+- [ ] **Persistence** (in the spirit of KnockKnock): launch agents and daemons, login items and background tasks, cron and periodic jobs, system extensions, configuration profiles, browser extensions. Each item with its code signature (Apple, Developer ID, ad hoc, unsigned), notarization, path, and VirusTotal score
+- [ ] **Processes** (in the spirit of TaskExplorer): process tree, signature, parent, arguments, open connections, VirusTotal score; flags for unsigned code and binaries running from temporary, Downloads or hidden folders, with the quarantine download URL
+- [ ] **Keyboard taps** (in the spirit of ReiKey): apps that intercept keystrokes, through the public event tap list
+- [ ] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined
+- [ ] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it
+
+## 0.5: better names and numbers
 
 - [ ] Real host names per connection: research reading DNS answers from mDNSResponder's unified log, or a local DNS forwarder
 - [ ] Bytes per connection from the NetworkStatistics framework (the source `nettop` uses)
@@ -39,6 +55,9 @@ Based on the design mockup (main window and blocklist editor).
 
 ## Later
 
+- [ ] Real-time alerts when a new launch agent, daemon or login item appears (in the spirit of BlockBlock)
+- [ ] Processes listening on the network, not just on this Mac
+- [ ] Exportable report (JSON or HTML) and an event timeline
 - [ ] Menu bar extra: live counters, pause blocking
 - [ ] Notification when an app contacts a new country
 - [ ] Optional Network Extension module for contributors with a developer account, to block per app and prompt on new connections
@@ -46,4 +65,4 @@ Based on the design mockup (main window and blocklist editor).
 ## Out of scope
 
 - Per-app blocking and prompts in the default build: they require a paid Apple Developer account (see [ARCHITECTURE.md](ARCHITECTURE.md)).
-- Any telemetry or cloud service.
+- Telemetry. Cloud lookups happen only when the user turns them on (VirusTotal, with their own key).

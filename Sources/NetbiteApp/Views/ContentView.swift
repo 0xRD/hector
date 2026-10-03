@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(ConnectionMonitor.self) private var monitor
-
+    @Environment(BlockingController.self) private var blocking
     @Environment(WindowState.self) private var state
 
     private var selectedAppID: AppGroup.ID? {
@@ -21,21 +21,25 @@ struct ContentView: View {
             SidebarView(selection: $state.sidebarSelection, highlightedAppID: state.hovered?.appID)
                 .navigationSplitViewColumnWidth(min: 230, ideal: 260, max: 340)
         } detail: {
-            VStack(spacing: 0) {
-                GeoBanner()
-                VSplitView {
-                    // The map is width-bound (2.5:1); taller would only add empty bands.
-                    mapCard(rows: rows)
-                        .frame(minHeight: 220, idealHeight: 380, maxHeight: 480)
-                    DestinationListView(groups: groups, selection: $state.selectedDestination, hovered: $state.hovered)
-                        .frame(minHeight: 200)
+            if state.sidebarSelection == .blocklists {
+                BlocklistView()
+            } else {
+                VStack(spacing: 0) {
+                    GeoBanner()
+                    VSplitView {
+                        // The map is width-bound (2.5:1); taller would only add empty bands.
+                        mapCard(rows: rows)
+                            .frame(minHeight: 220, idealHeight: 380, maxHeight: 480)
+                        DestinationListView(groups: groups, selection: $state.selectedDestination, hovered: $state.hovered)
+                            .frame(minHeight: 200)
+                    }
+                    Divider()
+                    StatusBar()
                 }
-                Divider()
-                StatusBar()
-            }
-            .inspector(isPresented: $state.showInspector) {
-                DestinationDetailView(row: selectedRow, usedBy: usedBySelected)
-                    .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
+                .inspector(isPresented: $state.showInspector) {
+                    DestinationDetailView(row: selectedRow, usedBy: usedBySelected)
+                        .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
+                }
             }
         }
         .navigationTitle(title)
@@ -50,9 +54,15 @@ struct ContentView: View {
                 .frame(width: 220)
             }
             ToolbarItemGroup(placement: .primaryAction) {
-                Label("Observe mode", systemImage: "eye")
-                    .labelStyle(BadgeLabelStyle(color: .netbiteAccent))
-                    .help("Netbite watches every app. Blocking arrives in 0.3 and will apply to the whole Mac.")
+                if blocking.isHelperReady {
+                    Label("Blocking on", systemImage: "shield.fill")
+                        .labelStyle(BadgeLabelStyle(color: .netbiteAccent, iconSize: 9))
+                        .help("The helper enforces your blocklist with pf, for every app on this Mac.")
+                } else {
+                    Label("Observe only", systemImage: "eye")
+                        .labelStyle(BadgeLabelStyle(color: .secondary, iconSize: 9))
+                        .help("Install the helper from Blocklists to block destinations.")
+                }
                 Toggle(isOn: $monitor.isPaused) {
                     Label(monitor.isPaused ? "Resume" : "Pause", systemImage: monitor.isPaused ? "play.fill" : "pause.fill")
                 }
@@ -67,6 +77,7 @@ struct ContentView: View {
         }
         #if DEBUG
         .task {
+            if DebugSnapshot.opensBlocklists { state.sidebarSelection = .blocklists }
             guard DebugSnapshot.hoverIndex != nil || DebugSnapshot.selectIndex != nil else { return }
             try? await Task.sleep(for: .seconds(4))
             let rows = visibleRows.filter { $0.destination.country != nil }
@@ -74,6 +85,7 @@ struct ContentView: View {
             if let index = DebugSnapshot.selectIndex, rows.indices.contains(index) { state.selectedDestination = rows[index].id }
         }
         #endif
+        .sheet(isPresented: $state.showUninstall) { UninstallSheet() }
         .onChange(of: state.sidebarSelection) {
             if let selected = state.selectedDestination, let app = selectedAppID, selected.appID != app {
                 state.selectedDestination = nil
@@ -126,10 +138,13 @@ struct ContentView: View {
     /// Every destination of every app that passes the filter and the search, for the map.
     private var visibleRows: [DestinationRow] {
         let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
+        let applied = blocking.applied
         return monitor.sortedApps.flatMap { app in
             app.sortedDestinations
-                .filter { state.filter.includes($0) && (query.isEmpty || matches($0, app: app, query: query)) }
-                .map { DestinationRow(app: app, destination: $0) }
+                .filter { query.isEmpty || matches($0, app: app, query: query) }
+                .map { DestinationRow(app: app, destination: $0,
+                                      blockReason: applied.blockReason(for: $0.key.address, country: $0.country)) }
+                .filter { state.filter.includes($0) }
         }
     }
 
@@ -153,7 +168,8 @@ struct ContentView: View {
     private var selectedRow: DestinationRow? {
         guard let ref = state.selectedDestination, let app = monitor.apps[ref.appID],
               let destination = app.destinations[ref.key] else { return nil }
-        return DestinationRow(app: app, destination: destination)
+        return DestinationRow(app: app, destination: destination,
+                              blockReason: blocking.applied.blockReason(for: destination.key.address, country: destination.country))
     }
 
     private var usedBySelected: [AppGroup] {
@@ -236,12 +252,14 @@ private struct StatusBar: View {
                 Text(monitor.isPaused ? "Paused" : "Live · libproc every 1 s")
             }
             Text(geoText)
-            if monitor.unreadableProcessCount > 0 {
-                Text("\(monitor.unreadableProcessCount) processes of other users are not visible yet")
-                    .help("System daemons belong to root. The privileged helper (0.3) will report them.")
+            if monitor.seesAllProcesses {
+                Text("All processes, through the helper")
+            } else if monitor.unreadableProcessCount > 0 {
+                Text("\(monitor.unreadableProcessCount) processes of other users are hidden")
+                    .help("System daemons belong to root. Install the helper (Blocklists) to see them.")
             }
             Spacer()
-            Text("Netbite 0.2 · observe only")
+            Text("Netbite \(NetbiteVersion.current)")
         }
         .font(.caption)
         .foregroundStyle(.secondary)

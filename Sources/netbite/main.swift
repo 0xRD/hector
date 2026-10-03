@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import NetbiteCore
 
-let version = "0.1.0-dev"
+let version = NetbiteVersion.current
 
 let usage = """
 netbite \(version): see which processes talk to which destinations, block destinations system-wide.
@@ -23,6 +23,12 @@ USAGE
   netbite rules render FILE --out DIR [--db PATH] [--hosts PATH]
       Write the pf ruleset, pf tables and the resulting hosts file into DIR.
       Nothing on the system is changed: this is what the privileged helper will apply.
+
+  netbite helper status                  State of the privileged helper and of pf
+  netbite helper apply FILE              Enforce a blocklist (system-wide, through the helper)
+  netbite helper flush                   Remove every Netbite rule
+      All helper commands accept --socket PATH. Install the helper from Netbite.app, or with
+      sudo netbited install.
 
   netbite version | help
 
@@ -230,16 +236,50 @@ func rules(_ args: Arguments) throws {
     }
 }
 
+func helper(_ args: Arguments) throws {
+    guard let sub = args.positional.first else { throw CLIError("Missing helper subcommand.\n\n\(usage)") }
+    let socket = args.options["--socket"] ?? HelperPaths.socket
+    // Changes need an administrator's approval (system dialog) unless we already run as root.
+    func authorization() throws -> Data {
+        geteuid() == 0 ? Data() : try HelperAuthorization.externalForm()
+    }
+    let request: HelperRequest
+    switch sub {
+    case "status": request = .status
+    case "flush": request = .flush(authorization: try authorization())
+    case "apply":
+        guard args.positional.count == 2 else { throw CLIError("Give one blocklist file.") }
+        let blocklist = try Blocklist.load(from: URL(fileURLWithPath: args.positional[1]))
+        request = .apply(blocklist, authorization: try authorization())
+    default: throw CLIError("Unknown helper subcommand: \(sub)")
+    }
+    switch try HelperClient.send(request, socketPath: socket) {
+    case .status(let status):
+        print("""
+        Helper \(status.version) · pf \(status.pfEnabled ? "enabled" : "disabled") · Netbite anchor \(status.anchorLoaded ? "loaded" : "empty")
+        Applied: \(status.appliedAt.map { $0.formatted() } ?? "never")
+        pf <\(PFAnchor.blockTable)>: \(status.blockTableCount) networks · <\(PFAnchor.geoTable)>: \(status.geoTableCount) networks · /etc/hosts: \(status.hostsDomainCount) domains
+        Blocked countries: \(status.blocklist.map { $0.blockedCountries.sorted().joined(separator: ", ") }.flatMap { $0.isEmpty ? nil : $0 } ?? "none")
+        """)
+        status.warnings.forEach { print("warning: \($0)") }
+    case .snapshot:
+        print("Unexpected snapshot reply.")
+    case .failure(let message):
+        throw CLIError(message)
+    }
+}
+
 // MARK: - Entry point
 
 let argv = CommandLine.arguments.dropFirst()
 do {
     let command = argv.first ?? "help"
-    let args = try Arguments(argv.dropFirst(), valueOptions: ["--db", "--out", "--hosts"])
+    let args = try Arguments(argv.dropFirst(), valueOptions: ["--db", "--out", "--hosts", "--socket"])
     switch command {
     case "connections", "conn": try connections(args)
     case "geo": try await geo(args)
     case "rules": try rules(args)
+    case "helper": try helper(args)
     case "version", "--version": print("netbite \(version)")
     case "help", "--help", "-h": print(usage)
     default: throw CLIError("Unknown command: \(command)\n\n\(usage)")

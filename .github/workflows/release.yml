@@ -1,0 +1,40 @@
+name: Release
+
+# Push a tag such as v0.3.0 to publish a downloadable, universal Netbite.app.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      # Pinned to a commit: a moved tag cannot change what runs with write access.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the tag matches the version in the code
+        run: |
+          VERSION=$(sed -n 's/.*static let current = "\(.*\)".*/\1/p' Sources/NetbiteCore/Helper/HelperProtocol.swift)
+          test "v$VERSION" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match version $VERSION"; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: swift test
+
+      - name: Build universal Netbite.app
+        run: scripts/bundle-app.sh --universal --zip
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ZIP=".build/Netbite-$VERSION-macOS.zip"
+          SHA=$(cut -d' ' -f1 "$ZIP.sha256")
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" docs/RELEASE_NOTES.md > notes.md
+          gh release create "$GITHUB_REF_NAME" "$ZIP" "$ZIP.sha256" \
+            --title "Netbite $VERSION" --notes-file notes.md

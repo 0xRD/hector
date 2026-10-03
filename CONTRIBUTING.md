@@ -13,7 +13,7 @@ Thanks for helping. Netbite runs with root privileges once the helper is install
 
 1. Open an issue describing the bug or the feature, unless it is trivial.
 2. Create a branch, make the change, and add tests in `Tests/NetbiteCoreTests` for anything in the core library.
-3. Make sure `swift build` and `swift test` pass. If your toolchain is broken, use `scripts/build.sh` and say so in the pull request.
+3. Make sure `swift build` and `scripts/test.sh` (which runs `swift test`) pass. If your toolchain is broken, use `scripts/build.sh` and say so in the pull request.
 4. Open a pull request that explains what changed and how you tested it.
 
 ## Style

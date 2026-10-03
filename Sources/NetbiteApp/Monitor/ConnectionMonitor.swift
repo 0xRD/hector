@@ -22,6 +22,8 @@ final class ConnectionMonitor {
     private(set) var unreadableProcessCount = 0
     private(set) var lastUpdate: Date?
     private(set) var geoStatus: GeoStatus = .loading
+    /// Snapshots come from the root helper, so system daemons are included.
+    private(set) var seesAllProcesses = false
     var isPaused = false
 
     /// Where lines on the map start: the country the Mac is set to. No network lookup involved.
@@ -48,12 +50,22 @@ final class ConnectionMonitor {
             while !Task.isCancelled {
                 guard let self else { return }
                 if !self.isPaused {
-                    let snapshot = await Task.detached(priority: .utility) { SocketCollector().snapshot() }.value
+                    let (snapshot, fromHelper) = await Task.detached(priority: .utility) { Self.takeSnapshot() }.value
+                    self.seesAllProcesses = fromHelper
                     self.ingest(snapshot)
                 }
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+    }
+
+    /// Asks the helper first (it runs as root and sees every process), then falls back to a local
+    /// snapshot of the user's own processes.
+    nonisolated private static func takeSnapshot() -> (CollectorSnapshot, Bool) {
+        if HelperClient.isInstalled, case .snapshot(let snapshot)? = try? HelperClient.send(.snapshot, timeout: 3) {
+            return (snapshot, true)
+        }
+        return (SocketCollector().snapshot(), false)
     }
 
     // MARK: - GeoIP

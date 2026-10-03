@@ -89,6 +89,8 @@ struct DestinationRowView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(destination.title)
                     .fontWeight(.medium)
+                    .strikethrough(row.isBlocked, color: .netbiteBlock)
+                    .foregroundStyle(row.isBlocked ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(subtitle)
@@ -109,7 +111,7 @@ struct DestinationRowView: View {
                 }
             }
             .frame(width: Column.location, alignment: .leading)
-            StatusBadge(destination: destination)
+            StatusBadge(destination: destination, blockReason: row.blockReason)
                 .frame(width: Column.status, alignment: .leading)
         }
         .padding(.vertical, 3)
