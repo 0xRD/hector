@@ -103,7 +103,7 @@ private struct HelperCard: View {
             Text(summary(status)).foregroundStyle(.secondary)
             if status.version != HectorVersion.current {
                 HStack {
-                    Label("The helper is version \(status.version); this app is \(HectorVersion.current). Update it to list login items and every process.",
+                    Label("The helper is version \(status.version); this app is \(HectorVersion.current). Update it to get every feature and the latest security fixes.",
                           systemImage: "arrow.triangle.2.circlepath")
                         .font(.caption)
                         .foregroundStyle(.orange)
