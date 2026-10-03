@@ -62,10 +62,14 @@ func serve(dryRunRoot: URL?, socketPath: String) async throws -> Never {
     // changes the rules goes through `gate`, one at a time. Between connections, and at least
     // every few minutes when nobody talks to the helper, subscribed hosts lists that are due are
     // downloaded again.
-    let gate = EnforcerGate(enforcer)
+    acceptForever(server: server, gate: EnforcerGate(enforcer), dryRun: dryRunRoot != nil)
+}
+
+/// The accept loop. Synchronous on purpose: it blocks on poll() and on the client slots, which an
+/// async function may not do.
+func acceptForever(server: Int32, gate: EnforcerGate, dryRun: Bool) -> Never {
     let clients = DispatchQueue(label: "io.github.0xrd.hectord.clients", attributes: .concurrent)
     let slots = DispatchSemaphore(value: HelperLimits.maximumConcurrentClients)
-    let dryRun = dryRunRoot != nil
     let waitMilliseconds = Int32(HostsListCatalog.checkInterval * 1_000)
     while true {
         var descriptor = pollfd(fd: server, events: Int16(POLLIN), revents: 0)
