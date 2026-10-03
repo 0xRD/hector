@@ -10,6 +10,7 @@ struct DestinationGroup: Identifiable {
 /// The process → destination tree. Hovering a row lights up its arc on the map.
 struct DestinationListView: View {
     @Environment(BlockingController.self) private var blocking
+    @Environment(WindowState.self) private var state
     let groups: [DestinationGroup]
     @Binding var selection: DestinationRef?
     @Binding var hovered: DestinationRef?
@@ -40,11 +41,8 @@ struct DestinationListView: View {
                             .tag(row.id)
                             .listRowBackground(hovered == row.id ? Color.hectorOKWash : nil)
                             .onHover { inside in
-                                if inside {
-                                    hovered = row.id
-                                } else if hovered == row.id {
-                                    hovered = nil
-                                }
+                                // Deferred: this can fire while the table lays out its rows.
+                                state.hoverListRow(row.id, inside: inside)
                             }
                             .contextMenu { menu(for: row) }
                     }
@@ -72,6 +70,9 @@ struct DestinationListView: View {
         Button("Copy IP Address") { copy(address.description) }
         if let hostname = destination.hostname {
             Button("Copy Host Name") { copy(hostname) }
+        }
+        if let network = destination.network {
+            Button("Copy Network Name") { copy(network.label) }
         }
     }
 
@@ -173,9 +174,16 @@ struct DestinationRowView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// The address when the title is a host name, then the network that owns it.
     private var subtitle: String {
         let destination = row.destination
-        if destination.hostname != nil { return destination.key.address.description }
-        return destination.isLocal ? "private address" : "no reverse DNS"
+        var parts: [String] = []
+        if destination.hostname != nil { parts.append(destination.key.address.description) }
+        if let network = destination.network {
+            // With a host name, the organization is enough; without one, show the AS number too.
+            parts.append(destination.hostname == nil ? network.label : network.displayName)
+        }
+        if parts.isEmpty { return destination.isLocal ? "private address" : "no reverse DNS" }
+        return parts.joined(separator: " · ")
     }
 }

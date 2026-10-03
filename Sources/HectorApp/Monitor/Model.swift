@@ -21,6 +21,9 @@ struct Destination: Identifiable, Hashable {
     var id: DestinationKey { key }
     /// ISO country code from the GeoIP database; `nil` for private ranges or before it loads.
     var country: String?
+    /// Autonomous system that announces the address ("AS15169 Google LLC"), from the optional
+    /// DB-IP ASN database; `nil` for private ranges, unknown space, or when it is not installed.
+    var network: NetworkOwner?
     /// PTR name, filled in asynchronously.
     var hostname: String?
     var liveConnections: Int

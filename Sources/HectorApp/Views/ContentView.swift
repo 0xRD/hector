@@ -146,7 +146,7 @@ struct ContentView: View {
         switch state.sidebarSelection {
         case .persistence: "Name, path, team ID"
         case .processes: "Name, PID, path, arguments"
-        default: "Host, IP, country, port"
+        default: "Host, IP, country, network, port"
         }
     }
 
@@ -187,9 +187,10 @@ struct ContentView: View {
     }
 
     private func matches(_ destination: Destination, app: AppGroup, query: String) -> Bool {
-        [destination.title, destination.key.address.description, String(destination.key.port),
-         destination.country ?? "", Countries.name(destination.country), app.name]
-            .contains { $0.lowercased().contains(query) }
+        let network: String = destination.network?.label ?? ""
+        let fields: [String] = [destination.title, destination.key.address.description, String(destination.key.port),
+                                destination.country ?? "", Countries.name(destination.country), network, app.name]
+        return fields.contains { $0.lowercased().contains(query) }
     }
 
     private var selectedRow: DestinationRow? {
@@ -337,7 +338,6 @@ private struct StatusBar: View {
             }
             Spacer()
             Text("Hector \(HectorVersion.current)")
-                .foregroundStyle(.tertiary)
         }
         .labelStyle(StatusBarLabelStyle())
         .font(.caption)

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct DestinationDetailView: View {
     @Environment(BlockingController.self) private var blocking
+    @Environment(ConnectionMonitor.self) private var monitor
     let row: DestinationRow?
     /// Every app that talks to the same address, on any port.
     let usedBy: [AppGroup]
@@ -49,6 +50,7 @@ struct DestinationDetailView: View {
                     CountryBadge(code: destination.country)
                 }
             }
+            DetailRow("Network") { networkValue(destination) }
             DetailRow("Reverse DNS", value: destination.hostname ?? "None")
             DetailRow("First seen") {
                 Text(destination.firstSeen, format: .dateTime.hour().minute().second())
@@ -61,6 +63,46 @@ struct DestinationDetailView: View {
                 }
             }
             DetailRow("Connections", value: connectionsText(destination))
+            if destination.network != nil {
+                // CC BY 4.0 asks for attribution where the data is shown.
+                Text("Network names by DB-IP.com, CC BY 4.0")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// The autonomous system that owns the address, or what to do to see it.
+    @ViewBuilder
+    private func networkValue(_ destination: Destination) -> some View {
+        if let network = destination.network {
+            DetailValueText(text: network.label, monospaced: false)
+        } else if destination.isLocal {
+            Text("Local network")
+        } else {
+            switch monitor.networkNamesStatus {
+            case .ready:
+                Text("Unknown").foregroundStyle(.secondary)
+            case .loading:
+                Text("Loading…").foregroundStyle(.secondary)
+            case .downloading:
+                HStack(spacing: Spacing.xs) {
+                    ProgressView().controlSize(.mini)
+                    Text("Downloading…").foregroundStyle(.secondary)
+                }
+            case .missing:
+                Button("Download Network Names") {
+                    Task { await monitor.downloadNetworkNames() }
+                }
+                .controlSize(.small)
+                .help("Downloads the free DB-IP Lite ASN database (monthly, CC BY 4.0). Every lookup stays on this Mac.")
+            case .failed(let message):
+                Button("Download Network Names Again") {
+                    Task { await monitor.downloadNetworkNames() }
+                }
+                .controlSize(.small)
+                .help(message)
+            }
         }
     }
 

@@ -13,6 +13,7 @@ Hector is meant to be built and used by anyone from source, so it does not depen
 |---|---|---|
 | Sockets of each process | `libproc` (`proc_pidinfo`, `proc_pidfdinfo`) | user for own processes, root for all |
 | Country of an IP | DB-IP Lite CSV, in memory | none |
+| Network (ASN) of an IP | DB-IP IP to ASN Lite CSV, in memory, optional | none |
 | Block IPs, networks, countries | `pf` tables in an anchor | root |
 | Block domains | managed section of `/etc/hosts` | root |
 
@@ -33,7 +34,8 @@ A Network Extension can be added later as an optional component for people who h
 │ HectorCore                                                    │
 │  Collector ── SocketCollector: pids → fds → socket_fdinfo      │
 │  GeoIP ────── GeoIPDatabase (sorted ranges, binary search)     │
-│               GeoIPUpdater (monthly DB-IP download)            │
+│               ASNDatabase (same, compact, network names)       │
+│               GeoIPUpdater, ASNUpdater (monthly DB-IP files)   │
 │  Rules ────── Blocklist (JSON) → RuleCompiler → CompiledBlock- │
 │               list → PFAnchor (ruleset, tables) + HostsFile    │
 └────────────────────────────────────────────────────────────────┘
@@ -66,6 +68,7 @@ A Network Extension can be added later as an optional component for people who h
 - **Host names.** A socket only knows the IP address. Reverse DNS (`--resolve`) returns PTR records, such as `fra16s50-in-f4.1e100.net`, not the name the app asked for. Attributing real names needs a view of DNS answers: see the roadmap.
 - **Traffic volume.** Byte counters per connection are not exposed by libproc. `nettop` gets them from the private NetworkStatistics framework; that is planned as an optional source.
 - **GeoIP load time.** Parsing the 700,000-line CSV takes about 1 s. The app loads it once at launch; a compact binary cache is planned so the CLI starts instantly too.
+- **Network names.** The ASN file is larger than the country one. `ASNDatabase` keeps 12 bytes per IPv4 range and 48 per IPv6 range, merges adjacent ranges of the same network while loading, and stores each organization name once in a shared UTF-8 buffer; names become `String`s only for the address being looked up. The app loads it in the background after the countries, only if the user downloaded it; the CLI loads it only for `--asn` and `geo asn`. Names come from a downloaded file, so control and bidi formatting characters are stripped before they reach the screen or the terminal.
 - **Short-lived connections** that open and close between two snapshots are missed. Polling every second catches most of them.
 
 ## Blocking

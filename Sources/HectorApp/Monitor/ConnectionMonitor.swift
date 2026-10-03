@@ -14,6 +14,15 @@ final class ConnectionMonitor {
         case failed(String)
     }
 
+    /// State of the optional network names (ASN) database.
+    enum NetworkNamesStatus: Equatable {
+        case loading
+        case ready(networks: Int)
+        case missing
+        case downloading
+        case failed(String)
+    }
+
     static let historyLength = 60
     /// Destinations idle for longer than this leave the list.
     static let retention: TimeInterval = 30 * 60
@@ -22,6 +31,7 @@ final class ConnectionMonitor {
     private(set) var unreadableProcessCount = 0
     private(set) var lastUpdate: Date?
     private(set) var geoStatus: GeoStatus = .loading
+    private(set) var networkNamesStatus: NetworkNamesStatus = .loading
     /// Snapshots come from the root helper, so system daemons are included.
     private(set) var seesAllProcesses = false
     var isPaused = false
@@ -30,6 +40,7 @@ final class ConnectionMonitor {
     let originCountry = Locale.current.region?.identifier ?? "US"
 
     @ObservationIgnored private var geo: GeoIPDatabase?
+    @ObservationIgnored private var networkNames: ASNDatabase?
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var hostnames: [IPAddress: String] = [:]
     @ObservationIgnored private var lookedUp: Set<IPAddress> = []
@@ -47,6 +58,8 @@ final class ConnectionMonitor {
         guard loop == nil else { return }
         loop = Task { [weak self] in
             await self?.loadGeo()
+            // Network names are secondary: they load in the background while snapshots start.
+            Task { [weak self] in await self?.loadNetworkNames() }
             while !Task.isCancelled {
                 guard let self else { return }
                 if !self.isPaused {
@@ -105,6 +118,44 @@ final class ConnectionMonitor {
         }
     }
 
+    // MARK: - Network names (ASN)
+
+    /// Loads the DB-IP ASN database if the user downloaded it. It is never downloaded on its own.
+    func loadNetworkNames() async {
+        let url = ASNUpdater.defaultDatabaseURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            networkNamesStatus = .missing
+            return
+        }
+        networkNamesStatus = .loading
+        do {
+            let database = try await Task.detached(priority: .utility) { try ASNDatabase(contentsOf: url) }.value
+            networkNames = database
+            networkNamesStatus = .ready(networks: database.networkCount)
+            relabelNetworks()
+        } catch {
+            networkNamesStatus = .failed(String(describing: error))
+        }
+    }
+
+    func downloadNetworkNames() async {
+        networkNamesStatus = .downloading
+        do {
+            try await ASNUpdater.update()
+            await loadNetworkNames()
+        } catch {
+            networkNamesStatus = .failed(String(describing: error))
+        }
+    }
+
+    private func relabelNetworks() {
+        for id in apps.keys {
+            for key in Array(apps[id]!.destinations.keys) {
+                apps[id]!.destinations[key]!.network = networkNames?.owner(for: key.address)
+            }
+        }
+    }
+
     // MARK: - Snapshots
 
     private func ingest(_ snapshot: CollectorSnapshot) {
@@ -147,7 +198,8 @@ final class ConnectionMonitor {
                     app.destinations[key] = destination
                 } else {
                     app.destinations[key] = Destination(
-                        key: key, country: geo?.country(for: key.address), hostname: hostnames[key.address],
+                        key: key, country: geo?.country(for: key.address), network: networkNames?.owner(for: key.address),
+                        hostname: hostnames[key.address],
                         liveConnections: info.count, tcpStates: info.states, firstSeen: now, lastSeen: now, activity: []
                     )
                     resolveHostname(key.address)

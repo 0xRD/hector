@@ -21,8 +21,12 @@ Based on the design mockup (main window and blocklist editor).
 - [x] Details panel: country, reverse DNS, activity, the apps that use the destination
 - [x] App icons from the bundles, app icon drawn in code, `scripts/bundle-app.sh`
 - [ ] Check the light appearance (only dark has been reviewed)
+  - [x] Code review of the network screens: map land dots and dimmed lines made as visible as in dark mode, the status bar version no longer in tertiary gray
+  - [ ] Look at every screen in light mode on a Mac
 - [ ] Fix the AppKit "reentrant operation in its NSTableView delegate" warning logged at launch
-- [ ] Network name (ASN) per destination
+  - [x] Likely cause fixed: list rows wrote the hovered destination from their hover handler, which can run while the table adds its rows; the write is now deferred and skipped when nothing changes
+  - [ ] Confirm on a Mac that the warning is gone (see [NEXT_STEPS.md](NEXT_STEPS.md))
+- [x] Network name (ASN) per destination: DB-IP IP to ASN Lite (CC BY 4.0), downloaded on request; list, details panel, map tooltip, search, `hector connections --asn`, `hector geo asn`
 
 ## 0.3: blocking from the app, downloadable release
 

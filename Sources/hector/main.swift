@@ -8,13 +8,16 @@ let usage = """
 hector \(version): see which processes talk to which destinations, block destinations system-wide.
 
 USAGE
-  hector connections [--json] [--all] [--resolve] [--db PATH]
+  hector connections [--json] [--all] [--resolve] [--asn] [--db PATH] [--asn-db PATH]
       List open internet connections grouped by app. Run with sudo to include other users' processes.
       --all       also show listening and unconnected sockets
       --resolve   reverse-resolve remote addresses (slower)
+      --asn       add the network (autonomous system) of each address; needs `geo update --asn`
 
-  hector geo update                     Download the DB-IP country database (monthly, CC BY 4.0)
+  hector geo update [--asn]             Download the DB-IP country database (monthly, CC BY 4.0);
+                                         with --asn, the DB-IP network names database instead
   hector geo lookup IP... [--db PATH]   Country of one or more addresses
+  hector geo asn IP... [--asn-db PATH]  Network (AS number and organization) of one or more addresses
   hector geo ranges CC [--db PATH] [--count]
                                          Networks of a country (ISO code such as CN or RU)
 
@@ -59,6 +62,7 @@ USAGE
   hector version | help
 
 Default GeoIP database: \(GeoIPUpdater.defaultDatabaseURL.path)
+Default network names database: \(ASNUpdater.defaultDatabaseURL.path)
 """
 
 // MARK: - Argument helpers
@@ -95,6 +99,20 @@ func loadGeo(_ args: Arguments, required: Bool) throws -> GeoIPDatabase? {
         return nil
     }
     return try GeoIPDatabase(contentsOf: url)
+}
+
+func loadASN(_ args: Arguments, required: Bool) throws -> ASNDatabase? {
+    let url = args.options["--asn-db"].map { URL(fileURLWithPath: $0) } ?? ASNUpdater.defaultDatabaseURL
+    guard FileManager.default.fileExists(atPath: url.path) else {
+        if required { throw CLIError("No network names database at \(url.path). Run `hector geo update --asn` first.") }
+        return nil
+    }
+    return try ASNDatabase(contentsOf: url)
+}
+
+/// Cuts `s` to `width` characters, ending with an ellipsis when it was longer.
+func clip(_ s: String, _ width: Int) -> String {
+    s.count <= width ? s : String(s.prefix(width - 1)) + "…"
 }
 
 func endpoint(_ address: IPAddress?, _ port: UInt16) -> String {
@@ -138,6 +156,8 @@ func connections(_ args: Arguments) throws {
         return
     }
     let geo = try loadGeo(args, required: false)
+    var asn: ASNDatabase?
+    if args.flags.contains("--asn") { asn = try loadASN(args, required: true) }
 
     let resolver = ReverseResolver()
     if args.flags.contains("--resolve") {
@@ -166,6 +186,10 @@ func connections(_ args: Arguments) throws {
                 + pad(endpoint(socket.remoteAddress, socket.remotePort), 44)
                 + pad(country, 5)
                 + pad(socket.tcpState ?? "", 13)
+            if let asn {
+                let owner = socket.remoteAddress.flatMap { asn.owner(for: $0) }?.label ?? ""
+                line += pad(clip(owner, 34), 36)
+            }
             if group.count > 1 { line += process.name }
             if let name = resolver.name(for: socket.remoteAddress) { line += "  \(name)" }
             print(line)
@@ -186,6 +210,13 @@ func connections(_ args: Arguments) throws {
 func geo(_ args: Arguments) async throws {
     guard let sub = args.positional.first else { throw CLIError("Missing geo subcommand.\n\n\(usage)") }
     switch sub {
+    case "update" where args.flags.contains("--asn"):
+        print("Downloading the DB-IP network names database…")
+        let source = try await ASNUpdater.update()
+        let db = try ASNDatabase(contentsOf: ASNUpdater.defaultDatabaseURL)
+        print("Installed \(source.lastPathComponent): \(db.rangeCount) ranges, \(db.networkCount) networks.")
+        print("Saved to \(ASNUpdater.defaultDatabaseURL.path)")
+        print(ASNUpdater.attribution)
     case "update":
         print("Downloading the DB-IP country database…")
         let source = try await GeoIPUpdater.update()
@@ -200,6 +231,14 @@ func geo(_ args: Arguments) async throws {
         for raw in ips {
             guard let ip = IPAddress(raw) else { throw CLIError("Not an IP address: \(raw)") }
             print("\(ip)\t\(db.country(for: ip) ?? (ip.isLocalOrPrivate ? "private" : "unknown"))")
+        }
+    case "asn":
+        let db = try loadASN(args, required: true)!
+        let ips = args.positional.dropFirst()
+        guard !ips.isEmpty else { throw CLIError("Give at least one IP address.") }
+        for raw in ips {
+            guard let ip = IPAddress(raw) else { throw CLIError("Not an IP address: \(raw)") }
+            print("\(ip)\t\(db.owner(for: ip)?.label ?? (ip.isLocalOrPrivate ? "private" : "unknown"))")
         }
     case "ranges":
         let db = try loadGeo(args, required: true)!
@@ -301,7 +340,7 @@ let argv = CommandLine.arguments.dropFirst()
 LegacyMigration.run()
 do {
     let command = argv.first ?? "help"
-    let args = try Arguments(argv.dropFirst(), valueOptions: ["--db", "--out", "--hosts", "--socket"])
+    let args = try Arguments(argv.dropFirst(), valueOptions: ["--db", "--asn-db", "--out", "--hosts", "--socket"])
     switch command {
     case "connections", "conn": try connections(args)
     case "geo": try await geo(args)
