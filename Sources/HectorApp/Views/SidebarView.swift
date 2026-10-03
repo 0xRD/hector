@@ -6,12 +6,14 @@ enum SidebarItem: Hashable {
     case blocklists
     case persistence
     case processes
+    case checkup
 }
 
 struct SidebarView: View {
     @Environment(ConnectionMonitor.self) private var monitor
     @Environment(BlockingController.self) private var blocking
     @Environment(SecurityController.self) private var security
+    @Environment(CheckupController.self) private var checkup
     @Binding var selection: SidebarItem?
     /// App owning the line hovered on the map or in the list.
     let highlightedAppID: AppGroup.ID?
@@ -33,6 +35,8 @@ struct SidebarView: View {
                     .tag(SidebarItem.persistence)
                 SidebarLabel("Processes", subtitle: processesSubtitle, systemImage: "cpu")
                     .tag(SidebarItem.processes)
+                SidebarLabel("Checkup", subtitle: checkupSubtitle, systemImage: "checklist")
+                    .tag(SidebarItem.checkup)
             }
             Section("Apps") {
                 SidebarLabel("All apps", subtitle: "\(apps.count) apps · \(monitor.liveConnectionCount) live",
@@ -65,6 +69,12 @@ struct SidebarView: View {
         guard let snapshot = security.processes else { return "Tree, signatures, flags" }
         let flagged = security.processFlags.values.filter { !$0.isEmpty }.count
         return "\(snapshot.processes.count) running" + (flagged > 0 ? " · \(flagged) flagged" : "")
+    }
+
+    private var checkupSubtitle: String {
+        guard let report = checkup.report else { return checkup.isRunning ? "Checking…" : "SIP, FileVault, firewall…" }
+        let toReview = report.count(.fail) + report.count(.warning)
+        return "\(report.passedCount) of \(report.results.count) pass" + (toReview > 0 ? " · \(toReview) to review" : "")
     }
 
     private var blocklistSubtitle: String {

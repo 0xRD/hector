@@ -10,7 +10,7 @@ struct ContentView: View {
     /// The network screens (map and list) as opposed to Blocklists and the security screens.
     private var isNetworkScreen: Bool {
         switch state.sidebarSelection {
-        case .blocklists, .persistence, .processes: false
+        case .blocklists, .persistence, .processes, .checkup: false
         default: true
         }
     }
@@ -36,6 +36,8 @@ struct ContentView: View {
                 PersistenceView()
             } else if state.sidebarSelection == .processes {
                 ProcessesView()
+            } else if state.sidebarSelection == .checkup {
+                CheckupView()
             } else {
                 VStack(spacing: 0) {
                     GeoBanner()
@@ -153,6 +155,7 @@ struct ContentView: View {
         case .blocklists: return "Blocklists"
         case .persistence: return "Persistence"
         case .processes: return "Processes"
+        case .checkup: return "Checkup"
         default: break
         }
         guard let id = selectedAppID else { return "All apps" }
