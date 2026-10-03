@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates Sources/NetbiteApp/Map/WorldData.swift from Natural Earth country shapes.
+"""Generates Sources/HectorApp/Map/WorldData.swift from Natural Earth country shapes.
 
 Natural Earth (https://www.naturalearthdata.com) is in the public domain. The output holds:
 - a grid of land dots on a 1000 x 400 equirectangular canvas (lon -180..180, lat 80..-60),
@@ -18,7 +18,7 @@ SOURCE_URL = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
               "master/geojson/ne_50m_admin_0_countries.geojson")
 WIDTH, HEIGHT, SPACING = 1000, 400, 10
 LAT_TOP, LAT_SPAN = 80.0, 140.0
-OUTPUT = os.path.join(os.path.dirname(__file__), "..", "Sources", "NetbiteApp", "Map", "WorldData.swift")
+OUTPUT = os.path.join(os.path.dirname(__file__), "..", "Sources", "HectorApp", "Map", "WorldData.swift")
 
 
 def load(path):

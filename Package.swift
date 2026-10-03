@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "Netbite",
+    name: "Hector",
     platforms: [.macOS(.v15)],
     products: [
-        .library(name: "NetbiteCore", targets: ["NetbiteCore"]),
-        .executable(name: "netbite", targets: ["netbite"]),
-        // Not "Netbite": on a case-insensitive disk it would collide with the `netbite` CLI binary.
-        .executable(name: "NetbiteApp", targets: ["NetbiteApp"]),
-        .executable(name: "netbited", targets: ["netbited"]),
+        .library(name: "HectorCore", targets: ["HectorCore"]),
+        .executable(name: "hector", targets: ["hector"]),
+        // Not "Hector": on a case-insensitive disk it would collide with the `hector` CLI binary.
+        .executable(name: "HectorApp", targets: ["HectorApp"]),
+        .executable(name: "hectord", targets: ["hectord"]),
     ],
     targets: [
-        .target(name: "NetbiteCore"),
-        .executableTarget(name: "netbite", dependencies: ["NetbiteCore"]),
-        .executableTarget(name: "NetbiteApp", dependencies: ["NetbiteCore"]),
+        .target(name: "HectorCore"),
+        .executableTarget(name: "hector", dependencies: ["HectorCore"]),
+        .executableTarget(name: "HectorApp", dependencies: ["HectorCore"]),
         // The privileged helper; it runs as root, so it stays small and depends on the core only.
-        .executableTarget(name: "netbited", dependencies: ["NetbiteCore"]),
-        .testTarget(name: "NetbiteCoreTests", dependencies: ["NetbiteCore"]),
+        .executableTarget(name: "hectord", dependencies: ["HectorCore"]),
+        .testTarget(name: "HectorCoreTests", dependencies: ["HectorCore"]),
     ]
 )

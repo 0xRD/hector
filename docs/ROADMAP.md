@@ -7,7 +7,7 @@
 - [x] DB-IP Lite country database: download, load, lookup, country → networks
 - [x] Blocklist model (domains, IPs, CIDRs, countries), JSON persistence
 - [x] Compiler to pf anchor, pf tables and a managed `/etc/hosts` section, with safety rails
-- [x] `netbite connections | geo | rules` command-line tool
+- [x] `hector connections | geo | rules` command-line tool
 - [x] Unit tests (Swift Testing)
 - [ ] CI on GitHub Actions (build and test on macOS)
 
@@ -26,15 +26,15 @@ Based on the design mockup (main window and blocklist editor).
 
 ## 0.3: blocking from the app, downloadable release
 
-- [x] `netbited` privileged helper: LaunchDaemon, Unix socket for administrators only, apply with roll back on pfctl failure, re-apply at boot, flush, uninstall
+- [x] `hectord` privileged helper: LaunchDaemon, Unix socket for administrators only, apply with roll back on pfctl failure, re-apply at boot, flush, uninstall
 - [x] "Block this destination" and "Block all of <country>" from the details panel
 - [x] Blocklists screen: per-country switches (all off by default), personal rules, pending changes with Apply / Discard
 - [x] Blocked destinations in red on the map and in the list, "Blocked" filter
 - [x] System processes visible through the helper
-- [x] `netbite helper status | apply | flush`, and a dry-run mode for the helper (`netbited serve --dry-run DIR`)
-- [x] GitHub Actions: CI on every push, universal `Netbite.app` published on every `v*` tag
+- [x] `hector helper status | apply | flush`, and a dry-run mode for the helper (`hectord serve --dry-run DIR`)
+- [x] GitHub Actions: CI on every push, universal `Hector.app` published on every `v*` tag
 - [x] Security review of the privileged code and fixes (see [SECURITY.md](../SECURITY.md)); tested for real: block, unauthorized requests refused, flush restores everything
-- [x] Netbite → Uninstall Netbite…: helper, rules, logs, user data, Keychain item and the app; `scripts/check-uninstall.sh`
+- [x] Hector → Uninstall Hector…: helper, rules, logs, user data, Keychain item and the app; `scripts/check-uninstall.sh`
 - [ ] Re-test the in-app uninstall end to end after the fix for the hang (install helper, uninstall, `scripts/check-uninstall.sh`); check System Settings → General → Login Items for a stale background item
 - [ ] Remove personal data before going public: rewrite the commits that carry a personal e-mail (use the GitHub noreply address), scan files and fixtures again, then force-push after explicit approval
 - [ ] First push of the workflows: confirm CI passes on GitHub's macOS runner (Xcode, not the Command Line Tools)
@@ -44,13 +44,15 @@ Based on the design mockup (main window and blocklist editor).
   - [x] Release workflow: dry run by hand (zip kept as an artifact), checks of the zip before publishing
 - [ ] Imported hosts lists (StevenBlack Unified, EasyPrivacy converted), with periodic updates (moved to 0.4 if 0.3 ships first)
 
-## 0.4: Hexorcist
+## 0.4: Hector
 
-Netbite grows into **Hexorcist**, a small all-in-one security app for macOS. Netbite stays the name of its network module. Everything keeps working without a paid Apple Developer account.
+Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbite stays the name of its network module. Everything keeps working without a paid Apple Developer account.
 
-- [ ] Rename the app, the bundle, the repository and the docs
-- [x] Core library and CLI for code signatures, SHA-256 and VirusTotal hash lookups (`netbite sign`, `netbite vt`)
-- [x] Core library and CLI for the persistence scan (`netbite persistence`)
+- [x] Rename the app, the bundle, the helper, the CLI and the docs to Hector, with migration from Netbite 0.3 (helper, blocklist, data, VirusTotal key)
+- [ ] Rename the GitHub repository to `hector` (owner, in Settings; GitHub redirects the old URL)
+- [ ] Rework the brand identity for Hector (the mark and the brief still describe the Hexorcist ghost)
+- [x] Core library and CLI for code signatures, SHA-256 and VirusTotal hash lookups (`hector sign`, `hector vt`)
+- [x] Core library and CLI for the persistence scan (`hector persistence`)
 - [x] App screens for Persistence and Processes, with signature and VirusTotal columns; settings to store the API key
 - [x] Login items and background tasks through the helper (`sfltool dumpbtm` needs root)
 - [ ] Check the `sfltool dumpbtm` parser against real output on macOS 15 and 26/27

@@ -1,0 +1,202 @@
+import Foundation
+import HectorCore
+import Observation
+
+/// Polls the socket collector once a second and keeps, per app, every destination seen this session.
+@MainActor
+@Observable
+final class ConnectionMonitor {
+    enum GeoStatus: Equatable {
+        case loading
+        case ready(ranges: Int)
+        case missing
+        case downloading
+        case failed(String)
+    }
+
+    static let historyLength = 60
+    /// Destinations idle for longer than this leave the list.
+    static let retention: TimeInterval = 30 * 60
+
+    private(set) var apps: [AppGroup.ID: AppGroup] = [:]
+    private(set) var unreadableProcessCount = 0
+    private(set) var lastUpdate: Date?
+    private(set) var geoStatus: GeoStatus = .loading
+    /// Snapshots come from the root helper, so system daemons are included.
+    private(set) var seesAllProcesses = false
+    var isPaused = false
+
+    /// Where lines on the map start: the country the Mac is set to. No network lookup involved.
+    let originCountry = Locale.current.region?.identifier ?? "US"
+
+    @ObservationIgnored private var geo: GeoIPDatabase?
+    @ObservationIgnored private var loop: Task<Void, Never>?
+    @ObservationIgnored private var hostnames: [IPAddress: String] = [:]
+    @ObservationIgnored private var lookedUp: Set<IPAddress> = []
+
+    var sortedApps: [AppGroup] {
+        apps.values.sorted {
+            if ($0.liveCount > 0) != ($1.liveCount > 0) { return $0.liveCount > 0 }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    var liveConnectionCount: Int { apps.values.reduce(0) { $0 + $1.liveCount } }
+
+    func start() {
+        guard loop == nil else { return }
+        loop = Task { [weak self] in
+            await self?.loadGeo()
+            while !Task.isCancelled {
+                guard let self else { return }
+                if !self.isPaused {
+                    let (snapshot, fromHelper) = await Task.detached(priority: .utility) { Self.takeSnapshot() }.value
+                    self.seesAllProcesses = fromHelper
+                    self.ingest(snapshot)
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    /// Asks the helper first (it runs as root and sees every process), then falls back to a local
+    /// snapshot of the user's own processes.
+    nonisolated private static func takeSnapshot() -> (CollectorSnapshot, Bool) {
+        if HelperClient.isInstalled, case .snapshot(let snapshot)? = try? HelperClient.send(.snapshot, timeout: 3) {
+            return (snapshot, true)
+        }
+        return (SocketCollector().snapshot(), false)
+    }
+
+    // MARK: - GeoIP
+
+    func loadGeo() async {
+        let url = GeoIPUpdater.defaultDatabaseURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            geoStatus = .missing
+            return
+        }
+        geoStatus = .loading
+        do {
+            let database = try await Task.detached(priority: .userInitiated) { try GeoIPDatabase(contentsOf: url) }.value
+            geo = database
+            geoStatus = .ready(ranges: database.rangeCount)
+            relabelCountries()
+        } catch {
+            geoStatus = .failed(String(describing: error))
+        }
+    }
+
+    func downloadGeo() async {
+        geoStatus = .downloading
+        do {
+            try await GeoIPUpdater.update()
+            await loadGeo()
+        } catch {
+            geoStatus = .failed(String(describing: error))
+        }
+    }
+
+    private func relabelCountries() {
+        for id in apps.keys {
+            for key in Array(apps[id]!.destinations.keys) {
+                apps[id]!.destinations[key]!.country = geo?.country(for: key.address)
+            }
+        }
+    }
+
+    // MARK: - Snapshots
+
+    private func ingest(_ snapshot: CollectorSnapshot) {
+        let now = snapshot.takenAt
+        var seen: [AppGroup.ID: [DestinationKey: (count: Int, states: [String])]] = [:]
+        var pids: [AppGroup.ID: Set<Int32>] = [:]
+
+        for entry in snapshot.processes {
+            let process = entry.process
+            let id = process.appBundleIdentifier ?? process.executablePath ?? process.name
+            if apps[id] == nil {
+                apps[id] = AppGroup(
+                    id: id, name: process.displayName, bundleIdentifier: process.appBundleIdentifier,
+                    bundlePath: process.appBundlePath, executablePath: process.executablePath,
+                    kind: Self.kind(of: process), processNames: [], pids: [], destinations: [:], activity: []
+                )
+            }
+            apps[id]!.processNames.insert(process.name)
+            pids[id, default: []].insert(process.pid)
+            // A CLOSED socket is a dead descriptor the app has not released yet, not traffic.
+            for socket in entry.sockets where socket.hasRemote && socket.tcpState != "CLOSED" {
+                let key = DestinationKey(address: socket.remoteAddress!, port: socket.remotePort, transport: socket.transport)
+                var info = seen[id, default: [:]][key] ?? (0, [])
+                info.count += 1
+                if let state = socket.tcpState { info.states.append(state) }
+                seen[id, default: [:]][key] = info
+            }
+        }
+
+        for id in Array(apps.keys) {
+            var app = apps[id]!
+            let current = seen[id] ?? [:]
+            app.pids = pids[id] ?? []
+
+            for (key, info) in current {
+                if var destination = app.destinations[key] {
+                    destination.liveConnections = info.count
+                    destination.tcpStates = info.states
+                    destination.lastSeen = now
+                    app.destinations[key] = destination
+                } else {
+                    app.destinations[key] = Destination(
+                        key: key, country: geo?.country(for: key.address), hostname: hostnames[key.address],
+                        liveConnections: info.count, tcpStates: info.states, firstSeen: now, lastSeen: now, activity: []
+                    )
+                    resolveHostname(key.address)
+                }
+            }
+            for key in Array(app.destinations.keys) {
+                if current[key] == nil {
+                    app.destinations[key]!.liveConnections = 0
+                    app.destinations[key]!.tcpStates = []
+                    if now.timeIntervalSince(app.destinations[key]!.lastSeen) > Self.retention {
+                        app.destinations[key] = nil
+                        continue
+                    }
+                }
+                Self.record(app.destinations[key]!.liveConnections, into: &app.destinations[key]!.activity)
+            }
+            Self.record(app.liveCount, into: &app.activity)
+            apps[id] = app.destinations.isEmpty ? nil : app
+        }
+
+        unreadableProcessCount = snapshot.unreadableProcessCount
+        lastUpdate = now
+    }
+
+    private static func record(_ value: Int, into history: inout [Int]) {
+        history.append(value)
+        if history.count > historyLength { history.removeFirst(history.count - historyLength) }
+    }
+
+    private static func kind(of process: NetProcess) -> AppKind {
+        guard process.appBundlePath != nil, let path = process.executablePath, !path.hasPrefix("/System/") else {
+            return .system
+        }
+        return .app
+    }
+
+    // MARK: - Reverse DNS
+
+    private func resolveHostname(_ address: IPAddress) {
+        guard !lookedUp.contains(address) else { return }
+        lookedUp.insert(address)
+        Task {
+            guard let name = await Task.detached(priority: .background, operation: { ReverseDNS.lookup(address) }).value else { return }
+            hostnames[address] = name
+            for id in apps.keys {
+                for key in apps[id]!.destinations.keys where key.address == address {
+                    apps[id]!.destinations[key]!.hostname = name
+                }
+            }
+        }
+    }
+}

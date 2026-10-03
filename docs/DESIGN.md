@@ -1,17 +1,16 @@
-# Hexorcist design brief
+# Hector design brief
 
-Hexorcist is a small, all-in-one security app for macOS: network monitor and blocking,
+Hector is a small, all-in-one security app for macOS: network monitor and blocking,
 persistence scan, process explorer, VirusTotal lookups. **Netbite** is the name of its network
-module (the live map and list of connections, and blocking). Until the rename lands, the app,
-the bundle and the menus are still called Netbite; this brief already describes Hexorcist.
+module (the live map and list of connections, and blocking). Hector was called Netbite up to 0.3.
 
-The code lives in `Sources/NetbiteApp/Design/` (tokens, components, brand marks). Network-only
+The code lives in `Sources/HectorApp/Design/` (tokens, components, brand marks). Network-only
 pieces (status of a destination, country badge, sparkline) stay in `Views/Theme.swift`.
 
 ## 1. The idea
 
 *A calm exorcist for your Mac.* Security tools tend to shout: red dashboards, alarm icons,
-gauges. Hexorcist is the opposite. It is a quiet, well-lit study: warm paper, soft colors,
+gauges. Hector is the opposite. It is a quiet, well-lit study: warm paper, soft colors,
 clear verdicts, and a small friendly ghost that gets shown the door. Calm by default, very
 clear when something deserves a look, never alarmist.
 
@@ -26,14 +25,14 @@ clear when something deserves a look, never alarmist.
 
 | Module | What it is | Glyph |
 |---|---|---|
-| Hexorcist (the app) | Brand, app icon, About, onboarding | `HexorcistMark`: ghost in a hexagon seal |
+| Hector (the app) | Brand, app icon, About, onboarding | `HectorMark`: ghost in a hexagon seal |
 | Netbite (network) | Map, list of destinations, Blocklists | `NetbiteLogo`: globe with a bite |
 | Persistence | What starts by itself | SF Symbol on a hexagon `SymbolTile` |
 | Processes | What runs now | SF Symbol on a hexagon `SymbolTile` |
 
 Each module is one sidebar section or entry, one `ScreenHeader`, and uses the same verdict
 language (section 7). The Netbite glyph appears where the network module is named (the map
-header today; its sidebar section after the rename).
+header today, its sidebar section later).
 
 ## 2. Principles
 
@@ -90,17 +89,17 @@ The sidebar keeps the system sidebar material; the toolbar keeps the system tool
 
 | Kind | Meaning | Ink light | Ink dark | Wash light | Wash dark | Token |
 |---|---|---|---|---|---|---|
-| ok (sage) | safe, allowed, live, verified | `#3D7054` | `#8CC79E` | `#DEEBDB` | `#304036` | `hexOK`, `hexOKWash` |
-| danger (clay) | blocked, malicious, destructive | `#A84230` | `#F29985` | `#F7E0D6` | `#4C302B` | `hexDanger`, `hexDangerWash` |
-| warning (honey) | needs a look, pending | `#875E0D` | `#EBC475` | `#FAEBC9` | `#473B24` | `hexWarning`, `hexWarningWash` |
-| info (lavender) | information, brand | `#6954A3` | `#C2B2F2` | `#EBE6FA` | `#3B364F` | `hexInfo`, `hexInfoWash` |
-| neutral (stone) | unknown, inactive, not checked | `#6B665E` | `#B2ABA1` | `#EBE6DE` | `#3D3B38` | `hexNeutral`, `hexNeutralWash` |
+| ok (sage) | safe, allowed, live, verified | `#3D7054` | `#8CC79E` | `#DEEBDB` | `#304036` | `hectorOK`, `hectorOKWash` |
+| danger (clay) | blocked, malicious, destructive | `#A84230` | `#F29985` | `#F7E0D6` | `#4C302B` | `hectorDanger`, `hectorDangerWash` |
+| warning (honey) | needs a look, pending | `#875E0D` | `#EBC475` | `#FAEBC9` | `#473B24` | `hectorWarning`, `hectorWarningWash` |
+| info (lavender) | information, brand | `#6954A3` | `#C2B2F2` | `#EBE6FA` | `#3B364F` | `hectorInfo`, `hectorInfoWash` |
+| neutral (stone) | unknown, inactive, not checked | `#6B665E` | `#B2ABA1` | `#EBE6DE` | `#3D3B38` | `hectorNeutral`, `hectorNeutralWash` |
 
-Control tints: `hexTint` (sage, `#3D7054` / `#5C9475`) is the app-wide tint (selection,
-prominent buttons). `hexDangerTint` (clay, `#A84230` / `#B2614F`) is for destructive prominent
+Control tints: `hectorTint` (sage, `#3D7054` / `#5C9475`) is the app-wide tint (selection,
+prominent buttons). `hectorDangerTint` (clay, `#A84230` / `#B2614F`) is for destructive prominent
 buttons and "block" switches.
 
-Legacy names kept until the rename: `netbiteAccent` = `hexOK`, `netbiteBlock` = `hexDanger`.
+The former `netbiteAccent` and `netbiteBlock` became `hectorOK` and `hectorDanger`.
 
 ### Contrast (WCAG 2.1, computed)
 
@@ -176,7 +175,7 @@ System materials stay where macOS puts them (sidebar, toolbar, sheets' chrome).
 Suggested mapping for the security screens: `TrustLevel` apple, App Store, notarized → ok;
 Developer ID, other certificate → neutral; ad hoc → warning; unsigned, invalid → danger.
 VirusTotal: malicious > 0 → danger; suspicious > 0 → warning; known and clean → ok; unknown →
-neutral. Use `Color.hexWarning` instead of `.orange`.
+neutral. Use `Color.hectorWarning` instead of `.orange`.
 
 ## 8. Iconography
 
@@ -191,15 +190,15 @@ neutral. Use `Color.hexWarning` instead of `.orange`.
 
 ### Logo and app icon
 
-- **Mark** (`HexorcistMark`): a rounded, pointy-top hexagon seal stroked with a lavender → sage
+- **Mark** (`HectorMark`): a rounded, pointy-top hexagon seal stroked with a lavender → sage
   gradient; inside, a small ghost (dome, three-scallop hem, two eyes glancing up and to the right,
   toward the exit); a honey four-point spark breaks through the seal's top-right edge, where the
-  stroke is cut. The cut is the Netbite bite, kept as a family resemblance.
+  stroke is cut. The cut is the Hector bite, kept as a family resemblance.
 - **App icon** (`AppIconArtwork`): plum squircle on the macOS icon grid (412 pt body in 512 pt,
   continuous corners), plum → night gradient, a faint cream hexagon lattice, a lavender glow
   behind the mark, a cream ghost with plum eyes. Drawn in code at launch.
-- **Wordmark** (`HexorcistWordmark`): the mark and "Hexorcist" in New York semibold, slightly
-  tight tracking. For About, onboarding, the top of the sidebar after the rename.
+- **Wordmark** (`HectorWordmark`): the mark and "Hector" in New York semibold, slightly
+  tight tracking. For About, onboarding, the top of the sidebar.
 - **Netbite glyph** (`NetbiteLogo`): the bitten globe, sage, for the network module.
 
 ## 9. Motion
@@ -213,7 +212,7 @@ neutral. Use `Color.hexWarning` instead of `.orange`.
 
 ## 10. Components
 
-All in `Sources/NetbiteApp/Design/Components.swift`, documented with `///` comments.
+All in `Sources/HectorApp/Design/Components.swift`, documented with `///` comments.
 
 | Component | Spec |
 |---|---|

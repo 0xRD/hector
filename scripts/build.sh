@@ -1,10 +1,10 @@
 #!/bin/sh
-# Builds the netbite CLI with swiftc directly, for machines where `swift build` is unavailable or
+# Builds the hector CLI with swiftc directly, for machines where `swift build` is unavailable or
 # broken (for example a Command Line Tools install whose SwiftPM and SDK versions do not match).
 # Prefer `swift build` and `swift test` whenever they work; tests need SwiftPM.
 #
 # Usage:  scripts/build.sh
-# Output: .build/manual/netbite
+# Output: .build/manual/hector
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -24,9 +24,9 @@ fi
 SWIFTC="swiftc -sdk $SDKROOT -target $TARGET -swift-version 6"
 mkdir -p "$OUT"
 
-$SWIFTC -O -module-name NetbiteCore -parse-as-library -emit-library -static \
-    -emit-module -emit-module-path "$OUT/NetbiteCore.swiftmodule" \
-    -o "$OUT/libNetbiteCore.a" $(find Sources/NetbiteCore -name '*.swift')
-$SWIFTC -O -module-name netbite -I "$OUT" -L "$OUT" -lNetbiteCore \
-    -o "$OUT/netbite" $(find Sources/netbite -name '*.swift')
-echo "Built $OUT/netbite (SDK: $SDKROOT)"
+$SWIFTC -O -module-name HectorCore -parse-as-library -emit-library -static \
+    -emit-module -emit-module-path "$OUT/HectorCore.swiftmodule" \
+    -o "$OUT/libHectorCore.a" $(find Sources/HectorCore -name '*.swift')
+$SWIFTC -O -module-name hector -I "$OUT" -L "$OUT" -lHectorCore \
+    -o "$OUT/hector" $(find Sources/hector -name '*.swift')
+echo "Built $OUT/hector (SDK: $SDKROOT)"

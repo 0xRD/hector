@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag such as v0.3.0 to publish a downloadable, universal Netbite.app.
+# Push a tag such as v0.3.0 to publish a downloadable, universal Hector.app.
 # Run it by hand (Actions → Release → Run workflow) for a dry run: the same build and checks, with
 # the zip kept as a workflow artifact instead of a published release.
 on:
@@ -22,13 +22,13 @@ jobs:
 
       - name: Check the tag matches the version in the code
         run: |
-          VERSION=$(sed -n 's/.*static let current = "\(.*\)".*/\1/p' Sources/NetbiteCore/Helper/HelperProtocol.swift)
+          VERSION=$(sed -n 's/.*static let current = "\(.*\)".*/\1/p' Sources/HectorCore/Helper/HelperProtocol.swift)
           test -n "$VERSION" || { echo "No version found in HelperProtocol.swift"; exit 1; }
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             test "v$VERSION" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match version $VERSION"; exit 1; }
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "ZIP=.build/Netbite-$VERSION-macOS.zip" >> "$GITHUB_ENV"
+          echo "ZIP=.build/Hector-$VERSION-macOS.zip" >> "$GITHUB_ENV"
 
       - name: Toolchain
         run: swift --version
@@ -36,7 +36,7 @@ jobs:
       - name: Test
         run: swift test
 
-      - name: Build universal Netbite.app
+      - name: Build universal Hector.app
         run: scripts/bundle-app.sh --universal --zip
 
       # Checks what users download, not the build folder: unpacked from the zip, both
@@ -46,8 +46,8 @@ jobs:
           (cd .build && shasum -a 256 -c "$(basename "$ZIP").sha256")
           CHECK=$(mktemp -d)
           ditto -x -k "$ZIP" "$CHECK"
-          APP="$CHECK/Netbite.app"
-          for BIN in "$APP/Contents/MacOS/Netbite" "$APP/Contents/Helpers/netbite" "$APP/Contents/Helpers/netbited"; do
+          APP="$CHECK/Hector.app"
+          for BIN in "$APP/Contents/MacOS/Hector" "$APP/Contents/Helpers/hector" "$APP/Contents/Helpers/hectord"; do
             ARCHS=$(lipo -archs "$BIN")
             echo "$BIN: $ARCHS"
             case " $ARCHS " in *" arm64 "*) ;; *) echo "arm64 missing"; exit 1 ;; esac
@@ -56,7 +56,7 @@ jobs:
           codesign --verify --strict --deep "$APP"
           PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
           test "$PLIST_VERSION" = "$VERSION" || { echo "Info.plist says $PLIST_VERSION"; exit 1; }
-          test "$("$APP/Contents/Helpers/netbite" version)" = "netbite $VERSION"
+          test "$("$APP/Contents/Helpers/hector" version)" = "hector $VERSION"
 
       - name: Write the release notes
         run: |
@@ -69,7 +69,7 @@ jobs:
         # Pinned to a commit, like checkout.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Netbite-${{ env.VERSION }}-dry-run
+          name: Hector-${{ env.VERSION }}-dry-run
           path: |
             ${{ env.ZIP }}
             ${{ env.ZIP }}.sha256
@@ -81,4 +81,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" "$ZIP" "$ZIP.sha256" \
-            --verify-tag --title "Netbite $VERSION" --notes-file .build/notes.md
+            --verify-tag --title "Hector $VERSION" --notes-file .build/notes.md
