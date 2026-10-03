@@ -132,7 +132,11 @@ final class BlockingController {
             return
         }
         await runAsAdministrator("\(AdministratorScript.shellQuoted(binary.path)) install")
-        for _ in 0..<20 where !HelperClient.isInstalled {
+        // The old helper's socket file may still be there while launchd starts the new one, which
+        // refuses connections for a moment: wait until a helper of this version answers.
+        for _ in 0..<40 {
+            let info = await Task.detached { try? HelperClient.info(timeout: 1) }.value
+            if info?.version == HectorVersion.current { break }
             try? await Task.sleep(for: .milliseconds(250))
         }
         await refresh()
