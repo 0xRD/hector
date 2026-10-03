@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// The sidebar is navigation only: one entry per screen. It holds no live, per-app rows, so it
-/// stays short and static (a long list refreshed every second kept the sidebar's scroll view
-/// stuck at the bottom on macOS 26). Filtering by app happens on the Connections screen.
+/// The sidebar is navigation only: one entry per screen, short and static. Filtering by app
+/// happens on the Connections screen.
 enum SidebarItem: Hashable {
     /// Netbite's map and list of connections, for every app or the one in `WindowState.appFilter`.
     case allApps
@@ -23,8 +22,6 @@ struct SidebarView: View {
     @Binding var selection: SidebarItem?
 
     var body: some View {
-        // The footer sits below the list rather than in a `.safeAreaInset` of it: an inset on a
-        // sidebar List left the scroll view stuck at the bottom on macOS 15.
         VStack(spacing: 0) {
             list
             ProtectionStatusFooter(selection: $selection)

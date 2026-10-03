@@ -45,9 +45,9 @@ struct ContentView: View {
                     VSplitView {
                         // The map is width-bound (2.5:1); taller would only add empty bands.
                         mapCard(rows: rows)
-                            .frame(minHeight: 220, idealHeight: 380, maxHeight: 480)
+                            .frame(minHeight: 160, idealHeight: 380, maxHeight: 480)
                         DestinationListView(groups: groups, selection: $state.selectedDestination, hovered: $state.hovered)
-                            .frame(minHeight: 200)
+                            .frame(minHeight: 160)
                     }
                     Divider()
                     StatusBar()
