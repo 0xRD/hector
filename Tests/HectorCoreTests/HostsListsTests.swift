@@ -48,10 +48,11 @@ import Testing
 
     @Test func countsInvalidAndSkippedLines() {
         let result = HostsListParser.parse(Self.sample)
-        // fe80::1%lo0 (not an address, two tokens) and "0.0.0.0 0.0.0.0" (an address is not a name).
-        #expect(result.invalidLines == 2)
-        // 5 reserved names, and 2 redirections (255.255.255.255 and ff02::1 are not sinks).
-        #expect(result.skippedEntries == 7)
+        // "0.0.0.0 0.0.0.0" (an address is not a name).
+        #expect(result.invalidLines == 1)
+        // 5 reserved names, and 3 redirections: 255.255.255.255, ff02::1, and fe80::1%lo0, which
+        // Darwin's inet_pton accepts as an address with a scope. Either way it is never followed.
+        #expect(result.skippedEntries == 8)
     }
 
     @Test func neverFollowsARedirection() {
