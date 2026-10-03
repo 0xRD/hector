@@ -662,6 +662,9 @@ struct EmptyStateView<Actions: View>: View {
     let message: String?
     let tint: Color
     let compact: Bool
+    /// Hector stands in the halo instead of the symbol, for the calm states (nothing to report,
+    /// waiting for a pick).
+    let hector: HectorGaze?
     let actions: Actions
 
     init(
@@ -670,6 +673,7 @@ struct EmptyStateView<Actions: View>: View {
         message: String? = nil,
         tint: Color = .hectorInfo,
         compact: Bool = false,
+        hector: HectorGaze? = nil,
         @ViewBuilder actions: () -> Actions
     ) {
         self.title = title
@@ -677,6 +681,7 @@ struct EmptyStateView<Actions: View>: View {
         self.message = message
         self.tint = tint
         self.compact = compact
+        self.hector = hector
         self.actions = actions()
     }
 
@@ -714,15 +719,20 @@ struct EmptyStateView<Actions: View>: View {
                 .stroke(tint.opacity(0.35), style: StrokeStyle(lineWidth: 1.2, lineCap: .round, dash: [2, 4]))
                 .rotationEffect(.degrees(30))
                 .frame(width: outer, height: outer)
-            SymbolTile(systemImage, tint: tint, size: inner)
+            if let hector {
+                HectorMark(gaze: hector, detailed: true).frame(width: inner * 1.15, height: inner * 1.15)
+            } else {
+                SymbolTile(systemImage, tint: tint, size: inner)
+            }
         }
         .accessibilityHidden(true)
     }
 }
 
 extension EmptyStateView where Actions == EmptyView {
-    init(_ title: String, systemImage: String, message: String? = nil, tint: Color = .hectorInfo, compact: Bool = false) {
-        self.init(title, systemImage: systemImage, message: message, tint: tint, compact: compact) { EmptyView() }
+    init(_ title: String, systemImage: String, message: String? = nil, tint: Color = .hectorInfo, compact: Bool = false,
+         hector: HectorGaze? = nil) {
+        self.init(title, systemImage: systemImage, message: message, tint: tint, compact: compact, hector: hector) { EmptyView() }
     }
 }
 

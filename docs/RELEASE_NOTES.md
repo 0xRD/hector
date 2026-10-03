@@ -1,3 +1,17 @@
+## What's new in 0.4
+
+Netbite becomes **Hector**, a small all-in-one security app for macOS. Netbite stays the name of its network module, and 0.3 installs move over on their own: helper, blocklist, country database and VirusTotal key.
+
+- **Connections:** an interactive map, with one line and a count bubble per country, a country filter, and zoom and pan. Network names (AS numbers and organizations) come from a second free DB-IP database.
+- **Blocklists:** StevenBlack Unified and EasyPrivacy hosts lists, downloaded and checked by the helper every week.
+- **Persistence:** launch agents and daemons, login items, background tasks, extensions, cron, profiles and browser extensions, each with its code signature.
+- **Processes:** the process tree with signatures, arguments, connections and flags for code running from odd places.
+- **Checkup:** SIP, Gatekeeper, XProtect, FileVault, firewall, updates, sharing services and more, each with how to fix it.
+- **Keyboard taps:** apps that receive your keystrokes.
+- **Camera & mic:** a log of when they turn on and off, naming the app (from the microphone's clients, and the camera's green indicator).
+- **VirusTotal:** look up files by hash with your own free key (Settings → VirusTotal). Files are never uploaded.
+- The `hector` command-line tool does all of this from a terminal.
+
 ## Install
 
 1. Download **Hector-{{VERSION}}-macOS.zip** below and open it.
@@ -17,7 +31,7 @@ sudo mkdir -p /usr/local/bin && sudo ln -sf /Applications/Hector.app/Contents/He
 
 ## Uninstall
 
-Choose **Hector → Uninstall Hector…** in the menu bar. It removes every rule, the helper and its logs, your blocklist, the country database, preferences, caches and the VirusTotal key, then moves the app to the Trash. macOS asks for an administrator password once.
+Choose **Hector → Uninstall Hector…** in the menu bar, or **Settings → General → Uninstall Hector…**. It removes every rule, the helper and its logs, your blocklist, the country database, preferences, caches and the VirusTotal key, then moves the app to the Trash. macOS asks for an administrator password once.
 
 ## Verify the download
 

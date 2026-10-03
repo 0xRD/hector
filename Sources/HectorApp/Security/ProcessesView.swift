@@ -31,7 +31,8 @@ struct ProcessesView: View {
                                message: state.processesFlaggedOnly
                                    ? "No process runs from a temporary, Downloads or hidden folder, and none runs code that was deleted."
                                    : "No process matches the search.",
-                               tint: state.processesFlaggedOnly ? .hectorOK : .hectorNeutral)
+                               tint: state.processesFlaggedOnly ? .hectorOK : .hectorNeutral,
+                               hector: state.processesFlaggedOnly ? .ahead : nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .canvasBackground()
             } else {

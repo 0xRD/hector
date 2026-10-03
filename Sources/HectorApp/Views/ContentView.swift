@@ -157,6 +157,13 @@ struct ContentView: View {
             )
             .padding(Spacing.sm)
             .insetSurface(cornerRadius: Radius.lg)
+            // Hector peeks over the bottom edge of the map, in the South Pacific, watching the lines.
+            .overlay(alignment: .bottomLeading) {
+                HectorPeek(gaze: .right)
+                    .frame(width: 34)
+                    .padding(.leading, Spacing.xl)
+                    .allowsHitTesting(false)
+            }
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.top, Spacing.md)

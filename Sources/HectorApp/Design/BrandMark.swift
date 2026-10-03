@@ -51,11 +51,25 @@ enum BrandGeometry {
         Path(roundedRect: CGRect(x: 6.8, y: 9.0, width: 10.4, height: 14.2), cornerRadius: 5.0, style: .continuous)
     }
 
-    /// Two calm eyes, looking straight out.
-    static func eyes() -> Path {
+    /// Two calm eyes, looking straight out, to one side, or resting (filled when open, stroked
+    /// when resting).
+    static func eyes(_ gaze: HectorGaze = .ahead) -> Path {
         var path = Path()
-        path.addEllipse(in: CGRect(x: 9.05, y: 12.6, width: 1.3, height: 1.6))
-        path.addEllipse(in: CGRect(x: 13.65, y: 12.6, width: 1.3, height: 1.6))
+        let shift: CGFloat = switch gaze {
+        case .left: -0.75
+        case .right: 0.75
+        case .ahead, .resting: 0
+        }
+        for x in [9.7, 14.3] as [CGFloat] {
+            let cx = x + shift
+            if gaze == .resting {
+                // Closed and content: a small downward curve.
+                path.move(to: CGPoint(x: cx - 0.75, y: 13.3))
+                path.addQuadCurve(to: CGPoint(x: cx + 0.75, y: 13.3), control: CGPoint(x: cx, y: 14.1))
+            } else {
+                path.addEllipse(in: CGRect(x: cx - 0.65, y: 12.6, width: 1.3, height: 1.6))
+            }
+        }
         return path
     }
 
@@ -138,8 +152,18 @@ enum BrandGeometry {
 /// silhouette, the visor and the crest, which stay legible down to 16 pt.
 ///
 ///     HectorMark().frame(width: 64, height: 64)
+/// Where Hector looks. The mark looks ahead; the app's small appearances turn his eyes toward
+/// what he watches, or close them while he rests.
+enum HectorGaze {
+    case ahead
+    case left
+    case right
+    case resting
+}
+
 struct HectorMark: View {
     var lineWidth: CGFloat = 1.4
+    var gaze: HectorGaze = .ahead
     /// Outlines, eyes and smile.
     var ink: Color = .hectorInfo
     /// Fill of the helmet, top to bottom.
@@ -184,7 +208,11 @@ struct HectorMark: View {
         context.fill(shape, with: .color(face))
         context.stroke(shape, with: .color(ink), style: outline)
         if detailed {
-            context.fill(BrandGeometry.eyes(), with: .color(ink))
+            if gaze == .resting {
+                context.stroke(BrandGeometry.eyes(gaze), with: .color(ink), style: StrokeStyle(lineWidth: lineWidth * 0.6, lineCap: .round))
+            } else {
+                context.fill(BrandGeometry.eyes(gaze), with: .color(ink))
+            }
             let mouth = StrokeStyle(lineWidth: lineWidth * 0.55, lineCap: .round)
             context.stroke(BrandGeometry.smile(), with: .color(ink), style: mouth)
         }
@@ -203,6 +231,27 @@ struct HectorMark: View {
             context.stroke(BrandGeometry.shine(), with: .color(.white.opacity(0.45)), style: shine)
         }
         context.stroke(shape, with: .color(ink), style: outline)
+    }
+}
+
+/// Hector peeking over an edge: the top of the mark, cut off where the edge is. Place it with
+/// its bottom on the edge he hides behind.
+///
+///     HectorPeek(gaze: .right).frame(width: 40)
+struct HectorPeek: View {
+    var gaze: HectorGaze = .ahead
+    /// How much of the mark shows, from the top (0.6: crest, helmet and eyes).
+    var showing: CGFloat = 0.62
+
+    var body: some View {
+        GeometryReader { proxy in
+            HectorMark(gaze: gaze, detailed: true)
+                .frame(width: proxy.size.width, height: proxy.size.width)
+                .frame(height: proxy.size.height, alignment: .top)
+                .clipped()
+        }
+        .aspectRatio(1 / showing, contentMode: .fit)
+        .accessibilityHidden(true)
     }
 }
 

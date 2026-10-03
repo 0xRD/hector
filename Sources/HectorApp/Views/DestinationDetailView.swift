@@ -22,7 +22,8 @@ struct DestinationDetailView: View {
                 "Pick a destination",
                 systemImage: "scope",
                 message: "Click a line on the map or a row in the list to see where it goes, which apps use it, and to block it.",
-                tint: .hectorOK
+                tint: .hectorOK,
+                hector: .left
             )
             .canvasBackground()
         }

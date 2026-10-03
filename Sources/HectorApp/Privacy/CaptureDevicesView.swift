@@ -44,6 +44,10 @@ struct CaptureDevicesView: View {
 
     private var header: some View {
         ScreenHeader("Camera & microphone", subtitle: subtitle, systemImage: "web.camera", tint: .hectorInfo) {
+            // Keeping watch while monitoring; resting while paused.
+            HectorMark(gaze: privacy.isMonitoring ? .ahead : .resting, detailed: true)
+                .frame(width: 30, height: 30)
+                .help(privacy.isMonitoring ? "Hector is keeping watch" : "Hector is resting: monitoring is paused")
             if privacy.isMonitoring {
                 Button {
                     privacy.stopMonitoring()
@@ -144,7 +148,8 @@ private struct CaptureLogSection: View {
             if privacy.events.isEmpty {
                 Card {
                     EmptyStateView("All quiet", systemImage: "web.camera",
-                                   message: "Nothing has turned on since Hector started listening.", tint: .hectorOK, compact: true)
+                                   message: "Nothing has turned on since Hector started listening.", tint: .hectorOK, compact: true,
+                                   hector: privacy.isMonitoring ? .ahead : .resting)
                 }
             } else {
                 Card(spacing: Spacing.sm) {
