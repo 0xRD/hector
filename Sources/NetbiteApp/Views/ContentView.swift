@@ -5,6 +5,15 @@ struct ContentView: View {
     @Environment(ConnectionMonitor.self) private var monitor
     @Environment(BlockingController.self) private var blocking
     @Environment(WindowState.self) private var state
+    @Environment(SecurityController.self) private var security
+
+    /// The network screens (map and list) as opposed to Blocklists and the security screens.
+    private var isNetworkScreen: Bool {
+        switch state.sidebarSelection {
+        case .blocklists, .persistence, .processes: false
+        default: true
+        }
+    }
 
     private var selectedAppID: AppGroup.ID? {
         if case .app(let id) = state.sidebarSelection { return id }
@@ -23,6 +32,10 @@ struct ContentView: View {
         } detail: {
             if state.sidebarSelection == .blocklists {
                 BlocklistView()
+            } else if state.sidebarSelection == .persistence {
+                PersistenceView()
+            } else if state.sidebarSelection == .processes {
+                ProcessesView()
             } else {
                 VStack(spacing: 0) {
                     GeoBanner()
@@ -43,15 +56,17 @@ struct ContentView: View {
             }
         }
         .navigationTitle(title)
-        .navigationSubtitle("\(monitor.liveConnectionCount) live connections")
-        .searchable(text: $state.search, placement: .toolbar, prompt: "Host, IP, country, port")
+        .navigationSubtitle(isNetworkScreen ? "\(monitor.liveConnectionCount) live connections" : "")
+        .searchable(text: $state.search, placement: .toolbar, prompt: searchPrompt)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Picker("Show", selection: $state.filter) {
-                    ForEach(DestinationFilter.allCases) { Text($0.rawValue).tag($0) }
+                if isNetworkScreen {
+                    Picker("Show", selection: $state.filter) {
+                        ForEach(DestinationFilter.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 220)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 220)
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 if blocking.isHelperReady {
@@ -63,16 +78,18 @@ struct ContentView: View {
                         .labelStyle(BadgeLabelStyle(color: .secondary, iconSize: 9))
                         .help("Install the helper from Blocklists to block destinations.")
                 }
-                Toggle(isOn: $monitor.isPaused) {
-                    Label(monitor.isPaused ? "Resume" : "Pause", systemImage: monitor.isPaused ? "play.fill" : "pause.fill")
+                if isNetworkScreen {
+                    Toggle(isOn: $monitor.isPaused) {
+                        Label(monitor.isPaused ? "Resume" : "Pause", systemImage: monitor.isPaused ? "play.fill" : "pause.fill")
+                    }
+                    .help(monitor.isPaused ? "Resume live updates" : "Freeze the view")
                 }
-                .help(monitor.isPaused ? "Resume live updates" : "Freeze the view")
                 Button {
                     state.showInspector.toggle()
                 } label: {
                     Label("Details", systemImage: "sidebar.trailing")
                 }
-                .help("Show or hide destination details")
+                .help("Show or hide the details panel")
             }
         }
         #if DEBUG
@@ -130,7 +147,21 @@ struct ContentView: View {
 
     // MARK: - Data
 
+    private var searchPrompt: String {
+        switch state.sidebarSelection {
+        case .persistence: "Name, path, team ID"
+        case .processes: "Name, PID, path, arguments"
+        default: "Host, IP, country, port"
+        }
+    }
+
     private var title: String {
+        switch state.sidebarSelection {
+        case .blocklists: return "Blocklists"
+        case .persistence: return "Persistence"
+        case .processes: return "Processes"
+        default: break
+        }
         guard let id = selectedAppID else { return "All apps" }
         return monitor.apps[id]?.name ?? "Netbite"
     }

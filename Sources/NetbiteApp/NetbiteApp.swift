@@ -8,6 +8,7 @@ struct NetbiteApp: App {
     private let monitor = ConnectionMonitor()
     private let windowState = WindowState()
     private let blocking = BlockingController()
+    private let security = SecurityController()
 
     var body: some Scene {
         Window("Netbite", id: "main") {
@@ -15,6 +16,7 @@ struct NetbiteApp: App {
                 .environment(monitor)
                 .environment(windowState)
                 .environment(blocking)
+                .environment(security)
                 .tint(.netbiteAccent)
                 .frame(minWidth: 1060, minHeight: 660)
                 .task {
@@ -29,6 +31,13 @@ struct NetbiteApp: App {
             CommandGroup(after: .appInfo) {
                 Button("Uninstall Netbite…") { windowState.showUninstall = true }
             }
+        }
+
+        Settings {
+            SettingsView()
+                .environment(security)
+                .environment(windowState)
+                .tint(.netbiteAccent)
         }
     }
 }

@@ -4,11 +4,14 @@ enum SidebarItem: Hashable {
     case allApps
     case app(AppGroup.ID)
     case blocklists
+    case persistence
+    case processes
 }
 
 struct SidebarView: View {
     @Environment(ConnectionMonitor.self) private var monitor
     @Environment(BlockingController.self) private var blocking
+    @Environment(SecurityController.self) private var security
     @Binding var selection: SidebarItem?
     /// App owning the line hovered on the map or in the list.
     let highlightedAppID: AppGroup.ID?
@@ -36,6 +39,12 @@ struct SidebarView: View {
                 }
                 .padding(.vertical, 2)
                 .tag(SidebarItem.blocklists)
+            }
+            Section("Security") {
+                SecuritySidebarRow(title: "Persistence", symbol: "arrow.triangle.2.circlepath", subtitle: persistenceSubtitle)
+                    .tag(SidebarItem.persistence)
+                SecuritySidebarRow(title: "Processes", symbol: "cpu", subtitle: processesSubtitle)
+                    .tag(SidebarItem.processes)
             }
             Section("Apps") {
                 HStack(spacing: 10) {
@@ -65,6 +74,18 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+    }
+
+    private var persistenceSubtitle: String {
+        guard let report = security.persistence else { return security.isScanningPersistence ? "Scanning…" : "Launch items, extensions…" }
+        let noted = report.items.filter { !$0.notes.isEmpty }.count
+        return "\(report.items.count) items" + (noted > 0 ? " · \(noted) to review" : "")
+    }
+
+    private var processesSubtitle: String {
+        guard let snapshot = security.processes else { return "Tree, signatures, flags" }
+        let flagged = security.processFlags.values.filter { !$0.isEmpty }.count
+        return "\(snapshot.processes.count) running" + (flagged > 0 ? " · \(flagged) flagged" : "")
     }
 
     private var blocklistSubtitle: String {
@@ -108,5 +129,24 @@ private struct AppSidebarRow: View {
         let count = app.destinations.count
         let live = app.liveCount
         return "\(count) dest." + (live > 0 ? " · \(live) live" : "")
+    }
+}
+
+private struct SecuritySidebarRow: View {
+    let title: String
+    let symbol: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .frame(width: 26, height: 26)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).fontWeight(.medium)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }

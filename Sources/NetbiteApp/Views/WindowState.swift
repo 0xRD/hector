@@ -1,3 +1,4 @@
+import NetbiteCore
 import Observation
 
 /// What the user picked or points at in the main window.
@@ -22,6 +23,13 @@ final class WindowState {
     var newRuleNote = ""
     var showUninstall = false
     var uninstallPhase = UninstallPhase.confirm
+    // Security screens
+    var selectedPersistenceItem: PersistenceItem.ID?
+    var selectedProcess: RunningProcess.ID?
+    var processesFlaggedOnly = false
+    var processesAsTree = true
+    // Settings
+    var apiKeyDraft = ""
 }
 
 enum UninstallPhase: Equatable {
