@@ -115,6 +115,10 @@ struct ContentView: View {
         #if DEBUG
         .task {
             if let screen = DebugSnapshot.screen { state.sidebarSelection = screen }
+            if DemoData.isEnabled {
+                state.selectedPersistenceItem = DemoData.selectedPersistenceItem
+                state.selectedProcess = DemoData.selectedProcess
+            }
             if DebugSnapshot.opensSettings { openSettings() }
             if let country = DebugSnapshot.country {
                 try? await Task.sleep(for: .seconds(4))

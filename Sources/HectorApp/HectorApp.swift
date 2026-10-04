@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.applicationIconImage = AppIconArtwork.render(size: 512)
         NSApp.activate()
         #if DEBUG
+        DebugSnapshot.renderBrandIfRequested()
         DebugSnapshot.scheduleIfRequested()
         #endif
     }

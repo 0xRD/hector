@@ -1,15 +1,99 @@
-# Hector
+<p align="center">
+  <img src="docs/images/hector-icon.png" width="160" height="160" alt="">
+</p>
 
-**A calm guardian for your Mac: see what runs, what starts by itself, and who it talks to, then cut it off.**
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/hector-wordmark-dark.png">
+    <img src="docs/images/hector-wordmark-light.png" height="64" alt="Hector">
+  </picture>
+</h1>
 
-Hector is an open-source security app for macOS, in the spirit of Objective-See's tools ([LuLu](https://objective-see.org/products/lulu.html), [KnockKnock](https://objective-see.org/products/knockknock.html), [TaskExplorer](https://objective-see.org/products/taskexplorer.html)) and [Little Snitch](https://www.obdev.at/products/littlesnitch/), built to run **without a paid Apple Developer account**. It gathers four views in one window:
+<p align="center">
+  <strong>A calm guardian for your Mac: see what runs, what starts by itself, and who it talks to, then cut it off.</strong>
+</p>
 
-- **Netbite**, the network module: which process talks to which server, where that server is, and blocking of domains, addresses and whole countries.
-- **Persistence**: everything configured to start automatically (launch agents and daemons, login items, cron, extensions, profiles).
-- **Processes**: what runs right now, who signed it, where it came from.
-- **Privacy**: which apps read your keystrokes, and when the camera or the microphone turns on.
+<p align="center">
+  macOS 15+ · Apple silicon and Intel · Swift 6 · GPL-3.0 · no account, no telemetry
+</p>
 
-Code signatures are checked locally; VirusTotal lookups are optional, use your own free key, and send hashes only, never files.
+Hector is an open-source security app for macOS, in the spirit of Objective-See's tools ([LuLu](https://objective-see.org/products/lulu.html), [KnockKnock](https://objective-see.org/products/knockknock.html), [TaskExplorer](https://objective-see.org/products/taskexplorer.html), [ReiKey](https://objective-see.org/products/reikey.html)) and [Little Snitch](https://www.obdev.at/products/littlesnitch/), built to run **without a paid Apple Developer account**. He is named after the defender of Troy: the one who stands on the walls and keeps watch. He does not shout. He looks, tells you what he saw, and lets you decide.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/connections-dark.png">
+    <img src="docs/images/connections-light.png" alt="The Connections screen: a world map with one line per destination, the list of apps and their destinations, and the details panel of a selected destination">
+  </picture>
+</p>
+
+<p align="center"><sub>Every screenshot shows the app's demo mode: documentation IP ranges, <code>example.com</code> hosts and made-up apps.</sub></p>
+
+> **Status: early development (0.4).** Hector was called Netbite up to 0.3; updating replaces the old helper and keeps your blocklist, data and VirusTotal key. See the [roadmap](docs/ROADMAP.md).
+
+## What Hector watches
+
+### Netbite, the network
+
+Netbite is the network module: which app talks to which server, where that server is, and a way to cut it off.
+
+- **Live connections per app.** Apps and their destinations, refreshed every second. Helper processes are grouped under their app; with the helper installed, system daemons show up too. The data comes from libproc, the same source `lsof -i` uses.
+- **An interactive world map.** One line per destination, solid while live, dashed when recent, clay when blocked. Hover a line to see which app owns it, click a country to show only it, zoom and pan.
+- **Country and network names, offline.** The country of every address from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database, and, if you want it, the network that owns it ("AS15169 Google LLC") from [DB-IP IP to ASN Lite](https://db-ip.com/db/download/ip-to-asn-lite). Lookups never leave your Mac. The details panel adds reverse DNS and the last minute of activity.
+- **Blocking, for the whole Mac.** "Block This Destination", "Block All of <country>", or your own rules for a domain, an address or a network. The `hectord` helper enforces them with pf (the macOS firewall) and `/etc/hosts`, and re-applies them at boot. Nothing changes until you press Apply. Country blocking is opt-in, networks wider than /8 (IPv4) or /16 (IPv6) are refused, and local networks are never blocked.
+- **Hosts lists.** Subscribe to [StevenBlack Unified](https://github.com/StevenBlack/hosts) (ads and malware) or [EasyPrivacy](https://easylist.to) (trackers), about 110,000 domains together, off by default. The helper downloads them from fixed HTTPS addresses, validates every line, keeps them apart from your own rules, and checks for updates weekly.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/blocklists-dark.png">
+    <img src="docs/images/blocklists-light.png" alt="The Blocklists screen: helper status, a pending change waiting to be applied, and switches to block whole countries">
+  </picture>
+</p>
+
+### Security
+
+- **Persistence.** Everything set to start by itself: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions. Each with its code signature, and a note on anything odd.
+- **Processes.** What runs right now, as a tree or a flat list: user, arguments, signature, connections. Code running from a temporary, Downloads or hidden folder, or deleted after launch, is flagged; downloads show where they came from.
+- **VirusTotal hash lookups.** For one item or all of them, within the free tier (4 per minute, 500 per day), cached for 7 days. Only the SHA-256 leaves your Mac, never the file. The key is yours and stays in your Keychain (Settings, ⌘,).
+- **Security checkup.** SIP, Gatekeeper, XProtect, FileVault, the firewall, automatic updates, Remote Login, Screen Sharing and Remote Management, File Sharing, Remote Apple Events, automatic login, the guest account and MDM enrollment. Each says what was found and how to fix it, with a button to the right System Settings pane. Read-only, no root, no password.
+
+<table>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/persistence-dark.png">
+        <img src="docs/images/persistence-light.png" alt="The Persistence screen: launch agents, launch daemons, login items, extensions, each with its signature and VirusTotal result">
+      </picture>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/processes-dark.png">
+        <img src="docs/images/processes-light.png" alt="The Processes screen: a process tree with signatures and connections, and a process flagged because it runs from Downloads">
+      </picture>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%"><sub><b>Persistence.</b> What starts by itself, who signed it, what VirusTotal knows.</sub></td>
+    <td width="50%"><sub><b>Processes.</b> A program started from Downloads, and where it was downloaded from.</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/checkup-dark.png">
+    <img src="docs/images/checkup-light.png" width="80%" alt="The Security checkup: two settings to review, with how to fix them, and the settings that pass">
+  </picture>
+</p>
+
+### Privacy
+
+- **Keyboard taps.** Every app that intercepts keystrokes through an event tap: whether it can change them or only listen, whether it sees every app or one, and who signed it. Read from the public event tap list, with no permission.
+- **Camera and microphone.** A live "in use now" view, and a log of every time a camera or an audio input turns on or off, with the app recording from the microphone. Which app uses a camera is not shown: macOS has no public way to tell. Hector never opens a device, so no permission is asked.
+
+### The `hector` command line
+
+Everything above is also in `hector`: `connections`, `geo`, `rules`, `lists`, `helper`, `persistence`, `processes`, `checkup`, `taps`, `devices`, `sign`, `vt`. See [Usage](#usage).
+
+### Honest about limits
 
 The no-paid-account constraint shapes what the network module can do:
 
@@ -23,26 +107,11 @@ The no-paid-account constraint shapes what the network module can do:
 
 Hector *observes per app* and *blocks for the whole Mac*. The [architecture notes](docs/ARCHITECTURE.md) explain why.
 
-> **Status: early development (0.4).** Hector was called Netbite up to 0.3; updating replaces the old helper and keeps your blocklist, data and VirusTotal key. See the [roadmap](docs/ROADMAP.md).
-
 ## Install
 
 Download the latest `Hector-x.y.z-macOS.zip` from [Releases](../../releases), move **Hector.app** to Applications, and open it. The release notes explain the one-time Gatekeeper step: Hector is not notarized, because notarization needs a paid Apple Developer account.
 
-## Features available now
-
-- **Netbite, live connections**: apps and their destinations, a world map with one line per destination (hover a line to see which app owns it), and a details panel with reverse DNS, country and the last minute of activity. Data comes from libproc, the same source `lsof -i` uses; helper processes are grouped under their app.
-- **Blocking**: "Block this destination", "Block all of <country>", personal rules, and a Blocklists screen with pending changes. The `hectord` helper enforces them with pf and `/etc/hosts`, re-applies them at boot, and lets the app see system processes. Country blocking is opt-in, networks wider than /8 (IPv4) or /16 (IPv6) are refused, and local networks are never blocked.
-- **Hosts lists**: subscribe to StevenBlack Unified (ads and malware) or EasyPrivacy (trackers), about 110,000 domains together, off by default. The helper downloads them from fixed HTTPS addresses, validates every line, keeps them apart from your own rules, and checks for updates weekly.
-- **Country of every destination**, offline, from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database.
-- **Network name of every destination** ("AS15169 Google LLC"), offline, from the free [DB-IP IP to ASN Lite](https://db-ip.com/db/download/ip-to-asn-lite) database: in the list under each address, in the details panel, on the map's tooltip, and in the search. Optional: download it from the details panel or with `hector geo update --asn`.
-- **Persistence**: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions, each with its code signature and notes on anything odd.
-- **Processes**: tree or flat list with user, arguments, signature, connections, and flags for code running from temporary, Downloads or hidden folders or deleted after launch; downloads show where they came from.
-- **Security checkup**: SIP, Gatekeeper, XProtect, FileVault, firewall, automatic updates, Remote Login, Screen Sharing and Remote Management, File Sharing, Remote Apple Events, automatic login, guest account and MDM enrollment, each with what was found and how to fix it, and a button to the right System Settings pane. Read-only, without root or a password.
-- **Keyboard taps** (in the spirit of [ReiKey](https://objective-see.org/products/reikey.html)): every app that intercepts keystrokes through an event tap, whether it can change them or only listen, whether it sees every app or one, and who signed it. Read from the public event tap list, with no permission.
-- **Camera and microphone**: a live "in use now" view and a log of every time a camera or an audio input turns on or off, with the app recording from the microphone. Which app uses a camera is not shown: macOS has no public way to tell. Hector never opens a device, so no permission is asked.
-- **VirusTotal**: hash lookups for one item or all, within the free tier (4 per minute, 500 per day), cached for 7 days. The key stays in your Keychain (Settings, ⌘,).
-- **Command line**: everything above is also in `hector` (`connections`, `geo`, `rules`, `lists`, `helper`, `persistence`, `processes`, `checkup`, `taps`, `devices`, `sign`, `vt`).
+To block, install the helper from the Blocklists screen; macOS asks for an administrator password once. Without it, Hector observes your own apps and blocks nothing.
 
 ## Requirements
 
@@ -73,7 +142,7 @@ scripts/bundle-app.sh
 open .build/Hector.app
 ```
 
-During development, `swift run HectorApp` starts the app without bundling it.
+During development, `swift run HectorApp` starts the app without bundling it. Debug builds also have a demo mode with sample data, `HECTOR_DEMO=1 swift run HectorApp`, which `scripts/readme-images.sh` uses to render the images of this page; [CONTRIBUTING.md](CONTRIBUTING.md) lists the other debug switches.
 
 If `swift build` crashes with `Symbol not found … BuildServerProtocol`, or complains that the SDK is not supported by the compiler, your Command Line Tools do not match their own SDK (Command Line Tools 26.6 ships that way). Install Command Line Tools for Xcode 27 or later, or Xcode. Until then, `scripts/build.sh` builds the CLI with `swiftc` directly, picking an SDK the compiler can load. Tests still need SwiftPM.
 
@@ -211,6 +280,8 @@ scripts/bundle-app.sh  Builds and ad-hoc signs .build/Hector.app (--universal, -
 .github/workflows/     CI on every push, release on every v* tag
 scripts/generate-world-data.py
                        Regenerates the map data from Natural Earth
+scripts/readme-images.sh
+                       Renders the logo and the screenshots in docs/images (demo data)
 ```
 
 ## Security

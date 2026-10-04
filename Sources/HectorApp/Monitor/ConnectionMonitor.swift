@@ -59,7 +59,12 @@ final class ConnectionMonitor {
     @ObservationIgnored private var lastSnapshotAt = ContinuousClock.now - .seconds(3600)
 
     /// Where lines on the map start: the country the Mac is set to. No network lookup involved.
-    let originCountry = Locale.current.region?.identifier ?? "US"
+    let originCountry: String = {
+        #if DEBUG
+        if DemoData.isEnabled { return DemoData.originCountry }
+        #endif
+        return Locale.current.region?.identifier ?? "US"
+    }()
 
     @ObservationIgnored private var geo: GeoIPDatabase?
     @ObservationIgnored private var networkNames: ASNDatabase?
@@ -78,6 +83,9 @@ final class ConnectionMonitor {
 
     func start() {
         guard loop == nil else { return }
+        #if DEBUG
+        if DemoData.isEnabled { return loadDemo() }
+        #endif
         loop = Task { [weak self] in
             await self?.loadGeo()
             // Network names are secondary: they load in the background while snapshots start.
@@ -277,3 +285,16 @@ final class ConnectionMonitor {
         }
     }
 }
+
+#if DEBUG
+extension ConnectionMonitor {
+    /// `HECTOR_DEMO=1`: fixed sample connections instead of the Mac's own, and no snapshots.
+    fileprivate func loadDemo() {
+        apps = Dictionary(uniqueKeysWithValues: DemoData.connections().map { ($0.id, $0) })
+        geoStatus = .ready(ranges: 618_402)
+        networkNamesStatus = .ready(networks: 512_740)
+        seesAllProcesses = true
+        lastUpdate = DemoData.now
+    }
+}
+#endif

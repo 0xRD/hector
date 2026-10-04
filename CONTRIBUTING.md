@@ -31,7 +31,12 @@ Debug builds of the app read these environment variables, so UI changes can be c
 - `HECTOR_DEBUG_SELECT=N` selects the N-th line of the map;
 - `HECTOR_DEBUG_SCREEN=NAME` opens a screen at launch: `blocklists`, `persistence`, `processes`, `checkup`, `taps` or `devices`;
 - `HECTOR_DEBUG_COUNTRY=US` filters Connections to one country; `HECTOR_DEBUG_HOVER_COUNTRY=US` hovers its bubble on the world map;
-- `HECTOR_DEBUG_SETTINGS=1` opens the Settings window.
+- `HECTOR_DEBUG_SETTINGS=1` opens the Settings window;
+- `HECTOR_APPEARANCE=light` or `dark` forces the appearance;
+- `HECTOR_DEMO=1` shows fixed sample data (documentation IP ranges, `example.com` hosts, made-up apps) instead of this Mac's, and never contacts the helper or saves anything; the README screenshots use it;
+- `HECTOR_RENDER_BRAND=DIR` writes the app icon and the wordmark as PNGs into `DIR`, then quits.
+
+`scripts/readme-images.sh` regenerates every image in `docs/images` with these switches. Run it after a visible change to the brand or to one of the screens it shows.
 
 `HECTOR_SNAPSHOT` draws the window itself; it does not show how AppKit placed the split views. For layout bugs, take a real capture of the window with `screencapture -o -l <window id>` (the window id comes from `CGWindowListCopyWindowInfo`).
 
