@@ -79,10 +79,7 @@ struct SidebarView: View {
     }
 
     private var blocklistSubtitle: String {
-        let applied = blocking.applied
-        let rules = applied.rules.filter(\.isEnabled).count
-        let countries = applied.blockedCountries.count
         guard blocking.isHelperReady else { return "Helper not installed" }
-        return "\(rules) rules · \(countries) countr\(countries == 1 ? "y" : "ies")"
+        return blocking.enforcedSummary ?? "Nothing blocked"
     }
 }

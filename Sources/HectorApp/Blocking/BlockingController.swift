@@ -62,6 +62,31 @@ final class BlockingController {
     /// What pf enforces right now.
     var applied: Blocklist { helperStatus?.blocklist ?? Blocklist() }
 
+    /// What is enforced, in a few words: "2 lists · 3 rules", or `nil` when nothing is. Hosts lists
+    /// count as much as rules: they are usually most of what is blocked.
+    var enforcedSummary: String? {
+        let applied = applied
+        var parts: [String] = []
+        let lists = applied.hostsLists.count
+        if lists > 0 { parts.append("\(lists) list\(lists == 1 ? "" : "s")") }
+        let rules = applied.rules.filter(\.isEnabled).count
+        if rules > 0 { parts.append("\(rules) rule\(rules == 1 ? "" : "s")") }
+        let countries = applied.blockedCountries.count
+        if countries > 0 { parts.append("\(countries) countr\(countries == 1 ? "y" : "ies")") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Domains and networks blocked, for a second line: "113,627 domains".
+    var enforcedVolume: String? {
+        guard let status = helperStatus else { return nil }
+        let domains = status.hostsDomainCount + (status.listDomainCount ?? 0)
+        let networks = status.blockTableCount + status.geoTableCount
+        var parts: [String] = []
+        if domains > 0 { parts.append("\(Display.count(domains)) domain\(domains == 1 ? "" : "s")") }
+        if networks > 0 { parts.append("\(Display.count(networks)) network\(networks == 1 ? "" : "s")") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     /// Rules added, removed or toggled, plus countries and hosts lists switched, compared with what
     /// is applied.
     var pendingChanges: Int {

@@ -98,7 +98,7 @@ private struct HelperCard: View {
             }
             .padding(.top, 4)
         case .ready(let status):
-            Text(status.pfEnabled && status.anchorLoaded ? "pf firewall enabled" : "Helper ready, nothing enforced yet")
+            Text(status.pfEnabled && status.anchorLoaded ? "Blocking is on" : "Helper ready, nothing enforced yet")
                 .font(.headline)
             Text(summary(status)).foregroundStyle(.secondary)
             if status.version != HectorVersion.current {
@@ -127,19 +127,20 @@ private struct HelperCard: View {
         }
     }
 
+    /// Only what is there: "113,627 list domains · 12 networks · applied 16:47 · helper 0.4.2".
     private func summary(_ status: HelperStatus) -> String {
-        var parts = [
-            "\(status.blockTableCount) networks",
-            "\(Display.count(status.geoTableCount)) country networks",
-            "\(status.hostsDomainCount) domains",
+        let counts: [(count: Int, one: String, many: String)] = [
+            (status.listDomainCount ?? 0, "list domain", "list domains"),
+            (status.hostsDomainCount, "domain of yours", "domains of yours"),
+            (status.blockTableCount, "network", "networks"),
+            (status.geoTableCount, "country network", "country networks"),
         ]
-        if let listDomains = status.listDomainCount, listDomains > 0 {
-            parts.append("\(Display.count(listDomains)) list domains")
-        }
+        var parts = counts.filter { $0.count > 0 }.map { "\(Display.count($0.count)) \($0.count == 1 ? $0.one : $0.many)" }
         if let date = status.appliedAt {
             parts.append("applied \(Display.time(date))")
         }
-        return parts.joined(separator: " · ") + " · helper \(status.version)"
+        parts.append("helper \(status.version)")
+        return parts.joined(separator: " · ")
     }
 }
 

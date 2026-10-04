@@ -62,11 +62,10 @@ struct ProtectionStatusFooter: View {
             guard status.pfEnabled && status.anchorLoaded else {
                 return Verdict(title: "Helper ready", detail: "Nothing is blocked yet", symbol: "shield", kind: .info)
             }
-            let applied = blocking.applied
-            let rules = applied.rules.filter(\.isEnabled).count
-            let countries = applied.blockedCountries.count
-            let detail = "\(rules) rule\(rules == 1 ? "" : "s") · \(countries) countr\(countries == 1 ? "y" : "ies") enforced"
-            return Verdict(title: "Blocking on", detail: detail, symbol: "checkmark.shield.fill", kind: .ok)
+            guard let summary = blocking.enforcedSummary else {
+                return Verdict(title: "Helper ready", detail: "Nothing is blocked yet", symbol: "shield", kind: .info)
+            }
+            return Verdict(title: "Blocking on", detail: blocking.enforcedVolume ?? summary, symbol: "checkmark.shield.fill", kind: .ok)
         }
     }
 }
