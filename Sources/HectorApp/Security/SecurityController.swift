@@ -60,12 +60,38 @@ final class SecurityController {
 
     init() {
         refreshKeyState()
+        #if DEBUG
+        if DemoData.isEnabled { loadDemo() }
+        #endif
     }
+
+    /// `HECTOR_DEMO=1` (debug builds): sample data, and nothing on this Mac is scanned or looked up.
+    private var isDemo: Bool {
+        #if DEBUG
+        DemoData.isEnabled
+        #else
+        false
+        #endif
+    }
+
+    #if DEBUG
+    private func loadDemo() {
+        persistence = DemoData.persistenceReport
+        includeAppleItems = true
+        processes = DemoData.processSnapshot
+        processFlags = DemoData.processFlags
+        processesThroughHelper = true
+        signatures = DemoData.signatures.mapValues { .analyzed($0) }
+        virusTotal = DemoData.virusTotal.mapValues { .done($0) }
+        quarantine = DemoData.quarantine
+        hasAPIKey = true
+    }
+    #endif
 
     // MARK: - Persistence
 
     func scanPersistence() async {
-        guard !isScanningPersistence else { return }
+        guard !isScanningPersistence, !isDemo else { return }
         isScanningPersistence = true
         defer { isScanningPersistence = false }
         let includeApple = includeAppleItems
@@ -105,7 +131,7 @@ final class SecurityController {
     // MARK: - Processes
 
     func refreshProcesses() async {
-        guard !isLoadingProcesses else { return }
+        guard !isLoadingProcesses, !isDemo else { return }
         isLoadingProcesses = true
         defer { isLoadingProcesses = false }
         let (snapshot, throughHelper, flags) = await Task.detached(priority: .userInitiated) {
@@ -200,6 +226,7 @@ final class SecurityController {
     }
 
     private func makeClient(reportingTo path: String?) -> VirusTotalClient? {
+        guard !isDemo else { return nil }
         do {
             if cachedKey == nil { cachedKey = try keyStore.read() }
             guard let key = cachedKey else {

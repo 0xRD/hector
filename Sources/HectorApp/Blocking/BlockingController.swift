@@ -31,7 +31,23 @@ final class BlockingController {
     }
 
     init() {
+        #if DEBUG
+        if DemoData.isEnabled {
+            draft = DemoData.draftBlocklist
+            helper = .ready(DemoData.helperStatus)
+            return
+        }
+        #endif
         draft = (try? Blocklist.load(from: Self.draftURL)) ?? Blocklist()
+    }
+
+    /// `HECTOR_DEMO=1` (debug builds): a sample blocklist, never saved; the helper is never contacted.
+    private static var isDemo: Bool {
+        #if DEBUG
+        DemoData.isEnabled
+        #else
+        false
+        #endif
     }
 
     // MARK: - State
@@ -64,6 +80,7 @@ final class BlockingController {
     // MARK: - Helper
 
     func refresh() async {
+        guard !Self.isDemo else { return }
         guard HelperClient.isInstalled else {
             helper = .notInstalled
             return
@@ -102,6 +119,7 @@ final class BlockingController {
     /// Builds the request off the main thread (getting the authorization may show the system
     /// password dialog), then sends it.
     private func perform(_ makeRequest: @escaping @Sendable () throws -> HelperRequest) async {
+        guard !Self.isDemo else { return }
         isWorking = true
         lastError = nil
         defer { isWorking = false }
@@ -148,6 +166,7 @@ final class BlockingController {
     }
 
     private func runAsAdministrator(_ command: String) async {
+        guard !Self.isDemo else { return }
         isWorking = true
         lastError = nil
         defer { isWorking = false }
@@ -226,6 +245,7 @@ final class BlockingController {
     }
 
     private func saveDraft() {
+        guard !Self.isDemo else { return }
         try? FileManager.default.createDirectory(at: Self.draftURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? draft.save(to: Self.draftURL)
     }

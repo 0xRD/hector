@@ -10,7 +10,16 @@ final class CheckupController {
     private(set) var report: CheckupReport?
     private(set) var isRunning = false
 
+    init() {
+        #if DEBUG
+        if DemoData.isEnabled { report = DemoData.checkupReport }
+        #endif
+    }
+
     func run() async {
+        #if DEBUG
+        if DemoData.isEnabled { return }
+        #endif
         guard !isRunning else { return }
         isRunning = true
         defer { isRunning = false }

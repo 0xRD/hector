@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import SwiftUI
 
 /// Development aid, debug builds only: lets a script check the UI without screen-recording rights.
 ///
@@ -13,6 +14,8 @@ import AppKit
 /// - `HECTOR_DEBUG_SETTINGS=1` opens the Settings window.
 /// - `HECTOR_DEBUG_SCREEN=NAME` opens a screen: blocklists, persistence, processes, checkup,
 ///   taps or devices.
+/// - `HECTOR_APPEARANCE=light` or `dark` forces the appearance, whatever the system uses.
+/// - `HECTOR_DEMO=1` shows fixed sample data instead of this Mac's (see `DemoData`).
 @MainActor
 enum DebugSnapshot {
     static var environment: [String: String] { ProcessInfo.processInfo.environment }
@@ -39,6 +42,11 @@ enum DebugSnapshot {
     static var opensSettings: Bool { environment["HECTOR_DEBUG_SETTINGS"] != nil }
 
     static func scheduleIfRequested() {
+        switch environment["HECTOR_APPEARANCE"] {
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        default: break
+        }
         guard let path = environment["HECTOR_SNAPSHOT"] else { return }
         let delay = environment["HECTOR_SNAPSHOT_DELAY"].flatMap(Double.init) ?? 6
         Task { @MainActor in
@@ -46,6 +54,36 @@ enum DebugSnapshot {
             write(to: URL(fileURLWithPath: path))
             NSApp.terminate(nil)
         }
+    }
+
+    /// `HECTOR_RENDER_BRAND=/some/folder` writes the app icon and the wordmark (light and dark)
+    /// as PNGs into that folder, then quits. `scripts/render-brand.sh` uses it for the README.
+    static func renderBrandIfRequested() {
+        guard let folder = environment["HECTOR_RENDER_BRAND"] else { return }
+        let directory = URL(fileURLWithPath: folder)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let icon = ImageRenderer(content: AppIconArtwork().scaleEffect(0.5).frame(width: 256, height: 256))
+        icon.scale = 2
+        savePNG(icon.cgImage, to: directory.appending(path: "hector-icon.png"))
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            guard let resolved = NSAppearance(named: appearance) else { continue }
+            NSApp.appearance = resolved
+            resolved.performAsCurrentDrawingAppearance {
+                let wordmark = ImageRenderer(content: HectorWordmark(size: 44).padding(4)
+                    .environment(\.colorScheme, name == "dark" ? .dark : .light))
+                wordmark.scale = 2
+                savePNG(wordmark.cgImage, to: directory.appending(path: "hector-wordmark-\(name).png"))
+            }
+        }
+        NSApp.terminate(nil)
+    }
+
+    private static func savePNG(_ image: CGImage?, to url: URL) {
+        guard let image, let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
+            FileHandle.standardError.write(Data("hector: could not render \(url.lastPathComponent)\n".utf8))
+            return
+        }
+        try? data.write(to: url)
     }
 
     private static func write(to url: URL) {
