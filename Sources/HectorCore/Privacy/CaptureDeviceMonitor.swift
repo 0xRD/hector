@@ -9,7 +9,9 @@ import Foundation
 /// Property listeners (Core Audio and CoreMediaIO, block-based, on a private serial queue) only
 /// signal that something changed; the state is then read again on the main actor and compared
 /// with the previous one. A light poll (every 2 s by default) catches what has no listener:
-/// apps starting or stopping to record while the microphone stays on.
+/// apps starting or stopping to record while the microphone stays on. It runs only while an audio
+/// input is running somewhere (recording, or a headset playing): with every microphone idle, the
+/// device listeners are enough and the monitor costs nothing.
 ///
 /// Call `stop()` before dropping the monitor: it removes every listener.
 @MainActor
@@ -65,15 +67,6 @@ public final class CaptureDeviceMonitor {
                 self?.refresh()
             }
         }
-        let interval = pollInterval
-        poller = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: interval)
-                guard let self, !Task.isCancelled else { return }
-                self.refresh()
-            }
-        }
-
         let system = AudioHAL.systemObject
         addAudioListener(system, AudioObjectPropertySelector(kAudioHardwarePropertyDevices))
         addAudioListener(system, AudioObjectPropertySelector(kAudioHardwarePropertyProcessObjectList))
@@ -126,9 +119,28 @@ public final class CaptureDeviceMonitor {
             if snapshot.microphoneUsers == nil { snapshot.microphoneUsers = indicatorUsers[.microphone] }
         }
         watch(microphones: objects.microphones, cameras: objects.cameras)
+        setPolling(snapshot.devices.contains { $0.kind == .microphone && $0.isRunningSomewhere })
         latest = snapshot
         let events = tracker.update(with: snapshot)
         handler(snapshot, events)
+    }
+
+    /// Starts or stops the poll; a running poll is left alone.
+    private func setPolling(_ needed: Bool) {
+        guard needed else {
+            poller?.cancel()
+            poller = nil
+            return
+        }
+        guard poller == nil else { return }
+        let interval = pollInterval
+        poller = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard let self, !Task.isCancelled else { return }
+                self.refresh()
+            }
+        }
     }
 
     // MARK: - Listeners

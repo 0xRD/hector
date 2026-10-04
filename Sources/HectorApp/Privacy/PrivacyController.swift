@@ -60,7 +60,8 @@ final class PrivacyController {
 
     var devicesInUse: [CaptureDevice] { devices.filter(\.isInUse) }
 
-    /// Starts listening to the cameras and microphones. Cheap: listeners plus a read every 2 s.
+    /// Starts listening to the cameras and microphones. Cheap: listeners, plus a read every 2 s
+    /// only while a microphone is running.
     func startMonitoring() {
         guard monitor == nil else { return }
         let monitor = CaptureDeviceMonitor { [weak self] snapshot, events in
@@ -85,7 +86,7 @@ final class PrivacyController {
     }
 
     private func apply(_ snapshot: CaptureSnapshot, _ newEvents: [CaptureEvent]) {
-        // Read every 2 s: assign only what changed, so the screens do not redraw for nothing.
+        // Read every 2 s while a microphone runs: assign only what changed, so the screens do not redraw for nothing.
         if devices != snapshot.devices { devices = snapshot.devices }
         if microphoneUsers != snapshot.microphoneUsers { microphoneUsers = snapshot.microphoneUsers }
         if cameraUsers != snapshot.cameraUsers { cameraUsers = snapshot.cameraUsers }
