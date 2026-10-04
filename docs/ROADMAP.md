@@ -154,6 +154,8 @@ Hector already blocks ads and trackers for the whole Mac the way a Pi-hole does:
 - [ ] Measure first: lookup latency and memory against /etc/hosts with 100,000+ domains (today: 43,112 list domains, 6 ms for a blocked name, 30 to 50 ms for normal names, no visible cost in mDNSResponder)
 - [ ] Later: serve other devices on the network (a real Pi-hole replacement), off by default
 
+Design, verified list URLs and a phased plan: [LOCAL_DNS.md](LOCAL_DNS.md). The pure core is written and tested (`HectorCore/DNS`: message parser, wildcard domain set, allowlist precedence, Adblock-style lists, attribution through mDNSResponder's log).
+
 ## 0.5: better names and numbers
 
 - [ ] Real host names per connection: research reading DNS answers from mDNSResponder's unified log, or a local DNS forwarder
