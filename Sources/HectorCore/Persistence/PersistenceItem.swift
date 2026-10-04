@@ -88,6 +88,10 @@ public struct PersistenceItem: Codable, Hashable, Identifiable, Sendable {
     /// SHA-256 of the executable, the key for a VirusTotal lookup. Not computed by the scanner.
     public var sha256: String?
 
+    /// Present but does nothing: an empty launchd file (uninstallers and updaters such as Google
+    /// Keystone leave these behind). Shown dimmed, never counted as something to review.
+    public var isInert: Bool { details["inert"] != nil }
+
     public init(category: Category, scope: Scope, label: String, configurationPath: String? = nil,
                 executablePath: String? = nil, arguments: [String] = [], version: String? = nil,
                 teamIdentifier: String? = nil, runAtLoad: Bool? = nil, keepAlive: Bool? = nil,

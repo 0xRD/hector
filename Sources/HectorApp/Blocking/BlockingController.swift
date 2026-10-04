@@ -201,7 +201,7 @@ final class BlockingController {
     }
 
     /// `Hector.app/Contents/Helpers/hectord`, or next to the executable when run with `swift run`.
-    private static var bundledHelper: URL? {
+    static var bundledHelper: URL? {
         let candidates = [
             Bundle.main.bundleURL.appending(path: "Contents/Helpers/hectord"),
             Bundle.main.executableURL?.deletingLastPathComponent().appending(path: "hectord"),

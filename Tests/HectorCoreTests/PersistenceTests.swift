@@ -534,3 +534,42 @@ private final class FakeTools: @unchecked Sendable {
         #expect(ProcessTool.run("echo", ["hi"]) == nil)
     }
 }
+
+@Suite struct PersistenceLaunchdQuirksTests {
+    private func scan(_ plist: String) throws -> PersistenceItem {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "hector-quirks-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appending(path: "com.example.agent.plist")
+        try Data(plist.utf8).write(to: url)
+        let roots = PersistenceScanner.Roots(home: folder, system: folder)
+        return PersistenceScanner(roots: roots).launchdItem(at: url, category: .launchAgent, scope: .user,
+                                                           overrides: [:], apps: AppIndex(roots: roots))
+    }
+
+    @Test func emptyPlistIsInertWithoutNotes() throws {
+        let item = try scan("<?xml version=\"1.0\"?><plist version=\"1.0\"><dict/></plist>")
+        #expect(item.isInert)
+        #expect(item.notes.isEmpty)
+    }
+
+    @Test func openIsJudgedByWhatItOpens() throws {
+        let item = try scan("""
+        <?xml version="1.0"?><plist version="1.0"><dict>
+        <key>Label</key><string>com.example.agent</string>
+        <key>ProgramArguments</key><array><string>/usr/bin/open</string><string>-W</string><string>/Applications/Example.app</string></array>
+        </dict></plist>
+        """)
+        #expect(item.executablePath == "/Applications/Example.app")
+        #expect(item.details["launcher"] == "/usr/bin/open")
+    }
+
+    @Test func openTargets() {
+        let apps = AppIndex(roots: PersistenceScanner.Roots(home: URL(fileURLWithPath: "/nonexistent"),
+                                                           system: URL(fileURLWithPath: "/nonexistent")))
+        #expect(PersistenceScanner.openTarget(arguments: ["/usr/bin/open", "-a", "/Applications/X.app"], apps: apps) == "/Applications/X.app")
+        #expect(PersistenceScanner.openTarget(arguments: ["/usr/bin/open", "--env", "A=1", "/opt/x"], apps: apps) == "/opt/x")
+        #expect(PersistenceScanner.openTarget(arguments: ["/usr/bin/open", "https://example.com"], apps: apps) == nil)
+        #expect(PersistenceScanner.openTarget(arguments: ["/usr/bin/open", "--args", "/opt/x"], apps: apps) == nil)
+    }
+}

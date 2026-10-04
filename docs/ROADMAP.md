@@ -29,12 +29,12 @@ Hector is meant to run all the time and its helper runs as root, so these come b
 Every screen looked at with the owner's real data (about 60 connections, 59 persistence items, 630 processes, 37 keyboard taps). Bugs first, then UI, then new features.
 
 **Bugs and wrong information**
-- [ ] The sidebar footer and the Blocklists row say "0 rules · 0 countries" and "Blocking on" while 113,622 list domains are enforced: count the hosts lists
-- [ ] Connections: an app whose executable sits in a versioned folder is named after the version (`2.1.281` for Claude Code's `~/.local/share/claude/versions/2.1.281`): fall back to the parent folders' names when the file name looks like a version
-- [ ] Persistence: Hector's own helper is flagged "Ad hoc" like an unknown item: recognize `io.github.0xrd.hectord` (same signature as the running app) and say "Hector's helper"
-- [ ] Persistence: a launch agent whose plist is an empty dictionary (Google Keystone leaves these behind) shows two warnings: call it "Inert: empty file, launchd ignores it" and dim it
-- [ ] Persistence: a job that runs `/usr/bin/open` (DisplayLink) shows Apple's signature for `open`; resolve what it opens (`-a`, `-b` or a path in the arguments) and check that signature instead
-- [ ] Dates and numbers follow the system locale (French relative dates and spaces in numbers) inside an English interface: use English formatting until the app is localized
+- [x] The sidebar footer and the Blocklists row say "0 rules · 0 countries" and "Blocking on" while 113,622 list domains are enforced: count the hosts lists
+- [x] Connections: an app whose executable sits in a versioned folder is named after the version (`2.1.281` for Claude Code's `~/.local/share/claude/versions/2.1.281`): fall back to the parent folders' names when the file name looks like a version
+- [x] Persistence: Hector's own helper is flagged "Ad hoc" like an unknown item: recognize `io.github.0xrd.hectord` (same signature as the running app) and say "Hector's helper"
+- [x] Persistence: a launch agent whose plist is an empty dictionary (Google Keystone leaves these behind) shows two warnings: call it "Inert: empty file, launchd ignores it" and dim it
+- [x] Persistence: a job that runs `/usr/bin/open` (DisplayLink) shows Apple's signature for `open`; resolve what it opens (`-a`, `-b` or a path in the arguments) and check that signature instead
+- [x] Dates and numbers follow the system locale (French relative dates and spaces in numbers) inside an English interface: use English formatting until the app is localized
 
 **UI**
 - [ ] Toolbar: the search field and the inspector button show on screens that have neither (Checkup, Blocklists, Camera & mic); hide them, or search what the screen shows
@@ -47,7 +47,7 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [ ] Connections: one row per port and protocol for the same address (160.79.104.10 three times under one app); merge them into one destination with its ports
 - [ ] Connections: most rows are bare IP addresses or cloud reverse names; names from DNS answers would fix this (see the local DNS resolver below)
 - [ ] Map: the mascot in the bottom-left corner is cut off by the map's edge; Camera & mic shows it again next to Pause
-- [ ] Blocklists: list tiles keep a fixed width and leave half the row empty; "1 invalid lines"; "pf firewall enabled" is jargon for most people ("Blocking active")
+- [ ] Blocklists: list tiles keep a fixed width and leave half the row empty; "1 invalid lines" and "pf firewall enabled" fixed
 - [ ] Checkup: the automatic updates sentence reads badly ("…automatically; off: installing App Store app updates"); list what is off as its own line
 
 **New features**

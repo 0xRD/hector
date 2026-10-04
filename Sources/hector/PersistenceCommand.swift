@@ -24,6 +24,8 @@ func persistence(_ args: Arguments) throws {
         for item in items {
             print("  " + pad(item.scope.rawValue, 7) + pad(clipped(item.label, 43), 44) + " " + pad(flags(item), 18)
                   + (item.executablePath ?? item.configurationPath ?? ""))
+            if let inert = item.details["inert"] { print("  " + String(repeating: " ", count: 7) + "  inert: \(inert)") }
+            if let launcher = item.details["launcher"] { print("  " + String(repeating: " ", count: 7) + "  started through \(launcher)") }
             for note in item.notes { print("  " + String(repeating: " ", count: 7) + "! \(note)") }
         }
         print("")

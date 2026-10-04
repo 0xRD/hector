@@ -214,6 +214,11 @@ public struct PersistenceScanner: Sendable {
             return item
         }
 
+        if plist.isEmpty {
+            item.details["inert"] = "empty property list: launchd ignores it"
+            return item
+        }
+
         if let label = plist["Label"] as? String {
             item.label = label
             if label != fileLabel { item.notes.append("label differs from the file name") }
@@ -264,6 +269,12 @@ public struct PersistenceScanner: Sendable {
             item.notes.append("no Program, ProgramArguments or BundleProgram")
         }
 
+        // `open` only starts something else: judge what it opens, not Apple's `open`.
+        if item.executablePath == "/usr/bin/open", let target = Self.openTarget(arguments: arguments, apps: apps) {
+            item.details["launcher"] = "/usr/bin/open"
+            item.executablePath = target
+        }
+
         if item.owningBundlePath == nil, let executable = item.executablePath {
             let bundle = SocketCollector.appBundle(containing: executable)
             item.owningBundlePath = bundle.path
@@ -277,6 +288,38 @@ public struct PersistenceScanner: Sendable {
 
         item.notes += Self.executableNotes(item.executablePath, arguments: arguments, roots: roots)
         return item
+    }
+
+    /// What `/usr/bin/open ARGUMENTS` starts: the app of `-a NAME|PATH` or `-b BUNDLE-ID`, else the
+    /// first absolute path. `nil` for a URL or anything that cannot be resolved.
+    static func openTarget(arguments: [String], apps: AppIndex) -> String? {
+        var rest = arguments.dropFirst().makeIterator()
+        // Options of open(1) that take a value.
+        let withValue: Set<String> = ["--env", "--stdin", "--stdout", "--stderr", "-u", "--url"]
+        while let argument = rest.next() {
+            switch argument {
+            case "-a":
+                guard let app = rest.next() else { return nil }
+                if app.hasPrefix("/") { return app }
+                let name = app.hasSuffix(".app") ? app : app + ".app"
+                for folder in ["/Applications", "/System/Applications", "/Applications/Utilities"] {
+                    let path = folder + "/" + name
+                    if FileManager.default.fileExists(atPath: path) { return path }
+                }
+                return nil
+            case "-b":
+                return rest.next().flatMap(apps.path(for:))
+            case "--args":
+                return nil
+            case let option where withValue.contains(option):
+                _ = rest.next()
+            case let option where option.hasPrefix("-"):
+                continue
+            default:
+                return argument.hasPrefix("/") ? argument : nil
+            }
+        }
+        return nil
     }
 
     /// Red flags KnockKnock-style tools look for in what a job launches.

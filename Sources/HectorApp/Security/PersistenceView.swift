@@ -193,6 +193,14 @@ private struct PersistenceRow: View {
                     if item.isDisabled == true {
                         Text("Disabled").font(.caption2).foregroundStyle(.secondary)
                     }
+                    if item.isInert {
+                        Text("Inert").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    if OwnHelper.isOwnHelper(item) {
+                        let verdict = OwnHelper.verdict()
+                        StatusPill("Hector", kind: verdict.isExpected ? .ok : .warning, showsIcon: false, size: .small)
+                            .help(verdict.text)
+                    }
                     if !item.notes.isEmpty {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(Color.hectorWarning)
@@ -212,6 +220,8 @@ private struct PersistenceRow: View {
             VirusTotalBadge(security: security, path: path).frame(width: 80, alignment: .leading)
         }
         .padding(.vertical, 2)
+        // Present, but launchd ignores it: keep it visible without drawing the eye.
+        .opacity(item.isInert ? 0.5 : 1)
     }
 }
 
@@ -247,6 +257,16 @@ struct PersistenceDetailView: View {
                 }
             }
 
+            if let inert = item.details["inert"] {
+                Banner("Inert: \(inert). Safe to leave or delete.", kind: .info)
+            }
+            if OwnHelper.isOwnHelper(item) {
+                let verdict = OwnHelper.verdict()
+                Banner(verdict.text, kind: verdict.isExpected ? .info : .warning)
+            }
+            if let launcher = item.details["launcher"] {
+                Banner("Started through \(launcher); the signature shown is the app it opens.", kind: .info)
+            }
             ForEach(item.notes, id: \.self) { note in
                 Banner(note, kind: .warning)
             }
@@ -265,7 +285,7 @@ struct PersistenceDetailView: View {
                 if let modified = item.modifiedAt {
                     DetailRow("Modified", value: Display.dateTime(modified))
                 }
-                ForEach(item.details.keys.sorted(), id: \.self) { key in
+                ForEach(item.details.keys.sorted().filter { $0 != "inert" }, id: \.self) { key in
                     DetailRow(key.capitalized, value: item.details[key] ?? "")
                 }
             }
