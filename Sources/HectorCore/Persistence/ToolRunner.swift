@@ -88,7 +88,7 @@ enum ProcessTool {
             }
         }
         // A grandchild may still hold the pipe open; do not wait for it forever.
-        _ = readers.wait(timeout: .now() + 2)
+        _ = readers.wait(timeout: .now() + 5)
 
         return ToolOutput(status: process.terminationStatus, output: out.string, errorOutput: err.string,
                           timedOut: timedOut, truncated: out.truncated)
@@ -105,8 +105,13 @@ private final class CappedReader: @unchecked Sendable {
 
     init(cap: Int) { self.cap = cap }
 
+    /// On its own thread, not the shared dispatch queue: when that queue is busy (tests run in
+    /// parallel on a small CI machine), the read could start after the caller stopped waiting, and
+    /// the output came back empty.
     func drain(_ handle: FileHandle, group: DispatchGroup) {
-        DispatchQueue.global(qos: .utility).async(group: group) { [self] in
+        group.enter()
+        let thread = Thread { [self] in
+            defer { group.leave() }
             while let chunk = try? handle.read(upToCount: 64 << 10), !chunk.isEmpty {
                 lock.withLock {
                     let room = cap - data.count
@@ -115,6 +120,7 @@ private final class CappedReader: @unchecked Sendable {
                 }
             }
         }
+        thread.start()
     }
 
     var string: String { lock.withLock { String(decoding: data, as: UTF8.self) } }
