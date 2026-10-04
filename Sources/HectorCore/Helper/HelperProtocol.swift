@@ -2,7 +2,7 @@ import Foundation
 
 public enum HectorVersion {
     /// The single version string of the app, the CLI and the helper. `scripts/bundle-app.sh` reads it.
-    public static let current = "0.4.2"
+    public static let current = "0.4.3"
 }
 
 /// Where the privileged helper lives once installed, and how to reach it.
