@@ -74,7 +74,8 @@ struct CaptureDevicesView: View {
     }
 }
 
-/// The devices in use right now, with the apps recording audio.
+/// The devices in use right now, with the apps recording audio, then every device in a compact
+/// list: the screen opens on what is on, not on a column of "Off".
 private struct InUseNowSection: View {
     @Environment(PrivacyController.self) private var privacy
 
@@ -83,14 +84,37 @@ private struct InUseNowSection: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             SectionHeader("In use now", subtitle: inUse.isEmpty ? nil : "\(inUse.count) device\(inUse.count == 1 ? "" : "s") on")
             Card {
-                if privacy.devices.isEmpty {
-                    Text(privacy.isMonitoring ? "No camera or audio input found." : "Not monitoring.")
+                if !privacy.isMonitoring {
+                    Text("Not monitoring.").font(.callout).foregroundStyle(.secondary)
+                } else if inUse.isEmpty {
+                    Label("No camera or microphone is in use.", systemImage: "checkmark.circle")
                         .font(.callout).foregroundStyle(.secondary)
                 } else {
-                    ForEach(privacy.devices) { device in
+                    ForEach(inUse) { device in
                         DeviceRow(device: device, users: users(for: device))
                     }
                 }
+            }
+            if !privacy.devices.isEmpty {
+                DisclosureGroup("All devices (\(privacy.devices.count))") {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        ForEach(privacy.devices.sorted { ($0.kind == .camera ? 0 : 1, $0.name) < ($1.kind == .camera ? 0 : 1, $1.name) }) { device in
+                            HStack(spacing: Spacing.sm) {
+                                Image(systemName: device.isInUse ? device.kind.symbol : device.kind.offSymbol)
+                                    .foregroundStyle(device.isInUse ? Color.hectorWarning : Color.secondary)
+                                    .frame(width: 18)
+                                Text(device.name).lineLimit(1)
+                                Text(device.kind.label).font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                                if device.isInUse {
+                                    StatusPill("In use", kind: .warning, systemImage: "circle.fill", size: .small)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, Spacing.xs)
+                }
+                .font(.callout)
             }
         }
     }
@@ -178,10 +202,24 @@ private struct CaptureEventRow: View {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(event.summary).lineLimit(2)
                 if let apps = appsLine { Text(apps).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                if let expected = CaptureEventRow.expectedNote(for: event) {
+                    Text(expected).font(.caption).foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// macOS's own clients that hold the microphone all the time, explained so they do not look
+    /// like a recording app.
+    static func expectedNote(for event: CaptureEvent) -> String? {
+        let known: [String: String] = [
+            "corespeechd": "Expected: macOS listening for “Hey Siri” or dictation; nothing is recorded or sent until it hears it.",
+            "corespeechd_system": "Expected: macOS listening for “Hey Siri” or dictation; nothing is recorded or sent until it hears it.",
+        ]
+        guard event.apps.count == 1, let path = event.apps[0].executablePath, path.hasPrefix("/System/") else { return nil }
+        return known[event.apps[0].name]
     }
 
     /// The apps on a device line; app events already name them in the summary.
