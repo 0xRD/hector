@@ -23,6 +23,43 @@ Hector is meant to run all the time and its helper runs as root, so these come b
   - [x] Hardened runtime for the helper and the CLI; every subprocess by absolute path with a fixed environment
   - [ ] Update SECURITY.md with the result, then make the repository public
 
+## Review of every screen on real data (2026-10-04)
+
+Every screen looked at with the owner's real data (about 60 connections, 59 persistence items, 630 processes, 37 keyboard taps). Bugs first, then UI, then new features.
+
+**Bugs and wrong information**
+- [ ] The sidebar footer and the Blocklists row say "0 rules · 0 countries" and "Blocking on" while 113,622 list domains are enforced: count the hosts lists
+- [ ] Connections: an app whose executable sits in a versioned folder is named after the version (`2.1.281` for Claude Code's `~/.local/share/claude/versions/2.1.281`): fall back to the parent folders' names when the file name looks like a version
+- [ ] Persistence: Hector's own helper is flagged "Ad hoc" like an unknown item: recognize `io.github.0xrd.hectord` (same signature as the running app) and say "Hector's helper"
+- [ ] Persistence: a launch agent whose plist is an empty dictionary (Google Keystone leaves these behind) shows two warnings: call it "Inert: empty file, launchd ignores it" and dim it
+- [ ] Persistence: a job that runs `/usr/bin/open` (DisplayLink) shows Apple's signature for `open`; resolve what it opens (`-a`, `-b` or a path in the arguments) and check that signature instead
+- [ ] Dates and numbers follow the system locale (French relative dates and spaces in numbers) inside an English interface: use English formatting until the app is localized
+
+**UI**
+- [ ] Toolbar: the search field and the inspector button show on screens that have neither (Checkup, Blocklists, Camera & mic); hide them, or search what the screen shows
+- [ ] Inspector columns take a quarter of the window with "No item selected": start collapsed and open on selection, or show a summary of the screen instead
+- [ ] Persistence and Processes headers: "Check all with VirusTotal" and "Show Apple items" are cut or wrapped at the default width; move them to a toolbar menu or shorten
+- [ ] Processes: 630 rows, almost all Apple daemons, in tree order; open on "third-party and flagged first" (Apple processes collapsed under one row), with app icons instead of the generic terminal tile
+- [ ] Processes and Persistence: a per-row "Check" link in the VirusTotal column; replace with automatic lookups for non-Apple items when a key is set (within the free quota), and show the score or "not checked"
+- [ ] Keyboard taps: 33 of 37 rows are DockDoor taps that are switched off; group by app ("DockDoor · 31 taps, 1 active"), hide switched-off taps by default, explain active vs listen-only
+- [ ] Camera & mic: "In use now" lists every device even when all are off; show what is on at the top and the devices in a compact list below; mark expected system clients (`corespeechd` for "Hey Siri") as such
+- [ ] Connections: one row per port and protocol for the same address (160.79.104.10 three times under one app); merge them into one destination with its ports
+- [ ] Connections: most rows are bare IP addresses or cloud reverse names; names from DNS answers would fix this (see the local DNS resolver below)
+- [ ] Map: the mascot in the bottom-left corner is cut off by the map's edge; Camera & mic shows it again next to Pause
+- [ ] Blocklists: list tiles keep a fixed width and leave half the row empty; "1 invalid lines"; "pf firewall enabled" is jargon for most people ("Blocking active")
+- [ ] Checkup: the automatic updates sentence reads badly ("…automatically; off: installing App Store app updates"); list what is off as its own line
+
+**New features**
+- [x] Settings → General → Open Hector at login (`SMAppService.mainApp`, no Developer ID needed); shows when it was switched off in System Settings
+- [ ] Menu bar mode: keep running with the window closed (today closing the window quits), with a menu bar icon showing blocking state, camera and mic in use, and the last events; pairs with "Open at login"
+- [ ] Notifications: a camera or microphone turning on, a new keyboard tap that is active, a new persistence item, a new app making connections (each switchable)
+- [ ] Persistence watch (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
+- [ ] Persistence actions: Reveal in Finder, and for user-scope items, disable or move to the Trash after confirmation (system items through the helper, with the authorization prompt)
+- [ ] Checkup: more checks: screen lock and password after sleep, Find My, firewall stealth mode advice, AirDrop set to Everyone, Bluetooth sharing, macOS version behind the latest, Startup Security policy (reduced security, kernel extensions allowed), Lockdown Mode status (information only), and the date of the last check so a change shows
+- [ ] Processes: CPU and memory columns, and "quit" or "show in Activity Monitor"
+- [ ] Connections: traffic per app (bytes in and out) if it can be read without private frameworks; research `nettop`'s source
+- [ ] First launch: a short onboarding (what each screen does, install the helper for blocking, optional VirusTotal key, open at login)
+
 ## 0.1: core and CLI
 
 - [x] Socket collector per process (libproc), helpers grouped under their app
