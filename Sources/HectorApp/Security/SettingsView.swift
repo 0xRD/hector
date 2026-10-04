@@ -79,6 +79,26 @@ private struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
+                Toggle(isOn: Binding(get: { loginItem.isEnabled }, set: { loginItem.setEnabled($0) })) {
+                    Text("Open Hector at login")
+                    Text("Keeps the camera and microphone log and the live view running from the start.")
+                }
+                if loginItem.needsApproval {
+                    LabeledContent("Switched off in System Settings") {
+                        Button("Open Login Items") { loginItem.openSystemSettings() }
+                    }
+                }
+                if let error = loginItem.error {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+            } header: {
+                Text("Startup")
+            } footer: {
+                Text("Blocking does not depend on this: the helper enforces your rules from boot, even when Hector is closed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
                 ForEach(Self.dataFiles, id: \.name) { file in
                     LabeledContent(file.label) {
                         Text(Self.size(of: file.name) ?? "Not downloaded").foregroundStyle(.secondary).monospacedDigit()
@@ -108,7 +128,10 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { loginItem.refresh() }
     }
+
+    private var loginItem: LoginItem { .shared }
 
     private static let dataFiles = [
         (label: "Countries", name: "dbip-country-lite.csv"),
