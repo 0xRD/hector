@@ -273,7 +273,7 @@ Budget for the child, to hold in phase 2 and 5:
 
 How to measure against /etc/hosts (phase 2, a `hector dns bench` command or a script):
 
-1. Baseline in /etc/hosts mode with the current lists: mDNSResponder's resident memory (`ps -o rss= -p $(pgrep -x mDNSResponder)`), then the same **with lists removed** to know what the hosts file costs (the 385 MB above).
+1. Baseline in /etc/hosts mode with the current lists: mDNSResponder's resident memory (`ps -o rss= -p $(pgrep -x mDNSResponder)`), then the same **with lists removed** to know what the hosts file costs. Measured on 2026-10-04 with 113,627 list domains: about 20 MB resident (`ps -o rss`), so the hosts file is not a memory problem; an earlier "385 MB" note was wrong.
 2. Latency through the system resolver, as apps see it: `getaddrinfo` for (a) 1,000 blocked list names, (b) 1,000 unique names that miss every cache (random labels under a domain that answers NXDOMAIN quickly, such as `<uuid>.example.com`), (c) 200 popular names twice (second pass from cache). `dscacheutil -flushcache` before each run. Report median, p95 and maximum.
 3. The same three runs in resolver mode, plus the child's resident memory and mDNSResponder's.
 4. Shadow mode first (phase 1): the resolver on a high port reached only through `/etc/resolver/hector.test`, so its own latency can be measured with `dig @127.0.0.1 -p <port>` before it carries real traffic.
@@ -347,6 +347,6 @@ Each step is small enough for one review, keeps `main` releasable, and adds its 
 - That `Q…` in `[R…->Q…] Question assigned` is the upstream DNS message ID (needs a packet capture, as root).
 - Everything about the override mechanism: IPMonitor's handling of temporary `Setup:` or `State:` DNS values, behaviour on network changes and preference edits, and how fast mDNSResponder abandons a dead 127.0.0.1 (needs root; phase 0).
 - The mDNSResponder message shapes on macOS 15 (only macOS 26.6 was observed), and whether delegated lookups log a delegate PID.
-- Whether the 385 MB resident size of mDNSResponder comes from the 113,625-domain hosts file (needs a run without lists).
+- mDNSResponder's memory without lists, for a baseline (with 113,627 list domains: about 20 MB resident).
 - Peter Lowe's list license.
 - Whether `posix_spawn` descriptor inheritance interacts with the hardened runtime or the planned sandbox profile (expected not to, to check with the sandbox work).
