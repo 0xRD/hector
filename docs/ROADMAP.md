@@ -54,7 +54,7 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [ ] Menu bar mode: keep running with the window closed (today closing the window quits), with a menu bar icon showing blocking state, camera and mic in use, and the last events; pairs with "Open at login"
 - [ ] Notifications: a camera or microphone turning on, a new keyboard tap that is active, a new persistence item, a new app making connections (each switchable)
 - [ ] Persistence watch (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
-- [ ] Persistence actions: Reveal in Finder, and for user-scope items, disable or move to the Trash after confirmation (system items through the helper, with the authorization prompt)
+- [ ] Persistence actions (Reveal in Finder and Copy path exist): for user-scope items, disable or move to the Trash after confirmation (system items through the helper, with the authorization prompt)
 - [ ] Checkup: more checks: screen lock and password after sleep, Find My, firewall stealth mode advice, AirDrop set to Everyone, Bluetooth sharing, macOS version behind the latest, Startup Security policy (reduced security, kernel extensions allowed), Lockdown Mode status (information only), and the date of the last check so a change shows
 - [ ] Processes: CPU and memory columns, and "quit" or "show in Activity Monitor"
 - [ ] Connections: traffic per app (bytes in and out) if it can be read without private frameworks; research `nettop`'s source
