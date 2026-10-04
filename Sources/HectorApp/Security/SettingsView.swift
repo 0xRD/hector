@@ -47,11 +47,16 @@ private struct VirusTotalSettings: View {
                 if let message = security.keyMessage {
                     Text(message).font(.caption).foregroundStyle(Color.hectorDanger)
                 }
+                Toggle(isOn: Binding(get: { security.looksUpAutomatically }, set: { security.looksUpAutomatically = $0 })) {
+                    Text("Look up automatically")
+                    Text("After each scan, checks every non-Apple item of Persistence and Processes. Uses your free quota; cached results are not looked up again.")
+                }
+                .disabled(!security.hasAPIKey)
             } header: {
                 Text("VirusTotal")
             } footer: {
                 Text("""
-                Only SHA-256 hashes are sent, and only when you ask: never the files themselves. \
+                Only SHA-256 hashes are sent, when you ask or after each scan if automatic lookups are on: never the files themselves. \
                 The free tier allows 4 lookups per minute and 500 per day; results are cached for 7 days. \
                 The key stays in your login Keychain.
                 """)

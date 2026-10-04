@@ -47,6 +47,12 @@ final class SecurityController {
     private(set) var isCheckingAll = false
     /// The free tier's quota is used up (refused locally or by VirusTotal): "Check all" stops.
     private(set) var quotaExhausted = false
+    /// Look up every non-Apple item of Persistence and Processes after each scan, without a
+    /// click. Off by default: it spends the user's free quota (4 per minute, 500 per day; results
+    /// are cached for 7 days, so after the first day only new code is looked up).
+    var looksUpAutomatically: Bool = UserDefaults.standard.bool(forKey: "virusTotalAutomatic") {
+        didSet { UserDefaults.standard.set(looksUpAutomatically, forKey: "virusTotalAutomatic") }
+    }
 
     // MARK: API key
 
@@ -102,7 +108,15 @@ final class SecurityController {
         }.value
         persistence = report
         persistenceHelperIssue = issue
-        await analyzeSignatures(of: report.items.compactMap(Self.codePath(of:)))
+        let paths = report.items.filter { !$0.isInert }.compactMap(Self.codePath(of:))
+        await analyzeSignatures(of: paths)
+        lookUpAutomaticallyIfWanted(paths)
+    }
+
+    /// The non-Apple paths among `paths`, looked up when the user asked for automatic lookups.
+    private func lookUpAutomaticallyIfWanted(_ paths: [String]) {
+        guard looksUpAutomatically, hasAPIKey, !quotaExhausted else { return }
+        checkAllVirusTotal(paths: paths.filter { signature(of: $0)?.trustLevel != .apple })
     }
 
     /// Login items need root: the helper runs `sfltool dumpbtm` for the app.
@@ -149,6 +163,7 @@ final class SecurityController {
         processesThroughHelper = throughHelper
         processFlags = flags
         await analyzeSignatures(of: snapshot.processes.compactMap(\.executablePath))
+        lookUpAutomaticallyIfWanted(snapshot.processes.filter { !$0.isAppleSystemCode }.compactMap(\.executablePath))
     }
 
     func quarantineInfo(for process: RunningProcess) -> QuarantineInfo? {

@@ -41,7 +41,7 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [x] Inspector columns take a quarter of the window with "No item selected": start collapsed and open on selection, or show a summary of the screen instead
 - [x] Persistence and Processes headers: "Check all with VirusTotal" and "Show Apple items" are cut or wrapped at the default width; move them to a toolbar menu or shorten
 - [x] Processes: 630 rows, almost all Apple daemons: Apple's processes (SIP-protected folders) hidden by default behind an "Apple" switch, their parents kept dimmed in the tree
-- [ ] Processes and Persistence: a per-row "Check" link in the VirusTotal column; replace with automatic lookups for non-Apple items when a key is set (within the free quota), and show the score or "not checked"
+- [x] Processes and Persistence: a per-row "Check" link in the VirusTotal column (done as an opt-in: Settings → VirusTotal → Look up automatically); replace with automatic lookups for non-Apple items when a key is set (within the free quota), and show the score or "not checked"
 - [x] Keyboard taps: 33 of 37 rows are DockDoor taps that are switched off; group by app ("DockDoor · 31 taps, 1 active"), hide switched-off taps by default, explain active vs listen-only
 - [x] Camera & mic: "In use now" lists every device even when all are off; show what is on at the top and the devices in a compact list below; mark expected system clients (`corespeechd` for "Hey Siri") as such
 - [x] Connections: one row per port and protocol for the same address (160.79.104.10 three times under one app); merge them into one destination with its ports
