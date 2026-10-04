@@ -109,7 +109,7 @@ private func printDevices(_ snapshot: CaptureSnapshot) {
 }
 
 private func eventLine(_ event: CaptureEvent) -> String {
-    let time = event.date.formatted(date: .omitted, time: .standard)
+    let time = Display.time(event.date, seconds: true)
     var line = "\(time)  \(event.isOn ? "ON " : "OFF")  \(event.summary)"
     if event.deviceID != nil, !event.apps.isEmpty {
         line += " · " + event.apps.map { "\($0.displayName) (\($0.pid))" }.joined(separator: ", ")

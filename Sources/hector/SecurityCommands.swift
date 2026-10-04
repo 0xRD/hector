@@ -124,7 +124,7 @@ func virusTotalCommand(_ args: Arguments) async throws {
     if args.flags.contains("--json") {
         print(String(decoding: try JSONEncoder.hector.encode(entries), as: UTF8.self))
     } else {
-        let date = Date.FormatStyle(date: .abbreviated, time: .shortened)
+        let date = Date.FormatStyle(date: .abbreviated, time: .shortened).locale(Display.locale)
         for entry in entries {
             print(entry.path)
             if let sha256 = entry.sha256 { row("SHA-256", sha256) }

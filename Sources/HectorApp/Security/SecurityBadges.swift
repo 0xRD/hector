@@ -192,7 +192,7 @@ struct CodeDetailsSection: View {
                     Link("Open the report", destination: lookup.permalink)
                     Button("Refresh") { Task { await security.checkVirusTotal(path: path, refresh: true) } }
                     if lookup.fromCache {
-                        Text("cached \(lookup.fetchedAt.formatted(.relative(presentation: .named)))")
+                        Text("cached \(Display.relative(lookup.fetchedAt))")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }

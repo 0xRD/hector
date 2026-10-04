@@ -174,7 +174,7 @@ struct PersistenceView: View {
         let unsigned = items.compactMap { security.signature(of: SecurityController.codePath(of: $0)) }
             .filter(\.trustLevel.isConcerning).count
         let noted = items.filter { !$0.notes.isEmpty }.count
-        let scanned = report.scannedAt.formatted(date: .omitted, time: .shortened)
+        let scanned = Display.time(report.scannedAt)
         return "\(items.count) items · \(unsigned) unsigned or ad hoc · \(noted) with notes · scanned at \(scanned)"
     }
 }
@@ -263,7 +263,7 @@ struct PersistenceDetailView: View {
                 if let disabled = item.isDisabled { DetailRow("Enabled", value: disabled ? "No" : "Yes") }
                 if let bundle = item.owningBundleIdentifier { DetailRow("App", value: bundle) }
                 if let modified = item.modifiedAt {
-                    DetailRow("Modified", value: modified.formatted(date: .abbreviated, time: .shortened))
+                    DetailRow("Modified", value: Display.dateTime(modified))
                 }
                 ForEach(item.details.keys.sorted(), id: \.self) { key in
                     DetailRow(key.capitalized, value: item.details[key] ?? "")

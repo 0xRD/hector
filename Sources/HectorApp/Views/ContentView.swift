@@ -483,7 +483,7 @@ private struct StatusBar: View {
 
     private var geoText: String {
         switch monitor.geoStatus {
-        case .ready(let ranges): "GeoIP: DB-IP Lite, \(ranges.formatted()) ranges"
+        case .ready(let ranges): "GeoIP: DB-IP Lite, \(Display.count(ranges)) ranges"
         case .loading: "GeoIP: loading…"
         case .downloading: "GeoIP: downloading…"
         case .missing: "GeoIP: not installed"

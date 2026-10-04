@@ -107,11 +107,11 @@ private struct HostsListTile: View {
         guard let state, let updated = state.updatedAt else {
             return "Downloaded by the helper when you apply."
         }
-        let domains: String = "\(state.domainCount.formatted()) domains"
-        let when: String = updated.formatted(.relative(presentation: .named))
+        let domains: String = "\(Display.count(state.domainCount)) domains"
+        let when: String = Display.relative(updated)
         var text: String = "\(domains) · updated \(when)"
         if state.invalidLines > 0 {
-            text += " · \(state.invalidLines.formatted()) invalid lines ignored"
+            text += " · \(Display.count(state.invalidLines)) invalid line\(state.invalidLines == 1 ? "" : "s") ignored"
         }
         return text
     }

@@ -79,7 +79,7 @@ struct CheckupView: View {
 
     private var subtitle: String {
         guard let report = checkup.report else { return "Reading this Mac's security settings…" }
-        let time: String = report.checkedAt.formatted(date: .omitted, time: .shortened)
+        let time: String = Display.time(report.checkedAt)
         return "\(report.summary) · checked at \(time) · read-only, nothing is changed"
     }
 

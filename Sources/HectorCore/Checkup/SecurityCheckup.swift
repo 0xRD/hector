@@ -270,7 +270,7 @@ public struct SecurityCheckup: Sendable {
         }
         guard let info else { return result(.unknown, "Unknown: XProtect's version could not be read.") }
         var version = "Version \(info.version)"
-        if let date = info.date { version += ", installed \(date.formatted(date: .abbreviated, time: .omitted))" }
+        if let date = info.date { version += ", installed \(Display.day(date))" }
         guard updates.installsSecurityResponses else {
             return result(.warning, "\(version), but security data files are not installed automatically, so it may be out of date.")
         }

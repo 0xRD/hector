@@ -115,7 +115,7 @@ public enum RuleCompiler {
             counts[id] = valid
         }
         if capped {
-            warnings.append("Hosts lists hold more than \(limit.formatted()) domains together; the rest were left out.")
+            warnings.append("Hosts lists hold more than \(Display.count(limit)) domains together; the rest were left out.")
         }
         return (union.sorted(), counts)
     }

@@ -26,6 +26,8 @@ struct HectorApp: App {
                 .environment(checkup)
                 .environment(privacy)
                 .tint(.hectorOK)
+                // English words in dates and numbers formatted by SwiftUI (see `Display`).
+                .environment(\.locale, Display.locale)
                 // Small enough for a 13-inch screen with the Dock showing.
                 .frame(minWidth: 900, minHeight: 560)
                 .task {
@@ -51,6 +53,7 @@ struct HectorApp: App {
                 .environment(security)
                 .environment(windowState)
                 .tint(.hectorTint)
+                .environment(\.locale, Display.locale)
         }
     }
 }

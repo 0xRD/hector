@@ -233,7 +233,7 @@ struct ProcessDetailView: View {
                 DetailRow("Parent", value: parentLabel(process))
                 DetailRow("User", value: process.userName.map { "\($0) (\(process.userID))" } ?? String(process.userID))
                 if let started = process.startedAt {
-                    DetailRow("Started", value: started.formatted(date: .abbreviated, time: .standard))
+                    DetailRow("Started", value: Display.dateTime(started, seconds: true))
                 }
                 if let path = process.executablePath { DetailRow("Executable", value: path, monospaced: true) }
                 if process.arguments.count > 1 {
@@ -298,7 +298,7 @@ private struct QuarantineSection: View {
             SectionHeader("Downloaded from the internet", systemImage: "arrow.down.circle", style: .eyebrow)
             if let agent = info.agent { DetailRow("By", value: agent) }
             if let date = info.downloadedAt {
-                DetailRow("On", value: date.formatted(date: .abbreviated, time: .shortened))
+                DetailRow("On", value: Display.dateTime(date))
             }
             if let url = info.dataURL { DetailRow("From", value: url, monospaced: true) }
             if let origin = info.originURL { DetailRow("Page", value: origin, monospaced: true) }

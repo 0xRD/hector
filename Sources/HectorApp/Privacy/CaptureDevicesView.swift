@@ -69,7 +69,7 @@ struct CaptureDevicesView: View {
         guard privacy.isMonitoring, let since = privacy.monitoringSince else { return "Paused" }
         let cameras = privacy.devices.filter { $0.kind == .camera }.count
         let inputs = privacy.devices.filter { $0.kind == .microphone }.count
-        let time = since.formatted(date: .omitted, time: .shortened)
+        let time = Display.time(since)
         return "Watching \(cameras) camera\(cameras == 1 ? "" : "s") and \(inputs) audio input\(inputs == 1 ? "" : "s") since \(time)"
     }
 }
@@ -167,7 +167,7 @@ private struct CaptureEventRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-            Text(event.date.formatted(date: .omitted, time: .standard))
+            Text(Display.time(event.date, seconds: true))
                 .font(Font.dataMonoCaption)
                 .foregroundStyle(.secondary)
                 .frame(width: 84, alignment: .leading)

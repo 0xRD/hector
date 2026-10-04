@@ -93,22 +93,22 @@ private func printListStates(_ status: HelperStatus) {
     print("Subscribed: \(subscribed.isEmpty ? "none" : subscribed.sorted().joined(separator: ", "))")
     for state in status.hostsLists ?? [] {
         let name = HostsListCatalog.source(state.id)?.name ?? state.id
-        var line = "  \(name): \(state.domainCount.formatted()) domains"
-        if let updated = state.updatedAt { line += ", downloaded \(updated.formatted(date: .abbreviated, time: .shortened))" }
-        if let checked = state.checkedAt { line += ", checked \(checked.formatted(date: .abbreviated, time: .shortened))" }
+        var line = "  \(name): \(Display.count(state.domainCount)) domains"
+        if let updated = state.updatedAt { line += ", downloaded \(Display.dateTime(updated))" }
+        if let checked = state.checkedAt { line += ", checked \(Display.dateTime(checked))" }
         if !subscribed.contains(state.id) { line += " (not subscribed)" }
         print(line)
         if let error = state.lastError { print("    last attempt failed: \(error)") }
     }
     if let count = status.listDomainCount {
-        print("/etc/hosts: \(status.hostsDomainCount) personal domains, \(count.formatted()) from lists")
+        print("/etc/hosts: \(status.hostsDomainCount) personal domains, \(Display.count(count)) from lists")
     }
 }
 
 private func printParse(_ result: HostsListParseResult) {
-    print("\(result.domains.count.formatted()) valid domains, \(result.invalidLines) invalid lines, \(result.skippedEntries) entries skipped (reserved names, redirections, protected hosts)")
+    print("\(Display.count(result.domains.count)) valid domains, \(result.invalidLines) invalid lines, \(result.skippedEntries) entries skipped (reserved names, redirections, protected hosts)")
     if result.exceededLimit {
-        print("warning: more than \(HostsListCatalog.maximumDomainsPerList.formatted()) domains; the helper would refuse this list.")
+        print("warning: more than \(Display.count(HostsListCatalog.maximumDomainsPerList)) domains; the helper would refuse this list.")
     }
 }
 

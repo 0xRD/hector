@@ -130,14 +130,14 @@ private struct HelperCard: View {
     private func summary(_ status: HelperStatus) -> String {
         var parts = [
             "\(status.blockTableCount) networks",
-            "\(status.geoTableCount.formatted()) country networks",
+            "\(Display.count(status.geoTableCount)) country networks",
             "\(status.hostsDomainCount) domains",
         ]
         if let listDomains = status.listDomainCount, listDomains > 0 {
-            parts.append("\(listDomains.formatted()) list domains")
+            parts.append("\(Display.count(listDomains)) list domains")
         }
         if let date = status.appliedAt {
-            parts.append("applied \(date.formatted(date: .omitted, time: .shortened))")
+            parts.append("applied \(Display.time(date))")
         }
         return parts.joined(separator: " · ") + " · helper \(status.version)"
     }
