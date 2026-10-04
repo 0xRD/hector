@@ -38,6 +38,8 @@ final class WindowState {
     var selectedProcess: RunningProcess.ID?
     var processesFlaggedOnly = false
     var processesAsTree = true
+    /// Apple's own processes are most of the list and rarely the question.
+    var processesShowApple = false
     // Settings
     var apiKeyDraft = ""
 

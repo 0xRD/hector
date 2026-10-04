@@ -8,6 +8,7 @@ struct ContentView: View {
     @Environment(BlockingController.self) private var blocking
     @Environment(WindowState.self) private var state
     @Environment(SecurityController.self) private var security
+    @Environment(PrivacyController.self) private var privacy
     #if DEBUG
     @Environment(\.openSettings) private var openSettings
     #endif
@@ -21,6 +22,27 @@ struct ContentView: View {
     }
 
     private var selectedAppID: AppGroup.ID? { state.appFilter }
+
+    /// Screens with a list to search and a details panel; the others hide both from the toolbar.
+    private var hasSearchAndDetails: Bool {
+        switch state.sidebarSelection {
+        case .blocklists, .checkup, .captureDevices: false
+        default: true
+        }
+    }
+
+    /// Whether the current screen has something selected for its details panel. The panel opens
+    /// on a selection and stays closed otherwise, instead of a quarter of the window saying
+    /// "nothing selected".
+    private var screenHasSelection: Bool {
+        switch state.sidebarSelection {
+        case .persistence: state.selectedPersistenceItem != nil
+        case .processes: state.selectedProcess != nil
+        case .keyboardTaps: privacy.selectedTap != nil
+        case .blocklists, .checkup, .captureDevices: false
+        default: state.selectedDestination != nil
+        }
+    }
 
     var body: some View {
         @Bindable var monitor = monitor
@@ -37,12 +59,15 @@ struct ContentView: View {
                 BlocklistView()
             } else if state.sidebarSelection == .persistence {
                 PersistenceView()
+                    .searchable(text: $state.search, placement: .toolbar, prompt: searchPrompt)
             } else if state.sidebarSelection == .processes {
                 ProcessesView()
+                    .searchable(text: $state.search, placement: .toolbar, prompt: searchPrompt)
             } else if state.sidebarSelection == .checkup {
                 CheckupView()
             } else if state.sidebarSelection == .keyboardTaps {
                 KeyboardTapsView()
+                    .searchable(text: $state.search, placement: .toolbar, prompt: searchPrompt)
             } else if state.sidebarSelection == .captureDevices {
                 CaptureDevicesView()
             } else {
@@ -64,11 +89,11 @@ struct ContentView: View {
                         .fillsSplitPane()
                         .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
                 }
+                .searchable(text: $state.search, placement: .toolbar, prompt: searchPrompt)
             }
         }
         .navigationTitle(title)
         .navigationSubtitle(isNetworkScreen ? "\(monitor.liveConnectionCount) live connections" : "")
-        .searchable(text: $state.search, placement: .toolbar, prompt: searchPrompt)
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 if isNetworkScreen {
@@ -100,12 +125,14 @@ struct ContentView: View {
                     }
                     .help(monitor.isPaused ? "Resume live updates" : "Freeze the view")
                 }
-                Button {
-                    state.showInspector.toggle()
-                } label: {
-                    Label("Details", systemImage: "sidebar.trailing")
+                if hasSearchAndDetails {
+                    Button {
+                        state.showInspector.toggle()
+                    } label: {
+                        Label("Details", systemImage: "sidebar.trailing")
+                    }
+                    .help("Show or hide the details panel")
                 }
-                .help("Show or hide the details panel")
                 SettingsLink {
                     Label("Settings", systemImage: "gearshape")
                 }
@@ -137,10 +164,21 @@ struct ContentView: View {
         #endif
         .sheet(isPresented: $state.showUninstall) { UninstallSheet() }
         // Snapshots only as often as someone can see them: see ConnectionMonitor.Demand.
-        .onAppear(perform: updateDemand)
+        .onAppear {
+            updateDemand()
+            state.showInspector = screenHasSelection
+        }
+        .onChange(of: state.sidebarSelection) {
+            updateDemand()
+            state.search = ""
+            state.showInspector = screenHasSelection
+        }
+        .onChange(of: state.selectedPersistenceItem) { if state.selectedPersistenceItem != nil { state.showInspector = true } }
+        .onChange(of: state.selectedProcess) { if state.selectedProcess != nil { state.showInspector = true } }
+        .onChange(of: privacy.selectedTap) { if privacy.selectedTap != nil { state.showInspector = true } }
+        .onChange(of: state.selectedDestination) { if state.selectedDestination != nil { state.showInspector = true } }
         // Closed while Hector stays in the menu bar: back to the slow pace at once.
         .onDisappear { monitor.demand = .hidden }
-        .onChange(of: state.sidebarSelection) { updateDemand() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { _ in updateDemand() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didHideNotification)) { _ in updateDemand() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didUnhideNotification)) { _ in updateDemand() }

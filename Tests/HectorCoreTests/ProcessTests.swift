@@ -175,3 +175,29 @@ import Testing
         for text in ["python3.12", "v8", "2", "x1.2", "1.2b", "Safari"] { #expect(!SocketCollector.looksLikeVersion(text), "\(text)") }
     }
 }
+
+@Suite struct ProcessFilterTests {
+    private func process(_ pid: Int32, parent: Int32, path: String) -> RunningProcess {
+        RunningProcess(pid: pid, parentPID: parent, userID: 501, name: "p\(pid)", executablePath: path)
+    }
+
+    @Test func appleCodeIsTheSIPProtectedFolders() {
+        #expect(process(1, parent: 0, path: "/sbin/launchd").isAppleSystemCode)
+        #expect(process(2, parent: 1, path: "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder").isAppleSystemCode)
+        #expect(!process(3, parent: 1, path: "/usr/local/bin/tool").isAppleSystemCode)
+        #expect(!process(4, parent: 1, path: "/Applications/Safari.app/Contents/MacOS/Safari").isAppleSystemCode)
+        #expect(!RunningProcess(pid: 5, parentPID: 1, userID: 0, name: "x").isAppleSystemCode)
+    }
+
+    @Test func ancestorsConnectTheTree() {
+        let snapshot = ProcessSnapshot(takenAt: Date(), processes: [
+            process(1, parent: 0, path: "/sbin/launchd"),
+            process(10, parent: 1, path: "/System/Library/Terminal"),
+            process(11, parent: 10, path: "/bin/zsh"),
+            process(12, parent: 11, path: "/opt/tool"),
+            process(20, parent: 1, path: "/usr/libexec/other"),
+        ], ranAsRoot: false)
+        #expect(snapshot.withAncestors([12]) == [12, 11, 10, 1])
+        #expect(snapshot.withAncestors([]) == [])
+    }
+}

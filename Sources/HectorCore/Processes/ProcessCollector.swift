@@ -23,6 +23,15 @@ public struct RunningProcess: Codable, Hashable, Identifiable, Sendable {
 
     public var id: Int32 { pid }
 
+    /// Runs from a folder that System Integrity Protection reserves for Apple: /System, /usr
+    /// (except /usr/local), /bin, /sbin. Nothing else can write there, so no signature check is
+    /// needed to call it Apple's.
+    public var isAppleSystemCode: Bool {
+        guard let path = executablePath else { return false }
+        if path.hasPrefix("/usr/local/") { return false }
+        return ["/System/", "/usr/", "/bin/", "/sbin/", "/Library/Apple/"].contains { path.hasPrefix($0) }
+    }
+
     public init(pid: Int32, parentPID: Int32, userID: UInt32, userName: String? = nil, name: String,
                 executablePath: String? = nil, arguments: [String] = [], startedAt: Date? = nil,
                 appBundlePath: String? = nil, appName: String? = nil, connections: [SocketInfo]? = nil) {
@@ -74,6 +83,23 @@ public struct ProcessSnapshot: Codable, Sendable {
 extension ProcessSnapshot {
     /// Processes depth-first under their parents, each with its depth in the tree. A process whose
     /// parent is not in the snapshot is a root; siblings keep their PID order.
+    /// The PIDs of `kept` and of every ancestor of them, so a tree filtered to some processes
+    /// still shows the parents that connect them.
+    public func withAncestors(_ kept: Set<Int32>) -> Set<Int32> {
+        let parents = Dictionary(processes.map { ($0.pid, $0.parentPID) }, uniquingKeysWith: { first, _ in first })
+        var result = kept
+        for pid in kept {
+            var current = parents[pid]
+            var steps = 0
+            while let parent = current, parent != 0, !result.contains(parent), steps < 512 {
+                result.insert(parent)
+                current = parents[parent]
+                steps += 1
+            }
+        }
+        return result
+    }
+
     public func treeOrdered() -> [(process: RunningProcess, depth: Int)] {
         let pids = Set(processes.map(\.pid))
         var children: [Int32: [RunningProcess]] = [:]

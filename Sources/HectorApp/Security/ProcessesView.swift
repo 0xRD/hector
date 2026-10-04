@@ -7,6 +7,8 @@ struct ProcessRow: Identifiable {
     /// Indentation in the tree; 0 in the flat list.
     let depth: Int
     let flags: Set<ProcessFlag>
+    /// Shown only to connect the tree (an Apple parent of a third-party process): dimmed.
+    var isContext = false
     var id: Int32 { process.pid }
 }
 
@@ -53,6 +55,8 @@ struct ProcessesView: View {
     private func header(rows: [ProcessRow]) -> some View {
         @Bindable var state = state
         return ScreenHeader("Running processes", subtitle: summary, systemImage: "cpu", tint: .hectorInfo, pinned: true) {
+            Toggle("Apple", isOn: $state.processesShowApple).toggleStyle(.checkbox)
+                .help("Show Apple's own processes (from /System, /usr, /bin and /sbin)")
             Toggle("Tree", isOn: $state.processesAsTree).toggleStyle(.checkbox)
                 .help("Show children under their parent process")
             Toggle("Flagged only", isOn: $state.processesFlaggedOnly).toggleStyle(.checkbox)
@@ -125,11 +129,18 @@ struct ProcessesView: View {
         } else {
             ordered = snapshot.treeOrdered()
         }
+        // Without Apple's processes: the others, plus (in the tree) the Apple parents that connect
+        // them. A search or a flag always shows what it found, Apple or not.
+        let thirdParty = Set(snapshot.processes.filter { !$0.isAppleSystemCode }.map(\.pid))
+        let shown = state.processesShowApple || !query.isEmpty || state.processesFlaggedOnly
+            ? nil : (flat ? thirdParty : snapshot.withAncestors(thirdParty))
         return ordered.compactMap { entry -> ProcessRow? in
             let flags = security.processFlags[entry.process.pid] ?? []
             if state.processesFlaggedOnly && flags.isEmpty { return nil }
             if !query.isEmpty && !matches(entry.process, query) { return nil }
-            return ProcessRow(process: entry.process, depth: entry.depth, flags: flags)
+            if let shown, !shown.contains(entry.process.pid) { return nil }
+            let isContext = shown != nil && !thirdParty.contains(entry.process.pid)
+            return ProcessRow(process: entry.process, depth: entry.depth, flags: flags, isContext: isContext)
         }
     }
 
@@ -152,7 +163,10 @@ struct ProcessesView: View {
         let source = snapshot.ranAsRoot || security.processesThroughHelper
             ? "every user, through the helper"
             : "other users' arguments hidden: install the helper to see them"
-        return "\(snapshot.processes.count) processes · \(flagged) flagged · \(source)"
+        let apple = snapshot.processes.filter(\.isAppleSystemCode).count
+        let count = state.processesShowApple ? "\(snapshot.processes.count) processes"
+            : "\(snapshot.processes.count - apple) processes (\(apple) of Apple's hidden)"
+        return "\(count) · \(flagged) flagged · \(source)"
     }
 }
 
@@ -170,6 +184,7 @@ private struct ProcessNameCell: View {
             }
         }
         .padding(.leading, CGFloat(min(row.depth, 12)) * 14)
+        .opacity(row.isContext ? 0.5 : 1)
     }
 }
 
