@@ -37,18 +37,18 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [x] Dates and numbers follow the system locale (French relative dates and spaces in numbers) inside an English interface: use English formatting until the app is localized
 
 **UI**
-- [ ] Toolbar: the search field and the inspector button show on screens that have neither (Checkup, Blocklists, Camera & mic); hide them, or search what the screen shows
-- [ ] Inspector columns take a quarter of the window with "No item selected": start collapsed and open on selection, or show a summary of the screen instead
-- [ ] Persistence and Processes headers: "Check all with VirusTotal" and "Show Apple items" are cut or wrapped at the default width; move them to a toolbar menu or shorten
-- [ ] Processes: 630 rows, almost all Apple daemons, in tree order; open on "third-party and flagged first" (Apple processes collapsed under one row), with app icons instead of the generic terminal tile
+- [x] Toolbar: the search field and the inspector button show on screens that have neither (Checkup, Blocklists, Camera & mic); hide them, or search what the screen shows
+- [x] Inspector columns take a quarter of the window with "No item selected": start collapsed and open on selection, or show a summary of the screen instead
+- [x] Persistence and Processes headers: "Check all with VirusTotal" and "Show Apple items" are cut or wrapped at the default width; move them to a toolbar menu or shorten
+- [x] Processes: 630 rows, almost all Apple daemons: Apple's processes (SIP-protected folders) hidden by default behind an "Apple" switch, their parents kept dimmed in the tree
 - [ ] Processes and Persistence: a per-row "Check" link in the VirusTotal column; replace with automatic lookups for non-Apple items when a key is set (within the free quota), and show the score or "not checked"
-- [ ] Keyboard taps: 33 of 37 rows are DockDoor taps that are switched off; group by app ("DockDoor · 31 taps, 1 active"), hide switched-off taps by default, explain active vs listen-only
-- [ ] Camera & mic: "In use now" lists every device even when all are off; show what is on at the top and the devices in a compact list below; mark expected system clients (`corespeechd` for "Hey Siri") as such
-- [ ] Connections: one row per port and protocol for the same address (160.79.104.10 three times under one app); merge them into one destination with its ports
+- [x] Keyboard taps: 33 of 37 rows are DockDoor taps that are switched off; group by app ("DockDoor · 31 taps, 1 active"), hide switched-off taps by default, explain active vs listen-only
+- [x] Camera & mic: "In use now" lists every device even when all are off; show what is on at the top and the devices in a compact list below; mark expected system clients (`corespeechd` for "Hey Siri") as such
+- [x] Connections: one row per port and protocol for the same address (160.79.104.10 three times under one app); merge them into one destination with its ports
 - [ ] Connections: most rows are bare IP addresses or cloud reverse names; names from DNS answers would fix this (see the local DNS resolver below)
-- [ ] Map: the mascot in the bottom-left corner is cut off by the map's edge; Camera & mic shows it again next to Pause
-- [ ] Blocklists: list tiles keep a fixed width and leave half the row empty; "1 invalid lines" and "pf firewall enabled" fixed
-- [ ] Checkup: the automatic updates sentence reads badly ("…automatically; off: installing App Store app updates"); list what is off as its own line
+- [x] Map: the mascot in the bottom-left corner looked cut off: kept, it is the intended "peeking over the edge"; the one next to Pause shows whether monitoring runs
+- [x] Blocklists: list tiles keep a fixed width and leave half the row empty; "1 invalid lines" and "pf firewall enabled" fixed; tiles of a row share one height (the empty third column fills once there are more lists)
+- [x] Checkup: the automatic updates sentence reads badly ("…automatically; off: installing App Store app updates"); list what is off as its own line
 
 **New features**
 - [x] Settings → General → Open Hector at login (`SMAppService.mainApp`, no Developer ID needed); shows when it was switched off in System Settings

@@ -116,7 +116,7 @@ public struct CaptureEvent: Codable, Hashable, Identifiable, Sendable {
     public var summary: String {
         let device = deviceName ?? kind.label
         let appNames = apps.map(\.displayName)
-        let app = appNames.isEmpty ? "An app" : ListFormatter.localizedString(byJoining: appNames)
+        let app = appNames.isEmpty ? "An app" : Display.list(appNames)
         let noun = kind.label.lowercased()
         switch change {
         case .alreadyOn: return deviceName == nil ? "\(app) was already using the \(noun)" : "\(device) was already on"

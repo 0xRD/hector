@@ -346,10 +346,10 @@ public struct SecurityCheckup: Sendable {
         if settings.installAppUpdates == false { minor.append("installing App Store app updates") }
 
         if !serious.isEmpty {
-            return result(.fail, "Off: " + (serious + minor).joined(separator: ", ") + ".")
+            return result(.fail, "Off: " + Display.list(serious + minor) + ".")
         }
         if !minor.isEmpty {
-            return result(.warning, "Security responses install automatically; off: " + minor.joined(separator: ", ") + ".")
+            return result(.warning, "Security responses install automatically. Still off: " + Display.list(minor) + ".")
         }
         return result(.pass, "macOS updates and security responses download and install automatically.")
     }

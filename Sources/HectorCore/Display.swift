@@ -33,6 +33,12 @@ public enum Display {
         date.formatted(Date.FormatStyle(date: .abbreviated, time: seconds ? .standard : .shortened).locale(locale))
     }
 
+    /// "a", "a and b", "a, b and c". Not `ListFormatter`, which joins in the system language.
+    public static func list(_ items: [String]) -> String {
+        guard items.count > 1 else { return items.first ?? "" }
+        return items.dropLast().joined(separator: ", ") + " and " + items[items.count - 1]
+    }
+
     /// "2 hours ago", "yesterday"
     public static func relative(_ date: Date) -> String {
         date.formatted(Date.RelativeFormatStyle(presentation: .named).locale(locale))

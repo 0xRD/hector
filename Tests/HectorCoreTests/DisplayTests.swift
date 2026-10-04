@@ -17,4 +17,11 @@ import Testing
         #expect(text.hasSuffix("627"))
         #expect(text.count == 7)
     }
+
+    @Test func listsJoinInEnglish() {
+        #expect(Display.list([]) == "")
+        #expect(Display.list(["Zoom"]) == "Zoom")
+        #expect(Display.list(["Zoom", "FaceTime"]) == "Zoom and FaceTime")
+        #expect(Display.list(["a", "b", "c"]) == "a, b and c")
+    }
 }

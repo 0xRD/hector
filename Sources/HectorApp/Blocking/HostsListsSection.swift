@@ -86,6 +86,8 @@ private struct HostsListTile: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        // Tiles of a row share its height, whatever their text.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .hoverHighlight("list:\(source.id)")
         .cardSurface(cornerRadius: Radius.md, tint: enabled ? Color.hectorDanger : nil)
         .motion(Motion.quick, value: enabled)
