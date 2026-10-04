@@ -138,6 +138,8 @@ struct ContentView: View {
         .sheet(isPresented: $state.showUninstall) { UninstallSheet() }
         // Snapshots only as often as someone can see them: see ConnectionMonitor.Demand.
         .onAppear(perform: updateDemand)
+        // Closed while Hector stays in the menu bar: back to the slow pace at once.
+        .onDisappear { monitor.demand = .hidden }
         .onChange(of: state.sidebarSelection) { updateDemand() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { _ in updateDemand() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didHideNotification)) { _ in updateDemand() }

@@ -75,13 +75,18 @@ private struct VirusTotalSettings: View {
 /// Hector's data on this Mac, and the way out.
 private struct GeneralSettings: View {
     @Environment(WindowState.self) private var state
+    @Environment(AppPreferences.self) private var preferences
 
     var body: some View {
         Form {
             Section {
                 Toggle(isOn: Binding(get: { loginItem.isEnabled }, set: { loginItem.setEnabled($0) })) {
                     Text("Open Hector at login")
-                    Text("Keeps the camera and microphone log and the live view running from the start.")
+                    Text("Starts Hector when you log in, so the camera and microphone log covers the whole session.")
+                }
+                Toggle(isOn: Binding(get: { preferences.keepsRunningInMenuBar }, set: { preferences.keepsRunningInMenuBar = $0 })) {
+                    Text("Keep running in the menu bar")
+                    Text("Closing the window leaves Hector in the menu bar instead of quitting. At login it opens there, without a window.")
                 }
                 if loginItem.needsApproval {
                     LabeledContent("Switched off in System Settings") {

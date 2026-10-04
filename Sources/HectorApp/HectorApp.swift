@@ -8,6 +8,7 @@ struct HectorApp: App {
     // First, so the controllers below find Netbite's blocklist and API key under Hector's names.
     // Stored properties are initialized in declaration order.
     private let migrated = LegacyMigration.run()
+    private let preferences = AppPreferences()
     // Created once with the app; see WindowState for why this is not `@State`.
     private let monitor = ConnectionMonitor()
     private let windowState = WindowState()
@@ -48,10 +49,38 @@ struct HectorApp: App {
             }
         }
 
+        MenuBarExtra(isInserted: Binding(get: { preferences.keepsRunningInMenuBar },
+                                         set: { preferences.keepsRunningInMenuBar = $0 })) {
+            MenuBarPanel()
+                .environment(monitor)
+                .environment(blocking)
+                .environment(privacy)
+                .environment(\.locale, Display.locale)
+                .tint(.hectorTint)
+        } label: {
+            MenuBarLabel()
+                .environment(blocking)
+                .environment(privacy)
+                // The label lives as long as the icon, window or not: what must keep running
+                // starts here.
+                .task {
+                    monitor.start()
+                    privacy.startMonitoring()
+                    await blocking.refresh()
+                    #if DEBUG
+                    await DebugSnapshot.renderPanelIfRequested(MenuBarPanel()
+                        .environment(monitor).environment(blocking).environment(privacy)
+                        .environment(\.locale, Display.locale))
+                    #endif
+                }
+        }
+        .menuBarExtraStyle(.window)
+
         Settings {
             SettingsView()
                 .environment(security)
                 .environment(windowState)
+                .environment(preferences)
                 .tint(.hectorTint)
                 .environment(\.locale, Display.locale)
         }
@@ -61,17 +90,32 @@ struct HectorApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Needed when launched as a bare executable (`swift run`) rather than from Hector.app.
-        NSApp.setActivationPolicy(.regular)
         NSApp.applicationIconImage = AppIconArtwork.render(size: 512)
-        NSApp.activate()
+        if MenuBarMode.isEnabled && MenuBarMode.launchedAtLogin {
+            // Started at login: the menu bar only, no window in the way.
+            NSApp.setActivationPolicy(.accessory)
+            DispatchQueue.main.async {
+                NSApp.windows.filter { $0.identifier?.rawValue == "main" || $0.title == "Hector" }.forEach { $0.close() }
+            }
+        } else {
+            // Needed when launched as a bare executable (`swift run`) rather than from Hector.app.
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate()
+        }
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { _ in
+            // After the window is gone, not while it closes.
+            DispatchQueue.main.async { MainActor.assumeIsolated { MenuBarMode.updateActivationPolicy() } }
+        }
         #if DEBUG
         DebugSnapshot.renderBrandIfRequested()
         DebugSnapshot.scheduleIfRequested()
         #endif
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !MenuBarMode.isEnabled }
+
+    /// Clicking the Dock icon or opening the app again shows the window.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool { true }
 }
 
 /// The app icon, drawn in code so the repository needs no binary assets.

@@ -33,6 +33,7 @@ Debug builds of the app read these environment variables, so UI changes can be c
 - `HECTOR_DEBUG_COUNTRY=US` filters Connections to one country; `HECTOR_DEBUG_HOVER_COUNTRY=US` hovers its bubble on the world map;
 - `HECTOR_DEBUG_SETTINGS=1` opens the Settings window;
 - `HECTOR_APPEARANCE=light` or `dark` forces the appearance;
+- `HECTOR_DEBUG_CLOSE_WINDOW=1` closes the window 3 s after launch (Hector should stay in the menu bar); `HECTOR_DEBUG_PANEL=/path/panel.png` writes the menu bar panel to a PNG;
 - `HECTOR_DEMO=1` shows fixed sample data (documentation IP ranges, `example.com` hosts, made-up apps) instead of this Mac's, and never contacts the helper or saves anything; the README screenshots use it;
 - `HECTOR_RENDER_BRAND=DIR` writes the app icon and the wordmark as PNGs into `DIR`, then quits.
 

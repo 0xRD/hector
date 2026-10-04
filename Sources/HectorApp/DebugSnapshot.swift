@@ -47,6 +47,13 @@ enum DebugSnapshot {
         case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
         default: break
         }
+        if environment["HECTOR_DEBUG_CLOSE_WINDOW"] != nil {
+            // As if the user closed the window: Hector should stay in the menu bar.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                NSApp.windows.filter { $0.identifier?.rawValue == "main" || $0.title == "Hector" }.forEach { $0.close() }
+            }
+        }
         guard let path = environment["HECTOR_SNAPSHOT"] else { return }
         let delay = environment["HECTOR_SNAPSHOT_DELAY"].flatMap(Double.init) ?? 6
         Task { @MainActor in
@@ -76,6 +83,16 @@ enum DebugSnapshot {
             }
         }
         NSApp.terminate(nil)
+    }
+
+    /// `HECTOR_DEBUG_PANEL=/path/panel.png` writes the menu bar panel, once the controllers have
+    /// had a few seconds to fill it.
+    static func renderPanelIfRequested<Content: View>(_ panel: Content) async {
+        guard let path = environment["HECTOR_DEBUG_PANEL"] else { return }
+        try? await Task.sleep(for: .seconds(6))
+        let renderer = ImageRenderer(content: panel.background(Color(nsColor: .windowBackgroundColor)))
+        renderer.scale = 2
+        savePNG(renderer.cgImage, to: URL(fileURLWithPath: path))
     }
 
     private static func savePNG(_ image: CGImage?, to url: URL) {

@@ -52,7 +52,8 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 
 **New features**
 - [x] Settings → General → Open Hector at login (`SMAppService.mainApp`, no Developer ID needed); shows when it was switched off in System Settings
-- [ ] Menu bar mode: keep running with the window closed (today closing the window quits), with a menu bar icon showing blocking state, camera and mic in use, and the last events; pairs with "Open at login"
+- [x] Menu bar mode: keeps running with the window closed (no Dock icon then), a template Hector in the menu bar (watching while blocking, resting otherwise; camera and mic symbols when in use), a panel with the blocking state, devices in use and the last camera and mic events; Settings → General → Keep running in the menu bar (on by default)
+  - [ ] Check on a real login that "Open at login" starts Hector in the menu bar without a window (the launch event's login-item flag, untested with `SMAppService`)
 - [ ] Notifications: a camera or microphone turning on, a new keyboard tap that is active, a new persistence item, a new app making connections (each switchable)
 - [ ] Persistence watch (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
 - [ ] Persistence actions (Reveal in Finder and Copy path exist): for user-scope items, disable or move to the Trash after confirmation (system items through the helper, with the authorization prompt)
