@@ -18,6 +18,25 @@ extension KeyboardTap {
     }
 }
 
+/// One line of the table: identical taps of one process (same mode, state, scope and keys)
+/// shown once, with how many there are.
+struct TapRow: Identifiable {
+    let tap: KeyboardTap
+    let count: Int
+    var id: KeyboardTap.ID { tap.id }
+
+    static func grouped(_ taps: [KeyboardTap]) -> [TapRow] {
+        var order: [String] = []
+        var groups: [String: [KeyboardTap]] = [:]
+        for tap in taps {
+            let key = "\(tap.tapping.pid)|\(tap.isActive)|\(tap.isEnabled)|\(tap.scopeLabel)|\(tap.eventsLabel)"
+            if groups[key] == nil { order.append(key) }
+            groups[key, default: []].append(tap)
+        }
+        return order.compactMap { key in groups[key].map { TapRow(tap: $0[0], count: $0.count) } }
+    }
+}
+
 /// Apps that intercept keystrokes through an event tap, in the spirit of ReiKey.
 struct KeyboardTapsView: View {
     @Environment(PrivacyController.self) private var privacy
@@ -26,7 +45,7 @@ struct KeyboardTapsView: View {
 
     var body: some View {
         @Bindable var state = state
-        let taps = visibleTaps
+        let taps = TapRow.grouped(visibleTaps)
         VStack(spacing: 0) {
             header
             Divider()
@@ -44,7 +63,7 @@ struct KeyboardTapsView: View {
     }
 
     @ViewBuilder
-    private func content(_ taps: [KeyboardTap]) -> some View {
+    private func content(_ taps: [TapRow]) -> some View {
         if let error = privacy.tapsError, privacy.taps == nil {
             EmptyStateView("The tap list could not be read", systemImage: "keyboard", message: error, tint: .hectorWarning)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -58,6 +77,11 @@ struct KeyboardTapsView: View {
                            message: "No app has an event tap on the keyboard right now.", tint: .hectorOK)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .canvasBackground()
+        } else if taps.isEmpty && state.search.isEmpty {
+            EmptyStateView("Nothing is listening", systemImage: "keyboard",
+                           message: "Every keyboard tap is switched off, so none receives keystrokes.", tint: .hectorOK)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .canvasBackground()
         } else if taps.isEmpty {
             EmptyStateView("Nothing matches", systemImage: "sparkle.magnifyingglass",
                            message: "No keyboard tap matches the search.", tint: .hectorNeutral)
@@ -69,7 +93,10 @@ struct KeyboardTapsView: View {
     }
 
     private var header: some View {
-        ScreenHeader("Keyboard taps", subtitle: summary, systemImage: "keyboard", tint: .hectorInfo, pinned: true) {
+        @Bindable var state = state
+        return ScreenHeader("Keyboard taps", subtitle: summary, systemImage: "keyboard", tint: .hectorInfo, pinned: true) {
+            Toggle("Switched off", isOn: $state.tapsShowSwitchedOff).toggleStyle(.checkbox)
+                .help("Also list taps their app has switched off: they receive nothing")
             Button {
                 Task { await refresh() }
             } label: {
@@ -80,27 +107,33 @@ struct KeyboardTapsView: View {
         }
     }
 
-    private func table(_ taps: [KeyboardTap]) -> some View {
+    private func table(_ rows: [TapRow]) -> some View {
         @Bindable var privacy = privacy
-        return Table(taps, selection: $privacy.selectedTap) {
-            TableColumn("App") { tap in
-                TapProcessCell(process: tap.tapping)
+        return Table(rows, selection: $privacy.selectedTap) {
+            TableColumn("App") { row in
+                HStack(spacing: 6) {
+                    TapProcessCell(process: row.tap.tapping)
+                    if row.count > 1 {
+                        Text("× \(row.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            .help("\(row.count) identical taps from this process")
+                    }
+                }
             }
             .width(min: 200, ideal: 280)
-            TableColumn("Sees") { tap in
-                Text(tap.scopeLabel).foregroundStyle(.secondary).lineLimit(1)
+            TableColumn("Sees") { row in
+                Text(row.tap.scopeLabel).foregroundStyle(.secondary).lineLimit(1)
             }
             .width(min: 80, ideal: 120, max: 200)
-            TableColumn("Mode") { tap in
-                TapModePill(tap: tap)
+            TableColumn("Mode") { row in
+                TapModePill(tap: row.tap)
             }
             .width(min: 90, ideal: 110, max: 140)
-            TableColumn("Keys") { tap in
-                Text(tap.eventsLabel).foregroundStyle(.secondary).lineLimit(1)
+            TableColumn("Keys") { row in
+                Text(row.tap.eventsLabel).foregroundStyle(.secondary).lineLimit(1)
             }
             .width(min: 90, ideal: 160, max: 240)
-            TableColumn("Signature") { tap in
-                SignatureBadge(security: security, path: PrivacyController.codePath(of: tap.tapping))
+            TableColumn("Signature") { row in
+                SignatureBadge(security: security, path: PrivacyController.codePath(of: row.tap.tapping))
             }
             .width(min: 90, ideal: 120, max: 160)
         }
@@ -113,7 +146,7 @@ struct KeyboardTapsView: View {
     }
 
     private var visibleTaps: [KeyboardTap] {
-        let all = privacy.taps ?? []
+        let all = (privacy.taps ?? []).filter { state.tapsShowSwitchedOff || $0.isEnabled }
         let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
         guard !query.isEmpty else { return all }
         return all.filter { tap in

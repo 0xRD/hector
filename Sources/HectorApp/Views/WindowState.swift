@@ -40,6 +40,8 @@ final class WindowState {
     var processesAsTree = true
     /// Apple's own processes are most of the list and rarely the question.
     var processesShowApple = false
+    /// A switched-off tap receives nothing; apps such as DockDoor leave dozens of them.
+    var tapsShowSwitchedOff = false
     // Settings
     var apiKeyDraft = ""
 

@@ -22,7 +22,9 @@ struct PrivacySidebarRows: View {
 
     private var tapsSubtitle: String {
         guard let taps = privacy.taps else { return "Apps reading keystrokes" }
-        return taps.count == 1 ? "1 tap" : "\(taps.count) taps"
+        // Only what receives keystrokes counts: switched-off taps receive nothing.
+        let apps = Set(taps.filter(\.isEnabled).map(\.tapping.pid)).count
+        return apps == 0 ? "Nobody listening" : (apps == 1 ? "1 app listening" : "\(apps) apps listening")
     }
 
     private var devicesSubtitle: String {
