@@ -30,7 +30,7 @@ public struct SocketCollector: Sendable {
 
             let path = Self.executablePath(of: pid)
             let bundle = path.map(Self.bundleCache.bundle(containing:)) ?? AppBundle()
-            let name = Self.name(of: pid) ?? path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "pid \(pid)"
+            let name = Self.processName(of: pid, path: path)
             let process = NetProcess(pid: pid, name: name, executablePath: path,
                                      appBundleIdentifier: bundle.identifier, appName: bundle.name,
                                      appBundlePath: bundle.path)
@@ -148,6 +148,34 @@ public struct SocketCollector: Sendable {
         var buffer = [CChar](repeating: 0, count: 2 * Int(MAXCOMLEN) + 1)
         guard proc_name(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
         return buffer.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+    }
+
+    /// The name to show for a process: its kernel name, unless that is only a version, as for
+    /// tools installed as `…/claude/versions/2.1.281`; then the nearest folder that names it.
+    static func processName(of pid: pid_t, path: String?) -> String {
+        displayName(kernelName: name(of: pid), path: path) ?? "pid \(pid)"
+    }
+
+    static func displayName(kernelName: String?, path: String?) -> String? {
+        let fileName = path.map { URL(fileURLWithPath: $0).lastPathComponent }
+        guard let candidate = kernelName ?? fileName else { return nil }
+        guard looksLikeVersion(candidate), let path else { return candidate }
+        // Folders that say nothing about the tool, between the version and its name.
+        let generic: Set<String> = ["versions", "version", "current", "latest", "bin", "libexec", "releases", "share", "lib"]
+        for folder in URL(fileURLWithPath: path).deletingLastPathComponent().pathComponents.reversed() {
+            if folder == "/" { break }
+            if looksLikeVersion(folder) || generic.contains(folder.lowercased()) { continue }
+            return folder
+        }
+        return candidate
+    }
+
+    /// "2.1.281", "v20.11.0", "1.2.3-beta": digits and dots with an optional prefix "v" and suffix.
+    static func looksLikeVersion(_ text: String) -> Bool {
+        let core = text.hasPrefix("v") ? text.dropFirst() : Substring(text)
+        let main = core.prefix { $0.isNumber || $0 == "." }
+        return main.contains(".") && main.first?.isNumber == true
+            && (main.count == core.count || core.dropFirst(main.count).first == "-")
     }
 
     static func executablePath(of pid: pid_t) -> String? {

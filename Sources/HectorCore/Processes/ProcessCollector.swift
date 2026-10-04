@@ -133,7 +133,7 @@ public struct ProcessCollector: Sendable {
                     .compactMap { SocketCollector.socketInfo(pid: pid, fd: $0.proc_fd) }
                     .filter(\.hasRemote)
             }
-            let name = SocketCollector.name(of: pid) ?? path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "pid \(pid)"
+            let name = SocketCollector.processName(of: pid, path: path)
             processes.append(RunningProcess(
                 pid: pid, parentPID: info.parentPID, userID: uid, userName: userNames[uid],
                 name: name, executablePath: path, arguments: Self.arguments(of: pid)?.arguments ?? [],

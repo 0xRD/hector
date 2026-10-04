@@ -155,3 +155,23 @@ import Testing
         #expect(snapshot.visible(to: 0).processes.allSatisfy { !$0.arguments.isEmpty })
     }
 }
+
+@Suite struct ProcessNameTests {
+    @Test func versionNamedExecutablesTakeTheirFolderName() {
+        #expect(SocketCollector.displayName(kernelName: "2.1.281", path: "/Users/alex/.local/share/claude/versions/2.1.281") == "claude")
+        #expect(SocketCollector.displayName(kernelName: nil, path: "/opt/tools/node/v20.11.0/bin/v20.11.0") == "node")
+        #expect(SocketCollector.displayName(kernelName: "1.2.3-beta", path: "/opt/acme/releases/1.2.3-beta") == "acme")
+    }
+
+    @Test func ordinaryNamesAreKept() {
+        #expect(SocketCollector.displayName(kernelName: "Safari", path: "/Applications/Safari.app/Contents/MacOS/Safari") == "Safari")
+        #expect(SocketCollector.displayName(kernelName: "python3.12", path: "/usr/local/bin/python3.12") == "python3.12")
+        #expect(SocketCollector.displayName(kernelName: "2.1.281", path: nil) == "2.1.281")
+        #expect(SocketCollector.displayName(kernelName: nil, path: nil) == nil)
+    }
+
+    @Test func versionShapes() {
+        for text in ["2.1.281", "v20.11.0", "1.0", "1.2.3-rc1"] { #expect(SocketCollector.looksLikeVersion(text), "\(text)") }
+        for text in ["python3.12", "v8", "2", "x1.2", "1.2b", "Safari"] { #expect(!SocketCollector.looksLikeVersion(text), "\(text)") }
+    }
+}

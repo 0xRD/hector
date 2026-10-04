@@ -30,8 +30,7 @@ public struct ProcessIdentity: Codable, Hashable, Sendable {
     /// whose path cannot be read, keeps its PID and a placeholder name.
     public static func resolve(pid: Int32) -> ProcessIdentity {
         let path = SocketCollector.executablePath(of: pid)
-        let fileName = path.map { URL(fileURLWithPath: $0).lastPathComponent }
-        let name = SocketCollector.name(of: pid) ?? fileName ?? "pid \(pid)"
+        let name = SocketCollector.processName(of: pid, path: path)
         guard let path else { return ProcessIdentity(pid: pid, name: name) }
         let bundle = SocketCollector.appBundle(containing: path)
         return ProcessIdentity(pid: pid, name: name, executablePath: path, appBundlePath: bundle.path,
