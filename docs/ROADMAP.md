@@ -17,11 +17,12 @@ Hector is meant to run all the time and its helper runs as root, so these come b
   - [x] Review of what 0.4 added to the helper (2026-10-04): `processes` no longer gives other users' arguments to administrators; see SECURITY.md
   - [x] Least privilege: hosts lists and the country database are downloaded and parsed by a child that drops to `nobody`; root re-checks the output (checked as root on 2026-10-04: EasyPrivacy, 43,112 domains)
   - [x] A sandbox profile for the helper (`sandbox_init`): writes only to its own files, /etc/hosts and /dev/pf, starts only pfctl, dscacheutil, killall, sfltool and itself (0.4.2; `hectord sandbox-profile`)
-  - [ ] Check the sandbox as root: `hector helper status` says "sandboxed", Apply with lists, Persistence (sfltool), Remove all rules, Uninstall
+  - [x] Checked as root (2026-10-04, helper 0.4.2): "sandboxed", Apply with both lists (pf, downloads as `nobody`, /etc/hosts, cache flush), login items through sfltool; no sandbox denial in the system log. Not yet: Remove all rules and Uninstall
   - [ ] Authenticate the client beyond `getpeereid`: check the peer's code signature (audit token, designated requirement of Hector's own signature); needs a Developer ID to pin, so not before one exists (documented in SECURITY.md)
   - [x] Fuzz tests for the request decoder and the parsers that see outside data (hosts lists, DB-IP CSV and cache, `sfltool` output, blocklists)
   - [x] Hardened runtime for the helper and the CLI; every subprocess by absolute path with a fixed environment
-  - [ ] Update SECURITY.md with the result, then make the repository public
+  - [x] Update SECURITY.md with the result
+  - [ ] Make the repository public
 
 ## Review of every screen on real data (2026-10-04)
 

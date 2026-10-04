@@ -58,7 +58,7 @@ Trust: subscribing to a list means trusting its maintainers to choose which name
 
 ## Sandbox
 
-Since 0.4.2, `hectord serve` puts itself in a sandbox (`sandbox_init`, the Sandbox Profile Language, no entitlement needed) before it reads a file or a request. The profile cannot be lifted by the process and is inherited by every child, so it also covers pfctl, sfltool and the download children. `hectord sandbox-profile` prints it. Under it, root can only:
+Since 0.4.2, `hectord serve` puts itself in a sandbox (`sandbox_init`, the Sandbox Profile Language, no entitlement needed) before it reads a file or a request. The profile cannot be lifted by the process and is inherited by every child, so it also covers pfctl, sfltool and the download children. `hectord sandbox-profile` prints it. Checked as root on macOS 26.6 (0.4.2): applying a blocklist with hosts lists and reading login items work inside it, with no denial in the system log. Under it, root can only:
 
 - write to the helper's data folder, `/etc/hosts` (and its temporary sibling), its socket, its log, `/dev/pf`, `/dev/null` and the download children's private folders;
 - start `/sbin/pfctl`, `/usr/bin/dscacheutil`, `/usr/bin/killall`, `/usr/bin/sfltool` and its own binary; no shell, no other program;
