@@ -100,6 +100,21 @@ import Testing
         }
     }
 
+    @Test func resolverLogLinesParseSafely() {
+        var rng = Generator(state: 14)
+        let seeds = [ResolverLogTests.queryRecord, ResolverLogTests.getAddrInfo, ResolverLogTests.networkFramework,
+                     ResolverLogTests.question].map { Array($0.utf8) }
+        let alphabet = Array("[]()->Q0123456789abcdef,:' <>RSTART".utf8)
+        for _ in 0..<5_000 {
+            let input = String(decoding: mutate(seeds.randomElement(using: &rng)!, alphabet: alphabet, &rng), as: UTF8.self)
+            if case .request(_, let client, _, _)? = MDNSResponderLog.event(fromMessage: input) {
+                #expect(client.pid > 0)
+                #expect(client.name.count <= 64)
+                #expect(!client.name.unicodeScalars.contains { $0.properties.generalCategory == .control })
+            }
+        }
+    }
+
     @Test func domainSetsAgreeWithAModel() {
         var rng = Generator(state: 13)
         let labels = ["a", "b", "ads", "x-y", "com", "net", "example"]
