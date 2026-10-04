@@ -56,6 +56,16 @@ Hosts lists (StevenBlack Unified, EasyPrivacy) are downloaded **for the helper**
 
 Trust: subscribing to a list means trusting its maintainers to choose which names fail to resolve on this Mac. They cannot redirect traffic or reach beyond /etc/hosts, but a list could block a site you need; personal rules cannot unblock a list entry (unsubscribe from the list instead).
 
+## Sandbox
+
+Since 0.4.2, `hectord serve` puts itself in a sandbox (`sandbox_init`, the Sandbox Profile Language, no entitlement needed) before it reads a file or a request. The profile cannot be lifted by the process and is inherited by every child, so it also covers pfctl, sfltool and the download children. `hectord sandbox-profile` prints it. Under it, root can only:
+
+- write to the helper's data folder, `/etc/hosts` (and its temporary sibling), its socket, its log, `/dev/pf`, `/dev/null` and the download children's private folders;
+- start `/sbin/pfctl`, `/usr/bin/dscacheutil`, `/usr/bin/killall`, `/usr/bin/sfltool` and its own binary; no shell, no other program;
+- not set the setuid or setgid bit on anything.
+
+A flaw in the helper therefore cannot be used to install a LaunchDaemon, replace a binary, edit sudoers or start a shell as root. Reading stays allowed (listing processes and sockets is the helper's job), and so do network connections (the download children). If the system refuses the profile, the helper keeps enforcing the blocklist without it rather than leaving the Mac unprotected, logs a warning, and `hector helper status` says "not sandboxed".
+
 ## Review before 0.3
 
 The privileged code was reviewed before the first release. Each issue below is fixed and covered by a regression test in `Tests/HectorCoreTests/SecurityHardeningTests.swift` where it can run without root.
@@ -87,7 +97,7 @@ What these screens cannot promise: a tap list does not cover every way to read k
 
 - **The helper is installed from the app bundle.** Without a Developer ID certificate, Hector cannot prove that `Hector.app/Contents/Helpers/hectord` is the one its authors built. A process already running as you could replace it just before you type your password in the install dialog, and it would then run as root. Install Hector only from a release you verified (SHA-256 in the release notes) or that you built yourself, and keep it in /Applications.
 - **The helper cannot check who its client is beyond the account.** It checks that the peer is root or an administrator (`getpeereid`), and changes need the authorization above. Checking the client's code signature would need a signing identity to pin; with ad hoc signing there is none, so any administrator process can read what the read requests return (connections, processes without other users' arguments, login items).
-- **No sandbox yet.** The helper does not run under a sandbox profile; it is on the roadmap, together with the Developer ID signing that would allow pinning the client.
+- **The sandbox limits writes and programs, not reads.** A compromised helper could still read any file and talk to the network. A deny-by-default profile would need every service pfctl, sfltool and Foundation talk to, which changes between macOS versions; see [Sandbox](#sandbox).
 - **Releases are ad-hoc signed and not notarized.** Gatekeeper cannot vouch for them; their integrity relies on GitHub and on the published SHA-256, which come from the same place. Building from source avoids this.
 - **Reverse DNS names are claims, not facts.** A PTR record is set by whoever owns the address range and can say anything, `apple.com` included.
 - **The security checkup is a snapshot, not a guarantee.** It runs as the user and only reads: Apple's tools (`csrutil`, `spctl`, `fdesetup`, `socketfilterfw`, `launchctl print-disabled`, `profiles status`) by absolute path with fixed arguments, never through a shell, and world-readable preference files. It never asks for a password and never changes a setting; what only root can read is reported as unknown. Its "Open Settings" buttons open `x-apple.systempreferences:` links only. Malware with root could lie to these tools, and a passing check says nothing about what is already installed.

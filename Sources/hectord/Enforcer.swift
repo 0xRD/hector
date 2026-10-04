@@ -403,11 +403,9 @@ final class Enforcer {
     }
 
     private func writeFile(_ data: Data, to url: URL, mode: mode_t) throws {
-        if dryRun {
-            try data.write(to: url, options: .atomic)
-        } else {
-            try SecureFiles.write(data, to: url.path, mode: mode)
-        }
+        // A dry run too: Foundation's atomic write goes through a temporary folder elsewhere,
+        // which the sandbox refuses.
+        try SecureFiles.write(data, to: url.path, mode: mode)
     }
 
     struct CommandError: Error, CustomStringConvertible {

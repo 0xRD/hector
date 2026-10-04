@@ -2,7 +2,7 @@ import Foundation
 
 public enum HectorVersion {
     /// The single version string of the app, the CLI and the helper. `scripts/bundle-app.sh` reads it.
-    public static let current = "0.4.1"
+    public static let current = "0.4.2"
 }
 
 /// Where the privileged helper lives once installed, and how to reach it.
@@ -100,6 +100,8 @@ public struct HelperInfo: Codable, Equatable, Sendable {
     public var protocolVersion: Int
     /// Raw values, so a newer helper's capabilities an older app does not know still decode.
     public var capabilities: [String]
+    /// Whether the helper runs inside its sandbox profile; `nil` from helpers before 0.4.2.
+    public var sandboxed: Bool?
 
     public init(version: String, protocolVersion: Int, capabilities: [String]) {
         self.version = version

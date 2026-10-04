@@ -7,7 +7,8 @@ Hector is meant to run all the time and its helper runs as root, so these come b
 - [ ] **Performance.** Measured on 2026-10-04 (M-series MacBook Pro, about 70 live connections): the app uses about 146 MB and 0 to 9% CPU while its window is open; the root helper uses about 2.5% CPU while idle, which is too much for a background service.
   - [x] The helper only works when asked; snapshots are now requested every second only while Connections is on screen (5 s on other screens, 10 s with no window), and app bundles are cached across snapshots
   - [x] The app: slower refresh when the window is hidden, minimized or on another screen (0% CPU hidden)
-  - [ ] Stop the camera and microphone poll when nothing needs it; measure the helper again as root once updated
+  - [x] Stop the camera and microphone poll when nothing needs it: it runs only while a microphone is running somewhere
+  - [ ] Measure the helper again as root once updated
   - [x] Memory: the country and network databases are parsed once into a checked binary cache and mapped (76 + 33 MB → about 4 MB each, 1.5 s → 10 ms)
   - [ ] The window's own rendering (about 100 MB of graphics buffers): fewer blur layers, smaller map backing
   - [ ] Avoid re-rendering the whole window every second: diff the snapshot, update only what changed
@@ -15,8 +16,9 @@ Hector is meant to run all the time and its helper runs as root, so these come b
 - [ ] **Security of the root helper.** It must not be a way to escalate privileges, even for a malicious process of the logged-in user.
   - [x] Review of what 0.4 added to the helper (2026-10-04): `processes` no longer gives other users' arguments to administrators; see SECURITY.md
   - [x] Least privilege: hosts lists and the country database are downloaded and parsed by a child that drops to `nobody`; root re-checks the output (checked as root on 2026-10-04: EasyPrivacy, 43,112 domains)
-  - [ ] A sandbox profile for the helper (`sandbox_init` with the few paths it writes: its data folder, /etc/hosts, the pf anchor)
-  - [ ] Authenticate the client beyond `getpeereid`: check the peer's code signature (audit token, designated requirement of Hector's own signature)
+  - [x] A sandbox profile for the helper (`sandbox_init`): writes only to its own files, /etc/hosts and /dev/pf, starts only pfctl, dscacheutil, killall, sfltool and itself (0.4.2; `hectord sandbox-profile`)
+  - [ ] Check the sandbox as root: `hector helper status` says "sandboxed", Apply with lists, Persistence (sfltool), Remove all rules, Uninstall
+  - [ ] Authenticate the client beyond `getpeereid`: check the peer's code signature (audit token, designated requirement of Hector's own signature); needs a Developer ID to pin, so not before one exists (documented in SECURITY.md)
   - [x] Fuzz tests for the request decoder and the parsers that see outside data (hosts lists, DB-IP CSV and cache, `sfltool` output, blocklists)
   - [x] Hardened runtime for the helper and the CLI; every subprocess by absolute path with a fixed environment
   - [ ] Update SECURITY.md with the result, then make the repository public

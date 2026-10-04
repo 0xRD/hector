@@ -11,6 +11,7 @@ Netbite becomes **Hector**, a small all-in-one security app for macOS. Netbite s
 - **Camera & mic:** a log of when they turn on and off, naming the app (from the microphone's clients, and the camera's green indicator).
 - **VirusTotal:** look up files by hash with your own free key (Settings → VirusTotal). Files are never uploaded.
 - The `hector` command-line tool does all of this from a terminal.
+- **Lighter and harder to abuse** (0.4.1 and 0.4.2): nothing is refreshed while the window is hidden, the IP databases take about 4 MB each instead of 110 MB, the camera and microphone monitor sleeps while no microphone runs, and the root helper downloads as `nobody` and runs in a sandbox that only lets it write its own files and start its own tools. Update the helper from Blocklists after installing.
 
 ## Install
 

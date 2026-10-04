@@ -358,7 +358,8 @@ func helper(_ args: Arguments) throws {
         }
         status.warnings.forEach { print("warning: \($0)") }
         if let info = try? HelperClient.info(socketPath: socket) {
-            print("Protocol \(info.protocolVersion)" + (info.isOutdated ? " · older than this CLI: update the helper from Hector → Blocklists" : ""))
+            let sandbox = info.sandboxed.map { $0 ? " · sandboxed" : " · not sandboxed (see the helper log)" } ?? ""
+            print("Protocol \(info.protocolVersion)" + sandbox + (info.isOutdated ? " · older than this CLI: update the helper from Hector → Blocklists" : ""))
         }
     case .snapshot, .processes, .toolOutput, .hello:
         print("Unexpected reply.")

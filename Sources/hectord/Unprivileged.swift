@@ -179,7 +179,7 @@ enum Unprivileged {
     /// A fresh folder only the child's user can use: created by root with mode 0700, then given
     /// to `nobody`. Under /private/var/tmp, never a path a user chooses.
     private static func privateFolder() throws -> String {
-        var template = Array("/private/var/tmp/hectord-fetch.XXXXXX".utf8CString)
+        var template = Array((HelperSandboxProfile.fetchFolderPrefix + "XXXXXX").utf8CString)
         guard let created = template.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress!) }) else {
             throw Failure(description: "Cannot create a temporary folder.")
         }

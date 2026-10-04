@@ -17,6 +17,7 @@ USAGE
   hectord install                Install as a LaunchDaemon (run as root)
   hectord uninstall [--purge]    Remove every rule, then the LaunchDaemon (run as root);
                                   --purge also deletes the helper's logs
+  hectord sandbox-profile        Print the sandbox profile that `serve` applies
   hectord version
 """
 
@@ -31,6 +32,15 @@ struct HelperError: Error, CustomStringConvertible {
 
 func serve(dryRunRoot: URL?, socketPath: String) async throws -> Never {
     signal(SIGPIPE, SIG_IGN)
+    // Before anything reads a request or a file: from here on the helper can only write its own
+    // files and start its own tools (see Sandbox.swift). A profile the system refuses must not
+    // leave the Mac unprotected, so the helper keeps going and says so in its log.
+    do {
+        try HelperSandbox.apply(dryRunRoot: dryRunRoot, socketPath: socketPath)
+        log("Sandbox applied.")
+    } catch {
+        log("warning: \(error); running without a sandbox.")
+    }
     let enforcer = try Enforcer(root: dryRunRoot)
     if dryRunRoot == nil {
         do { try HelperAuthorization.defineRight() } catch { log("Could not define the authorization right: \(error)") }
@@ -146,7 +156,9 @@ func handle(client: Int32, gate: EnforcerGate, dryRun: Bool) {
 func respond(to request: HelperRequest, peer: uid_t, gate: EnforcerGate, dryRun: Bool) throws -> HelperResponse {
     switch request {
     case .hello:
-        return .hello(.current)
+        var info = HelperInfo.current
+        info.sandboxed = HelperSandbox.isApplied
+        return .hello(info)
     case .snapshot:
         return .snapshot(SocketCollector().snapshot())
     case .processes:
@@ -335,6 +347,9 @@ do {
     case "fetch-countries": try await Unprivileged.runCountriesChild()
     case "install": try install()
     case "uninstall": try uninstall(purge: arguments.dropFirst().contains("--purge"))
+    // The sandbox profile `serve` applies, to read or test with sandbox-exec.
+    case "sandbox-profile":
+        print(HelperSandbox.profile(dryRunRoot: nil, socketPath: HelperPaths.socket))
     case "version", "--version": print("hectord \(HectorVersion.current)")
     default: print(usage)
     }
