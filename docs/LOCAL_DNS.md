@@ -334,9 +334,9 @@ Each step is small enough for one review, keeps `main` releasable, and adds its 
 ## Open questions
 
 1. **The override key.** Does IPMonitor honor a temporary `Setup:` DNS entity in the dynamic store, and does it survive preference changes? (Phase 0.) If neither `Setup:` nor `State:` works cleanly, the fallback is the persistent `networksetup` route with a launchd-run restore, which is weaker on the failure side.
-2. **Lists during a fallback.** Accept that lists pause for the seconds a restart takes (proposed), or rewrite /etc/hosts on every fallback (slow, and the source of mDNSResponder's memory use)?
-3. **VPNs.** When a VPN becomes the primary service with its own DNS, should Hector step aside (proposed: yes, and say so) or override the VPN's servers (breaks split DNS and may leak queries outside the tunnel)?
-4. **Personal block versus allowlist.** The allowlist wins over everything, including the user's own block rules. Is that the expected meaning, or should the more specific entry win?
+2. **Lists during a fallback. Decided (2026-10-04): pause.** Lists stop applying for the seconds a restart takes, and the status says so; /etc/hosts is not rewritten on a short fallback.
+3. **VPNs. Decided (2026-10-04): step aside.** When a VPN becomes the primary service with its own DNS, Hector leaves its servers alone and says so in the status ("Paused: a VPN provides DNS").
+4. **Personal block versus allowlist. Decided (2026-10-04): the allowlist wins**, over the user's own block rules too, and the UI must make that obvious: a blocked rule that an allowlist entry overrides is shown as "overridden by allowlist: <entry>", in the rule list and in the query log, and adding a block rule that an allowlist entry covers warns before saving.
 5. **Blocked TTL.** 2 s keeps counts accurate and unblocking immediate, at the cost of more queries reaching the resolver. Measure.
 6. **Peter Lowe's license.** No formal license found; ask before shipping it in the catalog.
 7. **Bounds.** Keep 300,000 names per list and 400,000 in total for the resolver, or raise them (TIF medium, 1Hosts Xtra) once memory is measured?
