@@ -233,7 +233,7 @@ private struct DestinationHero: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
-                    Text("\(destination.key.address.description) · \(destination.key.portLabel)")
+                    Text("\(destination.key.address.description) · \(destination.portsLabel)")
                         .font(.dataMonoCallout)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)

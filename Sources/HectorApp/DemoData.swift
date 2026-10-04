@@ -148,7 +148,7 @@ enum DemoData {
             var destinations: [DestinationKey: Destination] = [:]
             for item in sample.destinations {
                 guard let address = IPAddress(item.address) else { continue }
-                let key = DestinationKey(address: address, port: item.port, transport: item.transport)
+                let key = DestinationKey(address: address)
                 let activeUntil = item.live > 0 ? length : max(0, length - Int(item.idle))
                 let activity: [Int] = (0..<length).map { index in
                     guard index < activeUntil else { return 0 }
@@ -158,6 +158,7 @@ enum DemoData {
                     key: key, country: item.country, network: NetworkOwner(number: item.network.0, name: item.network.1),
                     hostname: item.host, liveConnections: item.live,
                     tcpStates: item.transport == .tcp ? Array(repeating: "ESTABLISHED", count: item.live) : [],
+                    ports: [DestinationKey.portLabel(item.port, item.transport)],
                     firstSeen: ago(1_800 + Double(generator.next(in: 0...1_200))),
                     lastSeen: ago(item.idle), activity: activity
                 )

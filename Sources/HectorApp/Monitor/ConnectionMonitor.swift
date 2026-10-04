@@ -193,7 +193,7 @@ final class ConnectionMonitor {
 
     private func ingest(_ snapshot: CollectorSnapshot) {
         let now = snapshot.takenAt
-        var seen: [AppGroup.ID: [DestinationKey: (count: Int, states: [String])]] = [:]
+        var seen: [AppGroup.ID: [DestinationKey: (count: Int, states: [String], ports: Set<String>)]] = [:]
         var pids: [AppGroup.ID: Set<Int32>] = [:]
 
         for entry in snapshot.processes {
@@ -210,9 +210,10 @@ final class ConnectionMonitor {
             pids[id, default: []].insert(process.pid)
             // A CLOSED socket is a dead descriptor the app has not released yet, not traffic.
             for socket in entry.sockets where socket.hasRemote && socket.tcpState != "CLOSED" {
-                let key = DestinationKey(address: socket.remoteAddress!, port: socket.remotePort, transport: socket.transport)
-                var info = seen[id, default: [:]][key] ?? (0, [])
+                let key = DestinationKey(address: socket.remoteAddress!)
+                var info = seen[id, default: [:]][key] ?? (0, [], [])
                 info.count += 1
+                info.ports.insert(DestinationKey.portLabel(socket.remotePort, socket.transport))
                 if let state = socket.tcpState { info.states.append(state) }
                 seen[id, default: [:]][key] = info
             }
@@ -227,13 +228,17 @@ final class ConnectionMonitor {
                 if var destination = app.destinations[key] {
                     destination.liveConnections = info.count
                     destination.tcpStates = info.states
+                    if !info.ports.isSubset(of: destination.ports) {
+                        destination.ports = Array(info.ports.union(destination.ports)).sorted()
+                    }
                     destination.lastSeen = now
                     app.destinations[key] = destination
                 } else {
                     app.destinations[key] = Destination(
                         key: key, country: geo?.country(for: key.address), network: networkNames?.owner(for: key.address),
                         hostname: hostnames[key.address],
-                        liveConnections: info.count, tcpStates: info.states, firstSeen: now, lastSeen: now, activity: []
+                        liveConnections: info.count, tcpStates: info.states, ports: info.ports.sorted(),
+                        firstSeen: now, lastSeen: now, activity: []
                     )
                     resolveHostname(key.address)
                 }

@@ -492,7 +492,7 @@ struct MapTooltip: View {
                 .font(.dataMonoCallout)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Text("\(Countries.name(row.destination.country)) · \(row.destination.key.portLabel)")
+            Text("\(Countries.name(row.destination.country)) · \(row.destination.portsLabel)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let network = row.destination.network {

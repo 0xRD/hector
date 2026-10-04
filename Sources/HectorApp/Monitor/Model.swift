@@ -1,13 +1,14 @@
 import Foundation
 import HectorCore
 
-/// One remote endpoint an app talks to.
+/// One remote address an app talks to, whatever the ports: 443/TCP and 443/UDP (QUIC) to the
+/// same server are one destination, not two rows.
 struct DestinationKey: Hashable, Sendable {
     let address: IPAddress
-    let port: UInt16
-    let transport: TransportProtocol
 
-    var portLabel: String { "\(port)/\(transport.rawValue.uppercased())" }
+    static func portLabel(_ port: UInt16, _ transport: TransportProtocol) -> String {
+        "\(port)/\(transport.rawValue.uppercased())"
+    }
 }
 
 /// Identifies a destination row: the same endpoint used by two apps is two rows.
@@ -28,6 +29,8 @@ struct Destination: Identifiable, Hashable {
     var hostname: String?
     var liveConnections: Int
     var tcpStates: [String]
+    /// Every port seen this session, "443/TCP" first, sorted.
+    var ports: [String]
     var firstSeen: Date
     var lastSeen: Date
     /// Live connection count per refresh, oldest first, at most `ConnectionMonitor.historyLength`.
@@ -36,6 +39,7 @@ struct Destination: Identifiable, Hashable {
     var isLive: Bool { liveConnections > 0 }
     var isLocal: Bool { key.address.isLocalOrPrivate }
     var title: String { hostname ?? key.address.description }
+    var portsLabel: String { ports.joined(separator: ", ") }
 }
 
 enum AppKind {

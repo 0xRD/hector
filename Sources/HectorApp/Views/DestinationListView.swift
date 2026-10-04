@@ -162,9 +162,12 @@ struct DestinationRowView: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(destination.key.portLabel)
+            // Several ports stack (443/TCP over 443/UDP) rather than widen the column.
+            Text(destination.ports.prefix(2).joined(separator: "\n") + (destination.ports.count > 2 ? " +\(destination.ports.count - 2)" : ""))
                 .font(.dataMonoCallout)
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .help(destination.portsLabel)
                 .frame(width: Column.port, alignment: .leading)
             Group {
                 if destination.isLocal {

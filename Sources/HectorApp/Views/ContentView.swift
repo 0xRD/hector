@@ -281,7 +281,7 @@ struct ContentView: View {
 
     private func matches(_ destination: Destination, app: AppGroup, query: String) -> Bool {
         let network: String = destination.network?.label ?? ""
-        let fields: [String] = [destination.title, destination.key.address.description, String(destination.key.port),
+        let fields: [String] = [destination.title, destination.key.address.description, destination.portsLabel,
                                 destination.country ?? "", Countries.name(destination.country), network, app.name]
         return fields.contains { $0.lowercased().contains(query) }
     }
