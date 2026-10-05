@@ -52,7 +52,11 @@ public struct NetProcess: Codable, Hashable, Sendable {
     }
 
     /// Name to show in a list: the app when known, else the process name.
-    public var displayName: String { appName ?? name }
+    /// The app's name, else the process name; a name that is only a version (from an older
+    /// helper) gives way to its folder's name, as `SocketCollector.displayName` does.
+    public var displayName: String {
+        appName ?? SocketCollector.displayName(kernelName: name, path: executablePath) ?? name
+    }
 }
 
 public struct ProcessSockets: Codable, Sendable {
