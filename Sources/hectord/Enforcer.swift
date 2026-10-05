@@ -105,7 +105,7 @@ final class Enforcer {
         try saveState(state)
         try writeFile(JSONEncoder.hector.encode(blocklist), to: blocklistFile, mode: 0o600)
         lastCompiled = compiled
-        log("Applied: \(compiled.blockTable.count) networks, \(compiled.geoTable.count) country networks, \(compiled.hostsDomains.count) domains, \(compiled.listDomains.count) list domains.")
+        log("Applied: \(compiled.blockTable.count) networks, \(compiled.geoTable.count) country networks, \(compiled.hostsDomains.count) domains, \(compiled.listDomains.count) list domains, \(compiled.allowlistRemovedCount) names kept out by the allowlist.")
         return status()
     }
 
@@ -147,7 +147,9 @@ final class Enforcer {
             hostsDomainCount: lastCompiled?.hostsDomains.count ?? 0,
             warnings: lastCompiled?.warnings ?? [],
             listDomainCount: lastCompiled?.listDomains.count ?? 0,
-            hostsLists: listStatus(subscribed: blocklist?.hostsLists ?? [])
+            hostsLists: listStatus(subscribed: blocklist?.hostsLists ?? []),
+            allowlistRemovedCount: lastCompiled?.allowlistRemovedCount ?? 0,
+            allowlistEffects: lastCompiled?.allowlistEffects ?? []
         )
     }
 

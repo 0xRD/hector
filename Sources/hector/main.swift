@@ -28,6 +28,9 @@ USAGE
       Nothing on the system is changed: this is what the privileged helper will apply.
       Both take --fetch-lists (download the subscribed hosts lists now) or --lists-dir DIR
       (read them from DIR/ID.txt); without either, hosts lists are left out.
+      "allowedDomains": ["example.com"] is the allowlist: it wins over everything in /etc/hosts.
+      An entry unblocks that name and the names below it in hosts lists, and overrides your own
+      domain rules for that exact name. check and render show what each entry overrides.
 
   hector lists [--json]                 Hosts lists catalog, subscriptions and the helper's copies
   hector lists refresh                  Ask the helper to download the subscribed lists now
@@ -285,7 +288,7 @@ func rules(_ args: Arguments) async throws {
             Rule(target: RuleTarget("*.hotjar.com")!, note: "Session recording"),
             Rule(target: RuleTarget("203.0.113.0/24")!, note: "Documentation range (TEST-NET-3)"),
             Rule(target: RuleTarget("198.51.100.17")!, isEnabled: false, note: "Disabled rules are kept but not applied"),
-        ], blockedCountries: [], hostsLists: [])
+        ], blockedCountries: [], hostsLists: [], allowedDomains: ["t.co"])
         print(String(decoding: try JSONEncoder.hector.encode(example), as: UTF8.self))
     case "check", "render":
         guard args.positional.count == 2 else { throw CLIError("Give one blocklist file.") }
@@ -305,6 +308,7 @@ func rules(_ args: Arguments) async throws {
         pf <\(PFAnchor.geoTable)>: \(compiled.geoTable.count) networks
         /etc/hosts: \(compiled.hostsDomains.count) domains, \(Display.count(compiled.listDomains.count)) from lists
         """)
+        printAllowlistEffects(compiled, blocklist: blocklist, listsIncluded: !lists.isEmpty)
         compiled.warnings.forEach { print("warning: \($0)") }
         guard sub == "render" else { return }
 
@@ -327,6 +331,37 @@ func rules(_ args: Arguments) async throws {
     }
 }
 
+/// The allowlist part of `rules check` and `rules render`: what each entry kept out of /etc/hosts.
+/// The allowlist wins over everything, the user's own domain rules included, so overridden rules
+/// are named.
+func printAllowlistEffects(_ compiled: CompiledBlocklist, blocklist: Blocklist, listsIncluded: Bool) {
+    guard !compiled.allowlistEffects.isEmpty else { return }
+    let entries = compiled.allowlistEffects.count
+    print("Allowlist: \(entries) entr\(entries == 1 ? "y" : "ies"), \(Display.count(compiled.allowlistRemovedCount)) names kept out of /etc/hosts"
+        + (listsIncluded || blocklist.hostsLists.isEmpty ? "" : " (hosts lists not included)"))
+    let targets = Dictionary(blocklist.rules.map { ($0.id, $0.target.description) }, uniquingKeysWith: { first, _ in first })
+    var idle = 0
+    for effect in compiled.allowlistEffects {
+        guard effect.listDomainsRemoved > 0 || !effect.overriddenRules.isEmpty else {
+            idle += 1
+            continue
+        }
+        var parts: [String] = []
+        if effect.listDomainsRemoved > 0 {
+            let names = effect.listDomainsRemoved
+            parts.append("\(Display.count(names)) list name\(names == 1 ? "" : "s") unblocked")
+        }
+        if !effect.overriddenRules.isEmpty {
+            let rules = effect.overriddenRules.compactMap { targets[$0] }
+            parts.append("overrides your rule\(rules.count == 1 ? "" : "s") \(rules.joined(separator: ", "))")
+        }
+        print("  allow \(effect.domain): \(parts.joined(separator: "; "))")
+    }
+    if idle > 0 {
+        print("  \(idle) \(idle == 1 ? "entry unblocks" : "entries unblock") nothing at the moment.")
+    }
+}
+
 func helper(_ args: Arguments) throws {
     guard let sub = args.positional.first else { throw CLIError("Missing helper subcommand.\n\n\(usage)") }
     let socket = args.options["--socket"] ?? HelperPaths.socket
@@ -344,7 +379,10 @@ func helper(_ args: Arguments) throws {
         request = .apply(blocklist, authorization: try authorization())
     default: throw CLIError("Unknown helper subcommand: \(sub)")
     }
-    switch try HelperClient.send(request, socketPath: socket) {
+    // An apply is checked against the helper's version first: an older helper ignores the allowlist.
+    let response = sub == "apply" ? try HelperClient.sendChecked(request, socketPath: socket)
+                                  : try HelperClient.send(request, socketPath: socket)
+    switch response {
     case .status(let status):
         print("""
         Helper \(status.version) · pf \(status.pfEnabled ? "enabled" : "disabled") · Netbite anchor \(status.anchorLoaded ? "loaded" : "empty")
@@ -355,6 +393,14 @@ func helper(_ args: Arguments) throws {
         if let listDomains = status.listDomainCount {
             let subscribed = status.blocklist?.hostsLists.sorted() ?? []
             print("Hosts lists: \(subscribed.isEmpty ? "none" : subscribed.joined(separator: ", ")) · \(Display.count(listDomains)) domains in /etc/hosts (`hector lists` for details)")
+        }
+        let allowed = status.blocklist?.allowedDomains.count ?? 0
+        if let removed = status.allowlistRemovedCount {
+            if allowed > 0 {
+                print("Allowlist: \(allowed) entr\(allowed == 1 ? "y" : "ies") · \(Display.count(removed)) names kept out of /etc/hosts")
+            }
+        } else {
+            print("Allowlist: not supported by this helper; update it from Hector → Blocklists")
         }
         status.warnings.forEach { print("warning: \($0)") }
         if let info = try? HelperClient.info(socketPath: socket) {

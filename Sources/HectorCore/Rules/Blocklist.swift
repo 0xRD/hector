@@ -99,12 +99,51 @@ public struct Blocklist: Codable, Sendable {
     /// Identifiers of the subscribed hosts lists (`HostsListCatalog`). Empty by default. Only the
     /// identifiers travel: the helper downloads the lists itself.
     public var hostsLists: Set<String>
+    /// The allowlist: host names that are never blocked by name, in normalized form (lowercased,
+    /// no trailing dot, see `normalizedAllowedDomain`). It wins over everything that goes to
+    /// /etc/hosts, the user's own domain rules included (docs/LOCAL_DNS.md, decision 4):
+    /// - an entry removes that exact name and every name below it from the hosts lists;
+    /// - an entry removes that exact name from the personal domain rules (`ads.example.com`
+    ///   blocked by a personal rule stays blocked when `example.com` is allowed).
+    /// Networks and countries (pf) are not affected. Empty by default.
+    public var allowedDomains: Set<String>
 
-    public init(rules: [Rule] = [], blockedCountries: Set<String> = [], hostsLists: Set<String> = []) {
+    public init(rules: [Rule] = [], blockedCountries: Set<String> = [], hostsLists: Set<String> = [],
+                allowedDomains: Set<String> = []) {
         self.schemaVersion = 1
         self.rules = rules
         self.blockedCountries = Set(blockedCountries.map { $0.uppercased() })
         self.hostsLists = hostsLists
+        // Invalid entries are kept as given, so that `HelperLimits.validate` reports them.
+        self.allowedDomains = Set(allowedDomains.map { Self.normalizedAllowedDomain($0) ?? $0 })
+    }
+
+    /// The normalized form of an allowlist entry, or `nil` when it is not a valid host name. The
+    /// validator is the one of personal domain rules (`DomainPattern`); `*.example.com` is accepted
+    /// and means `example.com`, since every entry already covers the names below it in lists.
+    public static func normalizedAllowedDomain(_ raw: String) -> String? {
+        DomainPattern(raw)?.host
+    }
+
+    /// Adds or removes an allowlist entry. Returns `false`, changing nothing, when `domain` is not
+    /// a valid host name.
+    @discardableResult
+    public mutating func setAllowed(_ domain: String, allowed: Bool) -> Bool {
+        guard let host = Self.normalizedAllowedDomain(domain) else { return false }
+        if allowed {
+            allowedDomains.insert(host)
+        } else {
+            allowedDomains.remove(host)
+        }
+        return true
+    }
+
+    /// The allowlist entry that overrides a block rule with this target, or `nil`. Only domain
+    /// targets can be overridden, and only by an entry for the same host. For the app: show
+    /// "overridden by allowlist" on a rule, warn before saving one.
+    public func allowlistEntry(overriding target: RuleTarget) -> String? {
+        guard case .domain(let pattern) = target, allowedDomains.contains(pattern.host) else { return nil }
+        return pattern.host
     }
 
     /// ISO 3166-1 alpha-2 shape: exactly two ASCII letters A–Z.
@@ -130,7 +169,9 @@ public struct Blocklist: Codable, Sendable {
 
     // Countries and lists are written sorted so the file diffs cleanly. Files written before hosts
     // lists existed have no `hostsLists` key and decode with none.
-    private enum CodingKeys: String, CodingKey { case schemaVersion, rules, blockedCountries, hostsLists }
+    // Files written before the allowlist existed have no `allowedDomains` key and decode with an
+    // empty one; apps that predate it ignore the key.
+    private enum CodingKeys: String, CodingKey { case schemaVersion, rules, blockedCountries, hostsLists, allowedDomains }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -150,6 +191,16 @@ public struct Blocklist: Codable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .hostsLists, in: container,
                                                    debugDescription: "Hosts list identifiers are 1 to 64 characters: a-z, 0-9 and -.")
         }
+        let allowed = try container.decodeIfPresent([String].self, forKey: .allowedDomains) ?? []
+        var normalized = Set<String>()
+        for entry in allowed {
+            guard let host = Self.normalizedAllowedDomain(entry) else {
+                throw DecodingError.dataCorruptedError(forKey: .allowedDomains, in: container,
+                                                       debugDescription: "Allowlist entries are host names, checked like personal domain rules.")
+            }
+            normalized.insert(host)
+        }
+        allowedDomains = normalized
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -158,6 +209,7 @@ public struct Blocklist: Codable, Sendable {
         try container.encode(rules, forKey: .rules)
         try container.encode(blockedCountries.sorted(), forKey: .blockedCountries)
         try container.encode(hostsLists.sorted(), forKey: .hostsLists)
+        try container.encode(allowedDomains.sorted(), forKey: .allowedDomains)
     }
 
     public static func load(from url: URL) throws -> Blocklist {

@@ -97,4 +97,72 @@ import Testing
             _ = PersistenceParsers.backgroundTaskItems(String(decoding: input, as: UTF8.self))
         }
     }
+
+    /// Mutated allowlists either fail to decode or hold only valid, normalized names.
+    @Test func allowlistsDecodeOnlyValidNames() {
+        var rng = Generator(state: 5)
+        let seed = Data(#"{"schemaVersion":1,"rules":[],"allowedDomains":["example.com","*.cdn.example.net","Upper.Example.org."]}"#.utf8)
+        for _ in 0..<2_000 {
+            guard let decoded = try? JSONDecoder.hector.decode(Blocklist.self, from: mutate(seed, &rng)) else { continue }
+            for entry in decoded.allowedDomains {
+                #expect(Blocklist.normalizedAllowedDomain(entry) == entry, "accepted \(entry.debugDescription)")
+            }
+            // Whatever decoded compiles without a crash.
+            _ = RuleCompiler.compile(decoded, geo: nil)
+        }
+    }
+
+    /// Random rules, lists and allowlists over a small alphabet of names, so that entries often
+    /// cover each other: whatever the input, no covered name reaches /etc/hosts, nothing else is
+    /// lost, and the report adds up.
+    @Test func allowlistInvariantsHold() {
+        var rng = Generator(state: 6)
+        let labels = ["a", "b", "ads", "cdn", "x-1"]
+        let roots = ["example.com", "example.net", "b.example.com"]
+        func name(_ rng: inout Generator) -> String {
+            var parts = [roots.randomElement(using: &rng)!]
+            for _ in 0..<Int.random(in: 0...2, using: &rng) { parts.insert(labels.randomElement(using: &rng)!, at: 0) }
+            return parts.joined(separator: ".")
+        }
+        let unified = HostsListCatalog.stevenBlackUnified.id
+        let privacy = HostsListCatalog.easyPrivacy.id
+        for _ in 0..<500 {
+            var rules: [Rule] = []
+            for _ in 0..<Int.random(in: 0...6, using: &rng) {
+                let host = name(&rng)
+                let raw = Bool.random(using: &rng) ? "*." + host : host
+                rules.append(Rule(target: RuleTarget(raw)!, isEnabled: Int.random(in: 0...3, using: &rng) > 0))
+            }
+            let allowed = Set((0..<Int.random(in: 0...4, using: &rng)).map { _ in name(&rng) })
+            let lists = [
+                unified: (0..<Int.random(in: 0...20, using: &rng)).map { _ in name(&rng) },
+                privacy: (0..<Int.random(in: 0...20, using: &rng)).map { _ in name(&rng) },
+            ]
+            let blocklist = Blocklist(rules: rules, hostsLists: [unified, privacy], allowedDomains: allowed)
+            let compiled = RuleCompiler.compile(blocklist, geo: nil, lists: lists)
+
+            let listed = Set(lists.values.joined())
+            let covered = listed.filter { RuleCompiler.allowlistEntry(covering: $0, in: allowed) != nil }
+            let personal = Set(compiled.hostsDomains)
+            #expect(Set(compiled.listDomains) == listed.subtracting(covered).subtracting(personal))
+            #expect(personal.isDisjoint(with: allowed))
+            #expect(compiled.allowlistEffects.map(\.domain) == allowed.sorted())
+            #expect(compiled.allowlistEffects.reduce(0) { $0 + $1.listDomainsRemoved } == covered.count)
+
+            var expectedOverrides: [UUID] = []
+            var expectedPersonal = Set<String>()
+            for rule in rules where rule.isEnabled {
+                guard case .domain(let pattern) = rule.target else { continue }
+                if allowed.contains(pattern.host) { expectedOverrides.append(rule.id) } else { expectedPersonal.insert(pattern.host) }
+            }
+            #expect(compiled.allowlistEffects.flatMap(\.overriddenRules).sorted { $0.uuidString < $1.uuidString }
+                    == expectedOverrides.sorted { $0.uuidString < $1.uuidString })
+            #expect(personal == expectedPersonal)
+            let overriddenHosts = Set(rules.filter { rule in expectedOverrides.contains(rule.id) }.compactMap { rule -> String? in
+                if case .domain(let pattern) = rule.target { return pattern.host }
+                return nil
+            })
+            #expect(compiled.allowlistRemovedCount == covered.union(overriddenHosts).count)
+        }
+    }
 }

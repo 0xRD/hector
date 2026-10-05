@@ -13,8 +13,36 @@ public struct CompiledBlocklist: Sendable {
     /// Host names from subscribed hosts lists, sorted, without the personal ones → the lists part
     /// of the `/etc/hosts` section.
     public var listDomains: [String] = []
-    /// Valid domains of each subscribed list that was available, by list identifier.
+    /// Valid domains of each subscribed list that was available, by list identifier, before the
+    /// allowlist is applied.
     public var listDomainCounts: [String: Int] = [:]
+    /// What each allowlist entry kept out of /etc/hosts, sorted by entry. Entries that changed
+    /// nothing are included, with zero counts.
+    public var allowlistEffects: [AllowlistEffect] = []
+
+    /// Distinct host names the allowlist kept out of /etc/hosts: list names plus the hosts of
+    /// overridden personal rules (a name in both counts once).
+    public var allowlistRemovedCount: Int = 0
+}
+
+/// What one allowlist entry overrode, for the app to show "overridden by allowlist".
+public struct AllowlistEffect: Codable, Hashable, Sendable, Identifiable {
+    /// The allowlist entry (normalized host name).
+    public var domain: String
+    /// Distinct names of the subscribed lists it removed: the entry itself and the names below it.
+    /// A name covered by several entries is counted for the most specific one only.
+    public var listDomainsRemoved: Int
+    /// Identifiers of the enabled personal rules it overrode (domain rules for the same host,
+    /// `*.example.com` included), in rule order.
+    public var overriddenRules: [UUID]
+
+    public var id: String { domain }
+
+    public init(domain: String, listDomainsRemoved: Int = 0, overriddenRules: [UUID] = []) {
+        self.domain = domain
+        self.listDomainsRemoved = listDomainsRemoved
+        self.overriddenRules = overriddenRules
+    }
 }
 
 public enum RuleCompiler {
@@ -24,12 +52,23 @@ public enum RuleCompiler {
 
     /// Compiles enabled rules. `geo` is needed only when countries are blocked; `lists` holds the
     /// parsed domains of the hosts lists available, by identifier (lists not subscribed are ignored).
+    ///
+    /// The allowlist wins over every name: an entry removes its exact host from the personal
+    /// domains, and its host and every name below it from the lists. `allowlistEffects` reports
+    /// what each entry overrode.
     public static func compile(_ blocklist: Blocklist, geo: GeoIPDatabase?, lists: [String: [String]] = [:]) -> CompiledBlocklist {
         var block = Set<CIDR>()
         var domains = Set<String>()
         var warnings: [String] = []
+        // Checked again here: the helper validates requests, but the compiler trusts no input.
+        let allowed = Set(blocklist.allowedDomains.compactMap(Blocklist.normalizedAllowedDomain))
+        var overridden: [String: [UUID]] = [:]
 
         for rule in blocklist.rules where rule.isEnabled {
+            if case .domain(let domain) = rule.target, allowed.contains(domain.host) {
+                overridden[domain.host, default: []].append(rule.id)
+                continue
+            }
             switch rule.target {
             case .network(let cidr):
                 let widest = cidr.network.isV4 ? widestIPv4Prefix : widestIPv6Prefix
@@ -70,7 +109,14 @@ public enum RuleCompiler {
             }
         }
 
-        let fromLists = compileLists(blocklist.hostsLists, lists: lists, personal: domains, warnings: &warnings)
+        let fromLists = compileLists(blocklist.hostsLists, lists: lists, personal: domains, allowed: allowed, warnings: &warnings)
+
+        var effects: [AllowlistEffect] = []
+        for entry in allowed.sorted() {
+            effects.append(AllowlistEffect(domain: entry, listDomainsRemoved: fromLists.removed[entry] ?? 0,
+                                           overriddenRules: overridden[entry] ?? []))
+        }
+        let removedNames = fromLists.removedNames.union(overridden.keys)
 
         return CompiledBlocklist(
             blockTable: block.sorted(),
@@ -78,18 +124,24 @@ public enum RuleCompiler {
             hostsDomains: domains.sorted(),
             warnings: warnings,
             listDomains: fromLists.domains,
-            listDomainCounts: fromLists.counts
+            listDomainCounts: fromLists.counts,
+            allowlistEffects: effects,
+            allowlistRemovedCount: removedNames.count
         )
     }
 
-    /// The union of the subscribed lists, without the personal domains, capped at
-    /// `HostsListCatalog.maximumListDomains`. Every name is checked again, so a damaged cache
-    /// cannot put a reserved name or a malformed line into /etc/hosts.
+    /// The union of the subscribed lists, without the personal domains and the names the
+    /// allowlist covers, capped at `HostsListCatalog.maximumListDomains`. Every name is checked
+    /// again, so a damaged cache cannot put a reserved name or a malformed line into /etc/hosts.
+    /// `removed` counts the distinct names each allowlist entry removed (`removedNames`).
     static func compileLists(_ subscribed: Set<String>, lists: [String: [String]], personal: Set<String>,
-                             warnings: inout [String],
-                             limit: Int = HostsListCatalog.maximumListDomains) -> (domains: [String], counts: [String: Int]) {
+                             allowed: Set<String> = [], warnings: inout [String],
+                             limit: Int = HostsListCatalog.maximumListDomains)
+        -> (domains: [String], counts: [String: Int], removed: [String: Int], removedNames: Set<String>) {
         var union = Set<String>()
         var counts: [String: Int] = [:]
+        var removed: [String: Int] = [:]
+        var removedNames = Set<String>()
         var capped = false
         let protected = HostsListCatalog.protectedHosts
         for id in subscribed.sorted() {
@@ -105,6 +157,10 @@ public enum RuleCompiler {
             for domain in domains {
                 guard isListDomain(domain, protected: protected) else { continue }
                 valid += 1
+                if let entry = allowlistEntry(covering: domain, in: allowed) {
+                    if removedNames.insert(domain).inserted { removed[entry, default: 0] += 1 }
+                    continue
+                }
                 if personal.contains(domain) || union.contains(domain) { continue }
                 if union.count >= limit {
                     capped = true
@@ -117,7 +173,21 @@ public enum RuleCompiler {
         if capped {
             warnings.append("Hosts lists hold more than \(Display.count(limit)) domains together; the rest were left out.")
         }
-        return (union.sorted(), counts)
+        return (union.sorted(), counts, removed, removedNames)
+    }
+
+    /// The most specific allowlist entry that covers `domain`: the name itself, else its nearest
+    /// parent on a label boundary (`example.com` covers `ads.example.com`, not `badexample.com`).
+    public static func allowlistEntry(covering domain: String, in allowed: Set<String>) -> String? {
+        guard !allowed.isEmpty else { return nil }
+        if allowed.contains(domain) { return domain }
+        var rest = domain[...]
+        while let dot = rest.firstIndex(of: ".") {
+            rest = rest[rest.index(after: dot)...]
+            let parent = String(rest)
+            if allowed.contains(parent) { return parent }
+        }
+        return nil
     }
 
     /// A name a list may put into /etc/hosts: already normalized, valid, not reserved, not protected.
