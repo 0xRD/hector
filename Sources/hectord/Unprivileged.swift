@@ -52,9 +52,33 @@ enum Unprivileged {
         }
     }
 
+    /// The child's own temporary folder, made after root is given up: a fresh `mkdtemp` under
+    /// /private/var/tmp (mode 0700, owned by `nobody`), set as TMPDIR, HOME and the working
+    /// directory before any download code runs, so nothing is written elsewhere. Root never has
+    /// to create or chown a folder for a child (0.4.5 helpers failed there, built by CI). The
+    /// caller removes it with `removeScratch`.
+    static func makeScratch() throws -> String {
+        var template = Array((HelperSandboxProfile.fetchFolderPrefix + "XXXXXX").utf8CString)
+        guard let created = template.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress!) }) else {
+            throw Failure(description: "Cannot create a temporary folder: \(String(cString: strerror(errno))).")
+        }
+        let path = String(cString: created)
+        guard setenv("TMPDIR", path + "/", 1) == 0, setenv("HOME", path, 1) == 0, chdir(path) == 0 else {
+            throw Failure(description: "Cannot use the temporary folder: \(String(cString: strerror(errno))).")
+        }
+        return path
+    }
+
+    static func removeScratch(_ path: String) {
+        _ = chdir("/")
+        try? FileManager.default.removeItem(atPath: path)
+    }
+
     /// `hectord fetch-list ID [--etag VALUE] [--last-modified VALUE]`
     static func runListChild(_ arguments: [String]) async throws {
         try dropPrivileges()
+        let scratch = try makeScratch()
+        defer { removeScratch(scratch) }
         var rest = arguments.makeIterator()
         guard let id = rest.next(), let source = HostsListCatalog.source(id) else { throw Failure(description: "Unknown list.") }
         var etag: String?
@@ -85,6 +109,8 @@ enum Unprivileged {
     /// `hectord fetch-countries`: the validated CSV on standard output.
     static func runCountriesChild() async throws {
         try dropPrivileges()
+        let scratch = try makeScratch()
+        defer { removeScratch(scratch) }
         let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         let destination = folder.appending(path: "countries-\(UUID().uuidString).csv")
         defer { try? FileManager.default.removeItem(at: destination) }
@@ -127,21 +153,19 @@ enum Unprivileged {
         try runChild(["fetch-countries"], maximumOutput: maximumCountriesOutput, timeout: 900)
     }
 
-    /// Starts this executable with `arguments`, a fixed environment and a private temporary
-    /// folder owned by the child's user, and returns its standard output. Throws when it fails,
-    /// writes too much, or takes too long.
+    /// Starts this executable with `arguments` and a fixed environment (the child makes its own
+    /// temporary folder, see `makeScratch`), and returns its standard output. Throws when it
+    /// fails, writes too much, or takes too long.
     private static func runChild(_ arguments: [String], maximumOutput: Int, timeout: TimeInterval) throws -> Data {
         guard let executable = Bundle.main.executablePath else { throw Failure(description: "Cannot find hectord.") }
-        let scratch = try privateFolder()
-        defer { try? FileManager.default.removeItem(atPath: scratch) }
+        sweepOldScratch()
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         // Nothing inherited: no DYLD_* or proxy variables from wherever the helper came from.
-        process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TMPDIR": scratch + "/", "HOME": scratch,
-                               "LANG": "en_US.UTF-8"]
-        process.currentDirectoryURL = URL(fileURLWithPath: scratch, isDirectory: true)
+        process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8"]
+        process.currentDirectoryURL = URL(fileURLWithPath: "/", isDirectory: true)
         let stdout = Pipe()
         let stderr = Pipe()
         process.standardInput = FileHandle.nullDevice
@@ -176,21 +200,20 @@ enum Unprivileged {
         return collector.data
     }
 
-    /// A fresh folder only the child's user can use: created by root with mode 0700, then given
-    /// to `nobody`. Under /private/var/tmp, never a path a user chooses.
-    private static func privateFolder() throws -> String {
-        var template = Array((HelperSandboxProfile.fetchFolderPrefix + "XXXXXX").utf8CString)
-        guard let created = template.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress!) }) else {
-            throw Failure(description: "Cannot create a temporary folder.")
+    /// Removes children's folders left for more than an hour (a child killed at its time limit
+    /// cannot clean up).
+    private static func sweepOldScratch() {
+        let parent = (HelperSandboxProfile.fetchFolderPrefix as NSString).deletingLastPathComponent
+        let prefix = (HelperSandboxProfile.fetchFolderPrefix as NSString).lastPathComponent
+        let files = FileManager.default
+        guard let names = try? files.contentsOfDirectory(atPath: parent) else { return }
+        for name in names where name.hasPrefix(prefix) {
+            let path = parent + "/" + name
+            var info = stat()
+            guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR,
+                  Date().timeIntervalSince1970 - Double(info.st_mtimespec.tv_sec) > 3600 else { continue }
+            try? files.removeItem(atPath: path)
         }
-        let path = String(cString: created)
-        if geteuid() == 0 {
-            guard chown(path, nobodyUser, nobodyGroup) == 0 else {
-                rmdir(path)
-                throw Failure(description: "Cannot prepare a temporary folder.")
-            }
-        }
-        return path
     }
 }
 

@@ -301,7 +301,8 @@ final class Enforcer {
             state.checkedAt = now
             state.lastError = nil
         } catch {
-            let message = (error as? HostsListDownloader.DownloadError)?.description ?? error.localizedDescription
+            // The error's own words: `localizedDescription` gives "The operation couldn't be completed".
+            let message = String(describing: error)
             state.lastError = String(message.prefix(300))
             log("Could not update the hosts list \(source.name): \(message)")
         }
