@@ -58,7 +58,8 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [ ] Persistence watch (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
 - [ ] Persistence actions (Reveal in Finder and Copy path exist): for user-scope items, disable or move to the Trash after confirmation (system items through the helper, with the authorization prompt)
 - [ ] Checkup: more checks: screen lock and password after sleep, Find My, firewall stealth mode advice, AirDrop set to Everyone, Bluetooth sharing, macOS version behind the latest, Startup Security policy (reduced security, kernel extensions allowed), Lockdown Mode status (information only), and the date of the last check so a change shows
-- [ ] Processes: CPU and memory columns, and "quit" or "show in Activity Monitor"
+- [x] Processes: a row menu (Reveal in Finder, Copy path, Copy PID, Open Activity Monitor) and "Quit…" for the user's own processes, after confirmation; the PID is checked again (owner and start time) so a reused number is never signalled
+- [ ] Processes: CPU and memory columns
 - [ ] Connections: traffic per app (bytes in and out) if it can be read without private frameworks; research `nettop`'s source
 - [ ] First launch: a short onboarding (what each screen does, install the helper for blocking, optional VirusTotal key, open at login)
 

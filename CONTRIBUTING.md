@@ -30,6 +30,7 @@ Debug builds of the app read these environment variables, so UI changes can be c
 - `HECTOR_DEBUG_HOVER=N` simulates the pointer over the N-th line of the map;
 - `HECTOR_DEBUG_SELECT=N` selects the N-th line of the map;
 - `HECTOR_DEBUG_SCREEN=NAME` opens a screen at launch: `blocklists`, `persistence`, `processes`, `checkup`, `taps` or `devices`;
+- `HECTOR_DEBUG_PROCESS=PID` selects that process on the Processes screen and opens its details;
 - `HECTOR_DEBUG_COUNTRY=US` filters Connections to one country; `HECTOR_DEBUG_HOVER_COUNTRY=US` hovers its bubble on the world map;
 - `HECTOR_DEBUG_SETTINGS=1` opens the Settings window;
 - `HECTOR_APPEARANCE=light` or `dark` forces the appearance;

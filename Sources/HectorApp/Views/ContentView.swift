@@ -146,6 +146,11 @@ struct ContentView: View {
                 // The sample tree is small: show it whole, and the details of the selected item.
                 state.processesShowApple = true
             }
+            if let pid = DebugSnapshot.processID {
+                state.processesShowApple = true
+                state.selectedProcess = pid
+                state.showProcessDetails = true
+            }
             if DebugSnapshot.opensSettings { openSettings() }
             if let country = DebugSnapshot.country {
                 try? await Task.sleep(for: .seconds(4))

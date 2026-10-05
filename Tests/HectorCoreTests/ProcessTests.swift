@@ -201,3 +201,44 @@ import Testing
         #expect(snapshot.withAncestors([]) == [])
     }
 }
+
+@Suite struct ProcessControlTests {
+    private func process(pid: Int32, userID: UInt32 = getuid(), startedAt: Date? = Date(timeIntervalSince1970: 1_000)) -> RunningProcess {
+        RunningProcess(pid: pid, parentPID: 1, userID: userID, name: "test", startedAt: startedAt)
+    }
+
+    @Test func offersQuitOnlyForTheUsersOwnProcesses() {
+        #expect(ProcessControl.canQuit(process(pid: 4242, userID: 501), userID: 501, ownPID: 1))
+        #expect(!ProcessControl.canQuit(process(pid: 4242, userID: 0), userID: 501, ownPID: 1))
+        #expect(!ProcessControl.canQuit(process(pid: 4242, userID: 502), userID: 501, ownPID: 1))
+        // Root running the app is not a reason to offer it.
+        #expect(!ProcessControl.canQuit(process(pid: 4242, userID: 0), userID: 0, ownPID: 1))
+        #expect(!ProcessControl.canQuit(process(pid: 4242, userID: 501), userID: 501, ownPID: 4242))
+        #expect(!ProcessControl.canQuit(process(pid: 1, userID: 501), userID: 501, ownPID: 2))
+        #expect(!ProcessControl.canQuit(process(pid: 4242, userID: 501, startedAt: nil), userID: 501, ownPID: 1))
+    }
+
+    @Test func quitsAChildAndRefusesAReusedPID() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["30"]
+        try child.run()
+        defer { if child.isRunning { child.terminate() } }
+
+        let info = try #require(ProcessCollector.basicInfo(of: child.processIdentifier))
+        let seen = RunningProcess(pid: child.processIdentifier, parentPID: info.parentPID, userID: info.userID,
+                                  name: "sleep", startedAt: info.startedAt)
+
+        // Same PID, another start time: a different process now.
+        var older = seen
+        older.startedAt = seen.startedAt?.addingTimeInterval(-60)
+        #expect(throws: ProcessControl.Refusal.replaced) { try ProcessControl.terminate(older) }
+        #expect(child.isRunning)
+
+        try ProcessControl.terminate(seen)
+        child.waitUntilExit()
+        #expect(child.terminationReason == .uncaughtSignal)
+        #expect(child.terminationStatus == SIGTERM)
+        #expect(throws: ProcessControl.Refusal.exited) { try ProcessControl.verify(seen) }
+    }
+}

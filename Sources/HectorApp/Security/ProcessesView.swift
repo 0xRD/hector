@@ -115,6 +115,12 @@ struct ProcessesView: View {
             }
             .width(min: 70, ideal: 90, max: 120)
         }
+        .contextMenu(forSelectionType: Int32.self) { pids in
+            if pids.count == 1, let pid = pids.first,
+               let process = security.processes?.processes.first(where: { $0.pid == pid }) {
+                ProcessActions.menu(for: process, security: security)
+            }
+        }
     }
 
     private var visibleRows: [ProcessRow] {
@@ -270,6 +276,14 @@ struct ProcessDetailView: View {
                     Button("Copy path") { copyToPasteboard(path) }
                 }
             }
+            HStack {
+                Button("Open Activity Monitor") { ProcessActions.openActivityMonitor() }
+                if ProcessControl.canQuit(process) {
+                    Button("Quit…", role: .destructive) { ProcessActions.confirmAndQuit(process, security: security) }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.hectorDanger)
+                }
+            }
         }
     }
 
@@ -319,6 +333,67 @@ private struct QuarantineSection: View {
             if let url = info.dataURL { DetailRow("From", value: url, monospaced: true) }
             if let origin = info.originURL { DetailRow("Page", value: origin, monospaced: true) }
             DetailRow("Opened", value: info.userApproved ? "Approved by the user in Gatekeeper" : "Not approved yet")
+        }
+    }
+}
+
+/// Actions on one process, shared by the row menu and the details panel.
+@MainActor
+enum ProcessActions {
+    @ViewBuilder
+    static func menu(for process: RunningProcess, security: SecurityController) -> some View {
+        if let path = process.executablePath {
+            Button("Reveal in Finder") { revealInFinder(path) }
+            Button("Copy path") { copyToPasteboard(path) }
+        }
+        Button("Copy PID") { copyToPasteboard(String(process.pid)) }
+        Divider()
+        Button("Open Activity Monitor") { openActivityMonitor() }
+        if ProcessControl.canQuit(process) {
+            Button("Quit…", role: .destructive) { confirmAndQuit(process, security: security) }
+        }
+    }
+
+    /// Activity Monitor cannot be opened on a given process; the PID is in the row menu to search it.
+    static func openActivityMonitor() {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.ActivityMonitor") else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    /// Asks first, then quits politely: an app through AppKit (it can ask to save its documents),
+    /// anything else with SIGTERM. Only offered for the user's own processes (`ProcessControl.canQuit`).
+    static func confirmAndQuit(_ process: RunningProcess, security: SecurityController) {
+        let app = NSRunningApplication(processIdentifier: process.pid).flatMap { $0.activationPolicy == .regular ? $0 : nil }
+        let alert = NSAlert()
+        alert.messageText = "Quit \u{201C}\(process.name)\u{201D}?"
+        var details = ["PID \(process.pid)" + (process.appName.map { $0 != process.name ? ", part of \($0)" : "" } ?? "") + "."]
+        if app != nil {
+            details.append("It is asked to quit as from its own menu, so it can offer to save open documents.")
+        } else {
+            details.append("It is sent a request to quit (SIGTERM), as `kill` does. Unsaved work in it may be lost, and macOS may start it again if it runs as a background service.")
+        }
+        alert.informativeText = details.joined(separator: " ")
+        alert.addButton(withTitle: "Quit").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        do {
+            if let app {
+                try ProcessControl.verify(process)
+                app.terminate()
+            } else {
+                try ProcessControl.terminate(process)
+            }
+        } catch {
+            let failure = NSAlert()
+            failure.alertStyle = .warning
+            failure.messageText = "Hector could not quit \u{201C}\(process.name)\u{201D}"
+            failure.informativeText = (error as? ProcessControl.Refusal)?.description ?? error.localizedDescription
+            failure.runModal()
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            await security.refreshProcesses()
         }
     }
 }
