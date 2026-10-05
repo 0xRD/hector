@@ -71,7 +71,7 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [x] Compiler to pf anchor, pf tables and a managed `/etc/hosts` section, with safety rails
 - [x] `hector connections | geo | rules` command-line tool
 - [x] Unit tests (Swift Testing)
-- [ ] CI on GitHub Actions (build and test on macOS)
+- [x] CI on GitHub Actions (build and test on macOS; shipped in 0.3)
 
 ## 0.2: the app
 
@@ -110,6 +110,8 @@ Based on the design mockup (main window and blocklist editor).
   - [x] Release workflow: dry run by hand (zip kept as an artifact), checks of the zip before publishing
 - [x] Imported hosts lists (StevenBlack Unified, EasyPrivacy converted), with periodic updates (shipped in 0.4: downloaded by the helper from a fixed catalog, weekly conditional checks, Lists section and `hector lists`)
   - [ ] Check on a real Mac: resolution latency and mDNSResponder memory with ~110,000 domains in /etc/hosts
+    - [x] Memory: about 20 MB resident for mDNSResponder with 113,627 list domains (2026-10-04, see [LOCAL_DNS.md](LOCAL_DNS.md))
+    - [ ] Latency: only measured with 43,112 domains (6 ms blocked, 30 to 50 ms normal); measure again with both lists
 
 ## 0.4: Hector
 
@@ -122,6 +124,8 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
   - [x] One node per country, with a count bubble, lines thicker for more destinations, and a hover card listing the apps; individual destinations fan out only when zoomed in
   - [x] Zoom and pan: pinch and drag on the trackpad, buttons to zoom, fit what is shown and show the world (zoom stops at 6×: the land is a 3.6° dot grid)
   - [ ] Zoom with ⌘ and the scroll wheel; keyboard shortcuts for the map buttons
+    - [x] Keyboard shortcuts: ⌘= zoom in, ⌘- zoom out, ⌘9 fit, ⌘0 whole world, shown in the buttons' tooltips (to try on a Mac)
+    - [ ] ⌘ and the scroll wheel (SwiftUI has no scroll-wheel event: needs an `NSEvent` monitor or an AppKit view under the map)
   - [ ] Later: city-level points would need a city database (DB-IP City Lite is about 130 MB); decide whether the gain is worth the size
 
 - [x] Rename the app, the bundle, the helper, the CLI and the docs to Hector, with migration from Netbite 0.3 (helper, blocklist, data, VirusTotal key)
@@ -132,6 +136,8 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 - [x] App screens for Persistence and Processes, with signature and VirusTotal columns; settings to store the API key
 - [x] Login items and background tasks through the helper (`sfltool dumpbtm` needs root)
 - [ ] Check the `sfltool dumpbtm` parser against real output on macOS 15 and 26/27
+  - [x] macOS 26.6: login items listed through the helper as root (2026-10-04, helper 0.4.2)
+  - [ ] macOS 15 and 27
 - [ ] Keychain: the API key item is tied to the binary that created it; decide how the app and the CLI share it without prompts
 - [x] **VirusTotal**: personal API key stored in the Keychain; lookups by SHA-256 only, never uploading a file unless the user asks for that file; results cached; the free-tier limit (4 requests per minute, 500 per day) respected
 - [x] **Persistence** (in the spirit of KnockKnock): launch agents and daemons, login items and background tasks, cron and periodic jobs, system extensions, configuration profiles, browser extensions. Each item with its code signature (Apple, Developer ID, ad hoc, unsigned), notarization, path, and VirusTotal score

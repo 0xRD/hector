@@ -9,7 +9,8 @@ import SwiftUI
 /// gets its own line again; hovering one reports it through `WindowState.hovered`, which the
 /// sidebar and the list use to highlight the owning app and row.
 ///
-/// Pinch to zoom, drag to pan; the buttons zoom in and out, fit what is shown, or show the world.
+/// Pinch to zoom, drag to pan; the buttons zoom in and out, fit what is shown, or show the world
+/// (⌘=, ⌘-, ⌘9 and ⌘0 while the map is on screen).
 struct WorldMapView: View {
     let rows: [DestinationRow]
     /// App whose lines stay emphasized when nothing is hovered (`nil`: all apps).
@@ -225,14 +226,22 @@ struct WorldMapView: View {
     private func controls(size: CGSize, geometry: MapGeometry) -> some View {
         let viewport = state.mapViewport
         return VStack(spacing: 2) {
-            MapControlButton("plus", help: "Zoom in") { zoom(by: 1.6, size: size) }
-                .disabled(viewport.zoom >= MapViewport.maximumZoom)
-            MapControlButton("minus", help: "Zoom out") { zoom(by: 1 / 1.6, size: size) }
-                .disabled(viewport.zoom <= 1)
+            MapControlButton("plus", help: "Zoom in", shortcut: KeyboardShortcut("=", modifiers: .command)) {
+                zoom(by: 1.6, size: size)
+            }
+            .disabled(viewport.zoom >= MapViewport.maximumZoom)
+            MapControlButton("minus", help: "Zoom out", shortcut: KeyboardShortcut("-", modifiers: .command)) {
+                zoom(by: 1 / 1.6, size: size)
+            }
+            .disabled(viewport.zoom <= 1)
             Divider().frame(width: 18)
-            MapControlButton("scope", help: "Fit the destinations shown") { fit(size: size) }
-            MapControlButton("globe", help: "Show the whole world") { state.mapViewport = .world }
-                .disabled(viewport == .world)
+            MapControlButton("scope", help: "Fit the destinations shown", shortcut: KeyboardShortcut("9", modifiers: .command)) {
+                fit(size: size)
+            }
+            MapControlButton("globe", help: "Show the whole world", shortcut: KeyboardShortcut("0", modifiers: .command)) {
+                state.mapViewport = .world
+            }
+            .disabled(viewport == .world)
         }
         .padding(4)
         .cardSurface(cornerRadius: Radius.md)
@@ -404,12 +413,19 @@ private final class LandPaths: @unchecked Sendable {
 private struct MapControlButton: View {
     let symbol: String
     let help: String
+    let shortcut: KeyboardShortcut
     let action: () -> Void
 
-    init(_ symbol: String, help: String, action: @escaping () -> Void) {
+    init(_ symbol: String, help: String, shortcut: KeyboardShortcut, action: @escaping () -> Void) {
         self.symbol = symbol
         self.help = help
+        self.shortcut = shortcut
         self.action = action
+    }
+
+    /// "Zoom in (⌘=)": the shortcut is only discoverable through the tooltip.
+    private var helpWithShortcut: String {
+        "\(help) (⌘\(shortcut.key.character))"
     }
 
     var body: some View {
@@ -420,7 +436,8 @@ private struct MapControlButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
-        .help(help)
+        .keyboardShortcut(shortcut)
+        .help(helpWithShortcut)
         .accessibilityLabel(help)
     }
 }
