@@ -34,6 +34,9 @@ final class ConnectionMonitor {
     private(set) var networkNamesStatus: NetworkNamesStatus = .loading
     /// Snapshots come from the root helper, so system daemons are included.
     private(set) var seesAllProcesses = false
+    /// The helper is installed but did not answer the last snapshot in time: only the user's own
+    /// processes are shown, and the screen says so.
+    private(set) var helperDidNotAnswer = false
     var isPaused = false
 
     /// How often a snapshot is worth taking, set by the window. Every snapshot makes the helper
@@ -96,8 +99,9 @@ final class ConnectionMonitor {
                 // comes back into view is up to date within a second.
                 if !self.isPaused, ContinuousClock.now - self.lastSnapshotAt >= self.demand.interval - .milliseconds(100) {
                     self.lastSnapshotAt = .now
-                    let (snapshot, fromHelper) = await Task.detached(priority: .utility) { Self.takeSnapshot() }.value
-                    if self.seesAllProcesses != fromHelper { self.seesAllProcesses = fromHelper }
+                    let (snapshot, source) = await Task.detached(priority: .utility) { Self.takeSnapshot() }.value
+                    if self.seesAllProcesses != (source == .helper) { self.seesAllProcesses = source == .helper }
+                    if self.helperDidNotAnswer != (source == .helperFailed) { self.helperDidNotAnswer = source == .helperFailed }
                     self.ingest(snapshot)
                 }
                 try? await Task.sleep(for: .seconds(1))
@@ -105,13 +109,18 @@ final class ConnectionMonitor {
         }
     }
 
+    enum SnapshotSource { case helper, local, helperFailed }
+
     /// Asks the helper first (it runs as root and sees every process), then falls back to a local
-    /// snapshot of the user's own processes.
-    nonisolated private static func takeSnapshot() -> (CollectorSnapshot, Bool) {
-        if HelperClient.isInstalled, case .snapshot(let snapshot)? = try? HelperClient.send(.snapshot, timeout: 3) {
-            return (snapshot, true)
+    /// snapshot of the user's own processes. The timeout matches the Processes screen's: endpoint
+    /// security agents can make walking every process's sockets slow, and a short timeout here
+    /// dropped every root process (such an agent's own among them) from the map.
+    nonisolated private static func takeSnapshot() -> (CollectorSnapshot, SnapshotSource) {
+        guard HelperClient.isInstalled else { return (SocketCollector().snapshot(), .local) }
+        if case .snapshot(let snapshot)? = try? HelperClient.send(.snapshot, timeout: 10) {
+            return (snapshot, .helper)
         }
-        return (SocketCollector().snapshot(), false)
+        return (SocketCollector().snapshot(), .helperFailed)
     }
 
     // MARK: - GeoIP

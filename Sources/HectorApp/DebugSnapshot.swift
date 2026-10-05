@@ -14,6 +14,7 @@ import SwiftUI
 /// - `HECTOR_DEBUG_SETTINGS=1` opens the Settings window.
 /// - `HECTOR_DEBUG_SCREEN=NAME` opens a screen: blocklists, persistence, processes, checkup,
 ///   taps or devices.
+/// - `HECTOR_DEBUG_APP=NAME` narrows Connections, map and list, to the app with that name.
 /// - `HECTOR_DEBUG_PROCESS=PID` selects that process on the Processes screen and shows its details.
 /// - `HECTOR_APPEARANCE=light` or `dark` forces the appearance, whatever the system uses.
 /// - `HECTOR_DEMO=1` shows fixed sample data instead of this Mac's (see `DemoData`).
@@ -40,6 +41,7 @@ enum DebugSnapshot {
 
     static var country: String? { environment["HECTOR_DEBUG_COUNTRY"] }
     static var hoverCountry: String? { environment["HECTOR_DEBUG_HOVER_COUNTRY"] }
+    static var appName: String? { environment["HECTOR_DEBUG_APP"] }
     static var processID: Int32? { environment["HECTOR_DEBUG_PROCESS"].flatMap(Int32.init) }
     static var opensSettings: Bool { environment["HECTOR_DEBUG_SETTINGS"] != nil }
 

@@ -93,11 +93,6 @@ struct ContentView: View {
         .navigationTitle(title)
         .navigationSubtitle(isNetworkScreen ? "\(monitor.liveConnectionCount) live connections" : "")
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                if isNetworkScreen {
-                    AppFilterMenu(monitor: monitor, state: state)
-                }
-            }
             ToolbarItem(placement: .principal) {
                 if isNetworkScreen {
                     Picker("Show", selection: $state.filter) {
@@ -156,6 +151,10 @@ struct ContentView: View {
                 try? await Task.sleep(for: .seconds(4))
                 state.countryFilter = country
             }
+            if let name = DebugSnapshot.appName {
+                try? await Task.sleep(for: .seconds(4))
+                state.appFilter = monitor.apps.values.first { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }?.id
+            }
             if let country = DebugSnapshot.hoverCountry {
                 try? await Task.sleep(for: .seconds(4))
                 state.hoveredCountry = country
@@ -204,14 +203,13 @@ struct ContentView: View {
 
     private func mapCard(rows: [DestinationRow], allCountryRows: [DestinationRow]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            MapCardHeader(rows: rows, allCountryRows: allCountryRows, state: state)
+            MapCardHeader(rows: rows, allCountryRows: allCountryRows, monitor: monitor, state: state)
             WorldMapView(
                 rows: rows,
                 focusAppID: selectedAppID,
                 originCountry: monitor.originCountry,
                 state: state,
                 onSelect: { row in
-                    if selectedAppID != nil { state.appFilter = row.app.id }
                     state.selectedDestination = row.id
                     state.showInspector = true
                 }
@@ -257,11 +255,12 @@ struct ContentView: View {
         return monitor.apps[id]?.name ?? "Hector"
     }
 
-    /// Every destination of every app that passes the filter and the search, for the map.
+    /// Every destination of the chosen app (or every app) that passes the filter and the search,
+    /// for the map and the list.
     private var visibleRows: [DestinationRow] {
         let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
         let applied = blocking.applied
-        return monitor.sortedApps.flatMap { app in
+        return monitor.sortedApps.filter { selectedAppID == nil || $0.id == selectedAppID }.flatMap { app in
             app.sortedDestinations
                 .filter { query.isEmpty || matches($0, app: app, query: query) }
                 .map { DestinationRow(app: app, destination: $0,
@@ -270,11 +269,11 @@ struct ContentView: View {
         }
     }
 
-    /// The list shows the selected app only, or every app.
+    /// The rows grouped by app, for the list.
     private func listGroups(from rows: [DestinationRow]) -> [DestinationGroup] {
         var order: [AppGroup.ID] = []
         var byApp: [AppGroup.ID: [DestinationRow]] = [:]
-        for row in rows where selectedAppID == nil || row.app.id == selectedAppID {
+        for row in rows {
             if byApp[row.app.id] == nil { order.append(row.app.id) }
             byApp[row.app.id, default: []].append(row)
         }
@@ -303,11 +302,12 @@ struct ContentView: View {
 
 /// Title, counts and legend above the map. Drops the counts when the column is narrow.
 ///
-/// The country count is also the country filter: it lists every country with its destinations.
+/// The app and country counts are also the filters: each lists its apps or countries.
 private struct MapCardHeader: View {
     let rows: [DestinationRow]
     /// The rows before the country filter, for the list of countries.
     let allCountryRows: [DestinationRow]
+    let monitor: ConnectionMonitor
     let state: WindowState
 
     var body: some View {
@@ -321,11 +321,14 @@ private struct MapCardHeader: View {
                         .font(.sectionTitle)
                         .fixedSize()
                         .accessibilityAddTraits(.isHeader)
+                    if let id = state.appFilter {
+                        AppFilterChip(name: monitor.apps[id]?.name ?? "App") { state.appFilter = nil }
+                    }
                     if let country = state.countryFilter {
                         CountryFilterChip(country: country) { state.countryFilter = nil }
                     }
                 }
-                Text(state.countryFilter == nil
+                Text(state.countryFilter == nil && state.appFilter == nil
                      ? "Hover a line to see which apps use it. Click a country to show only it."
                      : "Hover a line to see which app owns it. Click it for details.")
                     .font(.caption)
@@ -336,15 +339,20 @@ private struct MapCardHeader: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: Spacing.lg) {
                     Metric("\(rows.count)", label: rows.count == 1 ? "destination" : "destinations")
+                    AppFilterMenu(monitor: monitor, state: state)
                     countryMenu
                     Divider().frame(height: 30)
                     MapLegend()
                 }
                 HStack(spacing: Spacing.lg) {
+                    AppFilterMenu(monitor: monitor, state: state)
                     countryMenu
                     MapLegend()
                 }
-                MapLegend()
+                HStack(spacing: Spacing.lg) {
+                    AppFilterMenu(monitor: monitor, state: state)
+                    countryMenu
+                }
             }
             .layoutPriority(1)
         }
@@ -409,6 +417,29 @@ private struct CountryFilterChip: View {
         .buttonStyle(.plain)
         .help("Show every country")
         .accessibilityLabel("Only \(Countries.name(country)). Show every country")
+    }
+}
+
+/// The app the screen is narrowed to, with a button to show every app again.
+private struct AppFilterChip: View {
+    let name: String
+    let clear: () -> Void
+
+    var body: some View {
+        Button(action: clear) {
+            HStack(spacing: 5) {
+                Image(systemName: "app.badge.checkmark").font(.caption2.weight(.bold))
+                Text(name).font(.caption.weight(.semibold)).lineLimit(1)
+                Image(systemName: "xmark.circle.fill").font(.caption)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .foregroundStyle(Color.hectorOK)
+            .background(Color.hectorOKWash, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Show every app")
+        .accessibilityLabel("Only \(name). Show every app")
     }
 }
 
@@ -502,6 +533,11 @@ private struct StatusBar: View {
             if monitor.seesAllProcesses {
                 separator
                 Label("All processes, through the helper", systemImage: "checkmark.shield")
+            } else if monitor.helperDidNotAnswer {
+                separator
+                Label("The helper did not answer: your own processes only", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(Color.hectorWarning)
+                    .help("System daemons and other users' processes are missing until the helper answers again. Check Blocklists → helper.")
             } else if monitor.unreadableProcessCount > 0 {
                 separator
                 Label("\(monitor.unreadableProcessCount) processes of other users are hidden", systemImage: "eye.slash")
@@ -544,8 +580,8 @@ private struct StatusBarLabelStyle: LabelStyle {
     }
 }
 
-/// Narrows the Connections screen to one app. Replaces the per-app rows the sidebar used to
-/// have. Takes its models as parameters: toolbar items are hosted outside the window's view tree.
+/// Narrows the Connections screen, map and list, to one app. Sits next to the country filter in
+/// the map's header and looks like it: a count that opens a menu.
 private struct AppFilterMenu: View {
     let monitor: ConnectionMonitor
     let state: WindowState
@@ -553,27 +589,38 @@ private struct AppFilterMenu: View {
     var body: some View {
         let apps = monitor.apps.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         Menu {
-            Button("All apps") { state.appFilter = nil }
+            Button {
+                state.appFilter = nil
+            } label: {
+                if state.appFilter == nil { Label("All apps", systemImage: "checkmark") } else { Text("All apps") }
+            }
             Divider()
             Section("Apps") {
-                ForEach(apps.filter { $0.kind == .app }) { app in
-                    Button(label(for: app)) { state.appFilter = app.id }
-                }
+                ForEach(apps.filter { $0.kind == .app }) { item(for: $0) }
             }
             Section("System & tools") {
-                ForEach(apps.filter { $0.kind == .system }) { app in
-                    Button(label(for: app)) { state.appFilter = app.id }
-                }
+                ForEach(apps.filter { $0.kind == .system }) { item(for: $0) }
             }
         } label: {
-            Label(currentName, systemImage: state.appFilter == nil ? "square.grid.2x2" : "app.badge.checkmark")
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Metric("\(apps.count)", label: apps.count == 1 ? "app" : "apps")
+                Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
         }
-        .help("Show the connections of every app, or of one app")
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Show only one app")
+        .disabled(apps.isEmpty)
     }
 
-    private var currentName: String {
-        guard let id = state.appFilter else { return "All apps" }
-        return monitor.apps[id]?.name ?? "All apps"
+    private func item(for app: AppGroup) -> some View {
+        Button {
+            state.appFilter = app.id
+        } label: {
+            if state.appFilter == app.id { Label(label(for: app), systemImage: "checkmark") } else { Text(label(for: app)) }
+        }
     }
 
     private func label(for app: AppGroup) -> String {
