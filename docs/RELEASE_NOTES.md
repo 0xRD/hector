@@ -17,6 +17,7 @@ Netbite becomes **Hector**, a small all-in-one security app for macOS. Netbite s
 - **0.4.5:** fixes 0.4.4 hanging at launch (100% CPU, no window) when macOS hides the menu bar icon because the menu bar is full. Releases are now launched on CI before they are published.
 - **0.4.6:** fixes hosts lists failing to download with the 0.4.5 helper ("error 1"): download children now make their own temporary folder after giving up root, and errors say what went wrong. Update the helper from Blocklists, then Update Now.
 - **0.4.7:** Processes has a right-click menu on every row (Reveal in Finder, Copy path, Copy PID, Open Activity Monitor) and can quit your own processes after asking; apps are asked to quit normally, so they can offer to save. Other users' and the system's processes cannot be quit from Hector.
+- **0.4.8:** Connections: the app filter sits next to the country filter and now narrows the map as well as the list; zoomed in, the map switches to finer land dots so countries keep their shape; if the helper does not answer in time, the status bar says so instead of quietly showing only your own processes (it now waits 10 seconds, for Macs where an endpoint security agent slows it down). `hector helper status` splits /etc/hosts into personal and list domains. Install with Homebrew: `brew install --cask 0xrd/tap/hector`.
 
 ## Install
 

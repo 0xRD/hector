@@ -279,7 +279,7 @@ struct ProcessDetailView: View {
             HStack {
                 Button("Open Activity Monitor") { ProcessActions.openActivityMonitor() }
                 if ProcessControl.canQuit(process) {
-                    Button("Quit…", role: .destructive) { ProcessActions.confirmAndQuit(process, security: security) }
+                    Button("Quit", role: .destructive) { ProcessActions.confirmAndQuit(process, security: security) }
                         .buttonStyle(.borderedProminent)
                         .tint(Color.hectorDanger)
                 }
@@ -350,7 +350,7 @@ enum ProcessActions {
         Divider()
         Button("Open Activity Monitor") { openActivityMonitor() }
         if ProcessControl.canQuit(process) {
-            Button("Quit…", role: .destructive) { confirmAndQuit(process, security: security) }
+            Button("Quit", role: .destructive) { confirmAndQuit(process, security: security) }
         }
     }
 
