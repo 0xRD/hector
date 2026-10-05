@@ -49,8 +49,11 @@ struct HectorApp: App {
             }
         }
 
-        MenuBarExtra(isInserted: Binding(get: { preferences.keepsRunningInMenuBar },
-                                         set: { preferences.keepsRunningInMenuBar = $0 })) {
+        // Read-only on purpose: SwiftUI writes back whatever AppKit reports about the item, and
+        // when macOS hides it (a full menu bar behind the notch), each write rebuilt the scenes,
+        // which re-inserted the item, which macOS hid again: an endless loop at 100% CPU, in the
+        // builds made with the macOS 15 SDK. Only Settings changes this preference.
+        MenuBarExtra(isInserted: Binding(get: { preferences.keepsRunningInMenuBar }, set: { _ in })) {
             MenuBarPanel()
                 .environment(monitor)
                 .environment(blocking)

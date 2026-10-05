@@ -28,3 +28,6 @@ jobs:
       # before a tag is pushed.
       - name: Bundle the app
         run: scripts/bundle-app.sh --zip
+
+      - name: Launch the app (crash, CPU and memory)
+        run: scripts/smoke-test.sh .build/Hector.app 20
