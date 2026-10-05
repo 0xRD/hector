@@ -119,6 +119,11 @@ public enum HelperClient {
             return .failure("The installed helper (\(info.version)) is older than this app and cannot do this. "
                             + "Update it from Blocklists → Update helper.")
         }
+        // An older helper would drop the allowlist silently and block what the user unblocked.
+        if case .apply(let blocklist, _) = request, !blocklist.allowedDomains.isEmpty, !info.supportsAllowlist {
+            return .failure("The installed helper (\(info.version)) is older than this app and does not know the allowlist. "
+                            + "Update it from Blocklists → Update helper.")
+        }
         return try send(request, socketPath: socketPath, timeout: timeout)
     }
 }

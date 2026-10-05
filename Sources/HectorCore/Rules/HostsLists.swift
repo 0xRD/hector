@@ -50,7 +50,21 @@ public enum HostsListCatalog {
         minimumDomains: 5_000
     )
 
-    public static let all: [HostsListSource] = [stevenBlackUnified, easyPrivacy]
+    /// HaGeZi's Multi Light in the legacy hosts format, which lists every blocked subdomain
+    /// explicitly ("Hosts (including possible subdomains)"), so /etc/hosts blocks what the list
+    /// means. HaGeZi Normal (Multi, ~334,000 names) and Pro (~432,000) in that format exceed
+    /// `maximumDomainsPerList` and are not in the catalog.
+    public static let hageziLight = HostsListSource(
+        id: "hagezi-light",
+        name: "HaGeZi Light",
+        summary: "Ads, trackers, telemetry and some malware, built not to break sites. About 117,000 domains.",
+        url: URL(string: "https://raw.githubusercontent.com/hagezi/dns-blocklists-legacy/main/hosts/light.txt")!,
+        homepage: URL(string: "https://github.com/hagezi/dns-blocklists")!,
+        license: "GPL-3.0",
+        minimumDomains: 30_000
+    )
+
+    public static let all: [HostsListSource] = [stevenBlackUnified, easyPrivacy, hageziLight]
 
     public static func source(_ id: String) -> HostsListSource? {
         all.first { $0.id == id }

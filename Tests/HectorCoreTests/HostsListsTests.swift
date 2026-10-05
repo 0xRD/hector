@@ -27,6 +27,17 @@ import Testing
     0.0.0.0 one.example.com two.example.com
     """
 
+    /// The shape of HaGeZi's hosts-format files: a comment header, then `0.0.0.0 name` lines that
+    /// spell out subdomains.
+    @Test func readsHaGeZiHostsFormat() {
+        let text = "# Title: HaGeZi's Multi LIGHT\n# Syntax: Hosts (including possible subdomains)\n# Number of entries: 3\n#\n"
+            + "0.0.0.0 000webhost.com\n0.0.0.0 www.000webhost.com\n0.0.0.0 telemetry.example-studio.com\n"
+        let result = HostsListParser.parse(text)
+        #expect(result.domains == ["000webhost.com", "telemetry.example-studio.com", "www.000webhost.com"])
+        #expect(result.invalidLines == 0)
+        #expect(result.skippedEntries == 0)
+    }
+
     @Test func readsHostsLines() {
         let result = HostsListParser.parse(Self.sample)
         #expect(result.domains == [
@@ -149,6 +160,12 @@ import Testing
             #expect(HostsListCatalog.protectedHosts.contains(source.url.host() ?? ""))
         }
         #expect(HostsListCatalog.source("stevenblack-unified")?.url.absoluteString == "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts")
+        // Hosts format, which lists subdomains explicitly; the wildcard format would under-block.
+        #expect(HostsListCatalog.source("hagezi-light")?.url.absoluteString == "https://raw.githubusercontent.com/hagezi/dns-blocklists-legacy/main/hosts/light.txt")
+        // Normal and Pro exceed the per-list bound in hosts format.
+        #expect(HostsListCatalog.source("hagezi-multi") == nil && HostsListCatalog.source("hagezi-pro") == nil)
+        // Off by default, like every list.
+        #expect(Blocklist().hostsLists.isEmpty)
     }
 
     @Test func identifiersHaveAStrictShape() {

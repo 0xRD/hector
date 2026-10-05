@@ -94,7 +94,10 @@ public enum HelperCapability: String, Codable, CaseIterable, Sendable {
 /// The helper's answer to `hello`.
 public struct HelperInfo: Codable, Equatable, Sendable {
     /// Bumped when requests or responses change shape, independently of the app version.
-    public static let currentProtocol = 2
+    /// 3: blocklists carry `allowedDomains`, status replies `allowlistEffects`. A helper at
+    /// protocol 2 decodes such a blocklist without its allowlist and enforces the rest, so the app
+    /// must not send an allowlist to an outdated helper.
+    public static let currentProtocol = 3
 
     public var version: String
     public var protocolVersion: Int
@@ -124,6 +127,10 @@ public struct HelperInfo: Codable, Equatable, Sendable {
         capabilities.contains(capability.rawValue)
     }
 
+    /// Whether `apply` honors `Blocklist.allowedDomains` (protocol 3 and later). Older helpers
+    /// decode the blocklist without it.
+    public var supportsAllowlist: Bool { protocolVersion >= 3 }
+
     /// Whether the installed helper is older than this app and should be updated.
     public var isOutdated: Bool {
         protocolVersion < Self.currentProtocol || !HelperCapability.allCases.allSatisfy(supports)
@@ -143,6 +150,9 @@ public enum HelperLimits {
     /// Connections the helper serves at the same time; the next ones wait in the listen backlog.
     public static let maximumConcurrentClients = 8
     public static let maximumNoteLength = 500
+    /// Allowlist entries (`Blocklist.allowedDomains`). At 253 bytes per name at most, 10,000
+    /// entries stay within the request size.
+    public static let maximumAllowedDomains = 10_000
     /// Networks in the pf tables (rules and countries together). pf's default limit is 200,000
     /// table entries for the whole system; staying well under it leaves room for other software.
     /// Lookups stay fast at any size (pf tables are radix trees, and only the first packet of a
@@ -168,6 +178,13 @@ public enum HelperLimits {
         if let unknown = blocklist.hostsLists.sorted().first(where: { HostsListCatalog.source($0) == nil }) {
             throw Violation(description: "Unknown hosts list \(unknown).")
         }
+        guard blocklist.allowedDomains.count <= maximumAllowedDomains else {
+            throw Violation(description: "Too many allowlist entries (\(blocklist.allowedDomains.count), at most \(maximumAllowedDomains)).")
+        }
+        // The validator of personal domain rules, and the normalized form decoding produces.
+        guard blocklist.allowedDomains.allSatisfy({ Blocklist.normalizedAllowedDomain($0) == $0 }) else {
+            throw Violation(description: "An allowlist entry is not a valid host name.")
+        }
     }
 }
 
@@ -189,10 +206,17 @@ public struct HelperStatus: Codable, Sendable, Equatable {
     /// The state of every subscribed list, or of lists with a copy on disk. `nil` from helpers that
     /// predate hosts lists: the app then asks to update the helper.
     public var hostsLists: [HostsListState]?
+    /// Distinct names the allowlist kept out of /etc/hosts (`CompiledBlocklist.allowlistRemovedCount`).
+    /// `nil` from helpers that predate the allowlist (protocol 2 and older), which ignore it.
+    public var allowlistRemovedCount: Int?
+    /// What each allowlist entry overrode (`CompiledBlocklist.allowlistEffects`). Only the helper
+    /// can compute list counts: the app has no copy of the lists. `nil` from older helpers.
+    public var allowlistEffects: [AllowlistEffect]?
 
     public init(version: String, pfEnabled: Bool, anchorLoaded: Bool, appliedAt: Date?, blocklist: Blocklist?,
                 blockTableCount: Int, geoTableCount: Int, hostsDomainCount: Int, warnings: [String],
-                listDomainCount: Int? = nil, hostsLists: [HostsListState]? = nil) {
+                listDomainCount: Int? = nil, hostsLists: [HostsListState]? = nil,
+                allowlistRemovedCount: Int? = nil, allowlistEffects: [AllowlistEffect]? = nil) {
         self.version = version
         self.pfEnabled = pfEnabled
         self.anchorLoaded = anchorLoaded
@@ -204,6 +228,8 @@ public struct HelperStatus: Codable, Sendable, Equatable {
         self.warnings = warnings
         self.listDomainCount = listDomainCount
         self.hostsLists = hostsLists
+        self.allowlistRemovedCount = allowlistRemovedCount
+        self.allowlistEffects = allowlistEffects
     }
 }
 
@@ -220,5 +246,6 @@ public enum HelperResponse: Codable, Sendable {
 extension Blocklist: Equatable {
     public static func == (lhs: Blocklist, rhs: Blocklist) -> Bool {
         lhs.rules == rhs.rules && lhs.blockedCountries == rhs.blockedCountries && lhs.hostsLists == rhs.hostsLists
+            && lhs.allowedDomains == rhs.allowedDomains
     }
 }
