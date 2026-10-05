@@ -110,7 +110,13 @@ Hector *observes per app* and *blocks for the whole Mac*. The [architecture note
 
 ## Install
 
-Download the latest `Hector-x.y.z-macOS.zip` from [Releases](../../releases), move **Hector.app** to Applications, and open it. The release notes explain the one-time Gatekeeper step: Hector is not notarized, because notarization needs a paid Apple Developer account.
+With [Homebrew](https://brew.sh), from the [0xRD tap](https://github.com/0xRD/homebrew-tap) (it also puts the `hector` command on your PATH):
+
+```sh
+brew install --cask 0xrd/tap/hector
+```
+
+`brew update && brew upgrade` then picks up each release. Or download the latest `Hector-x.y.z-macOS.zip` from [Releases](../../releases), move **Hector.app** to Applications, and open it. The release notes explain the one-time Gatekeeper step: Hector is not notarized, because notarization needs a paid Apple Developer account.
 
 To block, install the helper from the Blocklists screen; macOS asks for an administrator password once. Without it, Hector observes your own apps and blocks nothing.
 
@@ -249,6 +255,8 @@ Choose **Hector → Uninstall Hector…** in the menu bar. It removes, after one
 - your blocklist, the country database, preferences, caches and saved window state in your Library;
 - the VirusTotal API key in your Keychain, if you saved one;
 - the app itself, moved to the Trash.
+
+Installed with Homebrew: `brew uninstall --zap hector` does the same, except the VirusTotal key (remove it from Keychain Access, item `io.github.0xrd.hector.virustotal`); a plain `brew uninstall` leaves the helper and its rules in place, like upgrades. If you use the in-app uninstaller instead, run `brew uninstall hector` afterwards so Homebrew forgets it.
 
 Without the app: `sudo /Library/PrivilegedHelperTools/io.github.0xrd.hectord uninstall --purge`, then delete `~/Library/Application Support/Hector`.
 

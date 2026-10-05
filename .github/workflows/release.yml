@@ -2,7 +2,8 @@ name: Release
 
 # Push a tag such as v0.3.0 to publish a downloadable, universal Hector.app.
 # Run it by hand (Actions → Release → Run workflow) for a dry run: the same build and checks, with
-# the zip kept as a workflow artifact instead of a published release.
+# the zip kept as a workflow artifact instead of a published release. After a tag, the cask in
+# 0xRD/homebrew-tap is moved to the new version (a separate job, so it can be re-run alone).
 on:
   push:
     tags: ["v*"]
@@ -85,3 +86,40 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" "$ZIP" "$ZIP.sha256" \
             --verify-tag --title "Hector $VERSION" --notes-file .build/notes.md
+
+  homebrew:
+    needs: release
+    if: github.ref_type == 'tag'
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      # Takes the checksum from the published release, so the cask matches what users download.
+      # Pushes with a deploy key that can write to the tap and nothing else.
+      - name: Update the cask in 0xRD/homebrew-tap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA=$(gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" -p "*.sha256" -O - | cut -d' ' -f1)
+          echo "$SHA" | grep -Eq '^[0-9a-f]{64}$' || { echo "No checksum in the release"; exit 1; }
+
+          WORK=$(mktemp -d)
+          trap 'rm -rf "$WORK"' EXIT
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$WORK/key"
+          chmod 600 "$WORK/key"
+          # GitHub's published host key (gh api meta): no trust on first use.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$WORK/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $WORK/key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$WORK/known_hosts"
+
+          git clone --depth 1 git@github.com:0xRD/homebrew-tap.git "$WORK/tap"
+          cd "$WORK/tap"
+          sed -i '' -e "s/^  version \".*\"$/  version \"$VERSION\"/" -e "s/^  sha256 \".*\"$/  sha256 \"$SHA\"/" Casks/hector.rb
+          if ! grep -q "^  version \"$VERSION\"$" Casks/hector.rb || ! grep -q "^  sha256 \"$SHA\"$" Casks/hector.rb; then
+            echo "Casks/hector.rb was not updated"; exit 1
+          fi
+          if git diff --quiet; then echo "The cask is already at $VERSION"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -am "hector $VERSION"
+          git push origin HEAD:main

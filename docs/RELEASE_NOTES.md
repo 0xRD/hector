@@ -20,6 +20,8 @@ Netbite becomes **Hector**, a small all-in-one security app for macOS. Netbite s
 
 ## Install
 
+With Homebrew: `brew install --cask 0xrd/tap/hector` (or `brew upgrade` if you installed it that way), then step 3 below; after an upgrade, open **Blocklists** and click **Update helper…**. Otherwise:
+
 1. Download **Hector-{{VERSION}}-macOS.zip** below and open it.
 2. Move **Hector.app** to your Applications folder.
 3. Open it. Hector is not notarized by Apple (that needs a paid developer account), so macOS refuses the first launch:
