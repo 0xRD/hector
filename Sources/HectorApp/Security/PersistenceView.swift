@@ -61,7 +61,7 @@ struct PersistenceView: View {
             }
         }
         .fillsSplitPane()
-        .inspector(isPresented: $state.showInspector) {
+        .inspector(isPresented: $state.showPersistenceDetails) {
             PersistenceDetailView(security: security, item: selectedItem)
                 .fillsSplitPane()
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
@@ -76,7 +76,8 @@ struct PersistenceView: View {
         return VStack(alignment: .leading, spacing: Spacing.sm) {
             ScreenHeader("What starts by itself", subtitle: summary(items), systemImage: "arrow.triangle.2.circlepath",
                          tint: .hectorInfo, pinned: true) {
-                Toggle("Show Apple items", isOn: $security.includeAppleItems)
+                Toggle("Apple", isOn: $security.includeAppleItems).fixedSize()
+                    .help("Show Apple's own launch items and extensions")
                     .toggleStyle(.checkbox)
                     .onChange(of: security.includeAppleItems) { Task { await security.scanPersistence() } }
                 checkAllButton(items)
@@ -104,7 +105,7 @@ struct PersistenceView: View {
             Button {
                 security.checkAllVirusTotal(paths: items.filter { $0.scope != .apple }.compactMap(SecurityController.codePath(of:)))
             } label: {
-                Label("Check all with VirusTotal", systemImage: "shield.lefthalf.filled")
+                Label("VirusTotal", systemImage: "shield.lefthalf.filled").fixedSize()
             }
             .disabled(!security.hasAPIKey)
             .help(security.hasAPIKey ? "Look up every third-party item (hashes only, 4 per minute)"

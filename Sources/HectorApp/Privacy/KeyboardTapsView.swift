@@ -52,7 +52,7 @@ struct KeyboardTapsView: View {
             content(taps)
         }
         .fillsSplitPane()
-        .inspector(isPresented: $state.showInspector) {
+        .inspector(isPresented: $state.showTapDetails) {
             KeyboardTapDetailView(security: security, tap: selectedTap)
                 .fillsSplitPane()
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)

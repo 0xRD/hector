@@ -31,16 +31,14 @@ struct ContentView: View {
         }
     }
 
-    /// Whether the current screen has something selected for its details panel. The panel opens
-    /// on a selection and stays closed otherwise, instead of a quarter of the window saying
-    /// "nothing selected".
-    private var screenHasSelection: Bool {
+    /// Shows or hides the current screen's details panel.
+    private func toggleDetails() {
         switch state.sidebarSelection {
-        case .persistence: state.selectedPersistenceItem != nil
-        case .processes: state.selectedProcess != nil
-        case .keyboardTaps: privacy.selectedTap != nil
-        case .blocklists, .checkup, .captureDevices: false
-        default: state.selectedDestination != nil
+        case .persistence: state.showPersistenceDetails.toggle()
+        case .processes: state.showProcessDetails.toggle()
+        case .keyboardTaps: state.showTapDetails.toggle()
+        case .blocklists, .checkup, .captureDevices: break
+        default: state.showInspector.toggle()
         }
     }
 
@@ -127,7 +125,7 @@ struct ContentView: View {
                 }
                 if hasSearchAndDetails {
                     Button {
-                        state.showInspector.toggle()
+                        toggleDetails()
                     } label: {
                         Label("Details", systemImage: "sidebar.trailing")
                     }
@@ -145,6 +143,8 @@ struct ContentView: View {
             if DemoData.isEnabled {
                 state.selectedPersistenceItem = DemoData.selectedPersistenceItem
                 state.selectedProcess = DemoData.selectedProcess
+                // The sample tree is small: show it whole, and the details of the selected item.
+                state.processesShowApple = true
             }
             if DebugSnapshot.opensSettings { openSettings() }
             if let country = DebugSnapshot.country {
@@ -164,18 +164,15 @@ struct ContentView: View {
         #endif
         .sheet(isPresented: $state.showUninstall) { UninstallSheet() }
         // Snapshots only as often as someone can see them: see ConnectionMonitor.Demand.
-        .onAppear {
-            updateDemand()
-            state.showInspector = screenHasSelection
-        }
+        .onAppear(perform: updateDemand)
         .onChange(of: state.sidebarSelection) {
             updateDemand()
             state.search = ""
-            state.showInspector = screenHasSelection
         }
-        .onChange(of: state.selectedPersistenceItem) { if state.selectedPersistenceItem != nil { state.showInspector = true } }
-        .onChange(of: state.selectedProcess) { if state.selectedProcess != nil { state.showInspector = true } }
-        .onChange(of: privacy.selectedTap) { if privacy.selectedTap != nil { state.showInspector = true } }
+        // A pick opens that screen's details panel.
+        .onChange(of: state.selectedPersistenceItem) { if state.selectedPersistenceItem != nil { state.showPersistenceDetails = true } }
+        .onChange(of: state.selectedProcess) { if state.selectedProcess != nil { state.showProcessDetails = true } }
+        .onChange(of: privacy.selectedTap) { if privacy.selectedTap != nil { state.showTapDetails = true } }
         .onChange(of: state.selectedDestination) { if state.selectedDestination != nil { state.showInspector = true } }
         // Closed while Hector stays in the menu bar: back to the slow pace at once.
         .onDisappear { monitor.demand = .hidden }

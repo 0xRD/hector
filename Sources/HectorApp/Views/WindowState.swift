@@ -25,7 +25,13 @@ final class WindowState {
     /// The viewport when the current pinch or drag began.
     var mapGestureStart: MapViewport?
     var search = ""
-    var showInspector = true
+    /// Details panels, one per screen: a screen's panel opens when something is picked there,
+    /// and switching screens cannot close another screen's panel (an inspector that goes away
+    /// writes `false` to its binding).
+    var showInspector = false
+    var showPersistenceDetails = false
+    var showProcessDetails = false
+    var showTapDetails = false
     // Blocklists screen
     var countrySearch = ""
     var showAllCountries = false

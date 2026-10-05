@@ -42,7 +42,7 @@ struct ProcessesView: View {
             }
         }
         .fillsSplitPane()
-        .inspector(isPresented: $state.showInspector) {
+        .inspector(isPresented: $state.showProcessDetails) {
             ProcessDetailView(security: security, row: selectedRow)
                 .fillsSplitPane()
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
@@ -55,11 +55,12 @@ struct ProcessesView: View {
     private func header(rows: [ProcessRow]) -> some View {
         @Bindable var state = state
         return ScreenHeader("Running processes", subtitle: summary, systemImage: "cpu", tint: .hectorInfo, pinned: true) {
-            Toggle("Apple", isOn: $state.processesShowApple).toggleStyle(.checkbox)
+            Toggle("Apple", isOn: $state.processesShowApple).toggleStyle(.checkbox).fixedSize()
                 .help("Show Apple's own processes (from /System, /usr, /bin and /sbin)")
-            Toggle("Tree", isOn: $state.processesAsTree).toggleStyle(.checkbox)
+            Toggle("Tree", isOn: $state.processesAsTree).toggleStyle(.checkbox).fixedSize()
                 .help("Show children under their parent process")
-            Toggle("Flagged only", isOn: $state.processesFlaggedOnly).toggleStyle(.checkbox)
+            Toggle("Flagged", isOn: $state.processesFlaggedOnly).toggleStyle(.checkbox).fixedSize()
+                .help("Only processes running from a temporary, Downloads or hidden folder, or deleted code")
             if security.isCheckingAll {
                 Button("Stop VirusTotal") { security.cancelVirusTotal() }
             } else {
@@ -70,7 +71,7 @@ struct ProcessesView: View {
                         return security.signature(of: path)?.trustLevel == .apple ? nil : path
                     })
                 } label: {
-                    Label("Check with VirusTotal", systemImage: "shield.lefthalf.filled")
+                    Label("VirusTotal", systemImage: "shield.lefthalf.filled").fixedSize()
                 }
                 .disabled(!security.hasAPIKey)
                 .help(security.hasAPIKey ? "Look up every listed non-Apple executable (hashes only, 4 per minute)"
