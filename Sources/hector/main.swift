@@ -306,7 +306,7 @@ func rules(_ args: Arguments) async throws {
         Hosts lists: \(subscribed.isEmpty ? "none" : subscribed.joined(separator: ", "))
         pf <\(PFAnchor.blockTable)>: \(compiled.blockTable.count) networks
         pf <\(PFAnchor.geoTable)>: \(compiled.geoTable.count) networks
-        /etc/hosts: \(compiled.hostsDomains.count) domains, \(Display.count(compiled.listDomains.count)) from lists
+        /etc/hosts: \(Display.count(compiled.hostsDomains.count + compiled.listDomains.count)) domains (\(Display.count(compiled.hostsDomains.count)) personal + \(Display.count(compiled.listDomains.count)) from lists)
         """)
         printAllowlistEffects(compiled, blocklist: blocklist, listsIncluded: !lists.isEmpty)
         compiled.warnings.forEach { print("warning: \($0)") }
@@ -384,15 +384,20 @@ func helper(_ args: Arguments) throws {
                                   : try HelperClient.send(request, socketPath: socket)
     switch response {
     case .status(let status):
+        // Personal rules and list domains, counted apart and added up (older helpers only send the first).
+        let personal = "\(Display.count(status.hostsDomainCount)) personal"
+        let hosts = status.listDomainCount.map {
+            "\(Display.count(status.hostsDomainCount + $0)) domains (\(personal) + \(Display.count($0)) from lists)"
+        } ?? "\(personal) domains"
         print("""
         Helper \(status.version) · pf \(status.pfEnabled ? "enabled" : "disabled") · Netbite anchor \(status.anchorLoaded ? "loaded" : "empty")
         Applied: \(status.appliedAt.map { Display.dateTime($0) } ?? "never")
-        pf <\(PFAnchor.blockTable)>: \(status.blockTableCount) networks · <\(PFAnchor.geoTable)>: \(status.geoTableCount) networks · /etc/hosts: \(status.hostsDomainCount) domains
+        pf <\(PFAnchor.blockTable)>: \(status.blockTableCount) networks · <\(PFAnchor.geoTable)>: \(status.geoTableCount) networks · /etc/hosts: \(hosts)
         Blocked countries: \(status.blocklist.map { $0.blockedCountries.sorted().joined(separator: ", ") }.flatMap { $0.isEmpty ? nil : $0 } ?? "none")
         """)
         if let listDomains = status.listDomainCount {
             let subscribed = status.blocklist?.hostsLists.sorted() ?? []
-            print("Hosts lists: \(subscribed.isEmpty ? "none" : subscribed.joined(separator: ", ")) · \(Display.count(listDomains)) domains in /etc/hosts (`hector lists` for details)")
+            print("Hosts lists: \(subscribed.isEmpty ? "none" : subscribed.joined(separator: ", ")) · \(Display.count(listDomains)) domains (`hector lists` for details)")
         }
         let allowed = status.blocklist?.allowedDomains.count ?? 0
         if let removed = status.allowlistRemovedCount {

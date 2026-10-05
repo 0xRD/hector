@@ -101,7 +101,7 @@ private func printListStates(_ status: HelperStatus) {
         if let error = state.lastError { print("    last attempt failed: \(error)") }
     }
     if let count = status.listDomainCount {
-        print("/etc/hosts: \(status.hostsDomainCount) personal domains, \(Display.count(count)) from lists")
+        print("/etc/hosts: \(Display.count(status.hostsDomainCount + count)) domains (\(Display.count(status.hostsDomainCount)) personal + \(Display.count(count)) from lists)")
     }
 }
 
