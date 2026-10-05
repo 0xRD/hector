@@ -19,6 +19,12 @@
 
 Hector is an open-source security app for macOS, in the spirit of Objective-See's tools ([LuLu](https://objective-see.org/products/lulu.html), [KnockKnock](https://objective-see.org/products/knockknock.html), [TaskExplorer](https://objective-see.org/products/taskexplorer.html), [ReiKey](https://objective-see.org/products/reikey.html)) and [Little Snitch](https://www.obdev.at/products/littlesnitch/), built to run **without a paid Apple Developer account**. He is named after the defender of Troy: the one who stands on the walls and keeps watch. He does not shout. He looks, tells you what he saw, and lets you decide.
 
+```sh
+brew install --cask 0xrd/tap/hector
+```
+
+Or download the zip from [Releases](../../releases); see [Install](#install) for the one-time Gatekeeper step.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/connections-dark.png">
