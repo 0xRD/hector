@@ -363,8 +363,8 @@ struct WorldMapView: View {
 }
 
 /// The land dots as two paths (plain and contacted countries), rebuilt only when the size, the
-/// viewport or the set of contacted countries changes: about 5,000 dots, and the map redraws every
-/// second while connections come and go.
+/// viewport or the set of contacted countries changes: up to 19,000 dots zoomed in (only the
+/// visible ones are drawn), and the map redraws every second while connections come and go.
 private final class LandPaths: @unchecked Sendable {
     static let shared = LandPaths()
 
@@ -390,12 +390,14 @@ private final class LandPaths: @unchecked Sendable {
     }
 
     private static func build(_ geometry: MapGeometry, contacted: Set<Int>) -> (land: Path, contacted: Path) {
-        // Dots grow with the zoom, so the land keeps its shape.
-        let radius = WorldData.dotSpacing * geometry.scale * 0.21
+        // Dots grow with the zoom until a finer grid takes over (`WorldDots`), so the land keeps
+        // its shape and the dots stay small.
+        let level = WorldDots.level(zoom: geometry.scale / MapGeometry.fitScale(geometry.size))
+        let radius = level.spacing * geometry.scale * 0.21
         let visible = CGRect(origin: .zero, size: geometry.size).insetBy(dx: -radius, dy: -radius)
         var land = Path()
         var landContacted = Path()
-        let dots = WorldData.dots
+        let dots = level.dots
         for i in stride(from: 0, to: dots.count, by: 3) {
             let center = geometry.point(canvasX: Double(dots[i]), y: Double(dots[i + 1]))
             guard visible.contains(center) else { continue }

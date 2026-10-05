@@ -4,19 +4,25 @@
 Natural Earth (https://www.naturalearthdata.com) is in the public domain. The output holds:
 - a grid of land dots on a 1000 x 400 equirectangular canvas (lon -180..180, lat 80..-60),
   each tagged with the country it falls in, so the map can tint countries;
+- finer grids of the same land (half and a quarter of the spacing) for zoomed-in views, packed
+  as base64 so the compiler does not type-check tens of thousands of literals;
 - one label point per ISO 3166-1 alpha-2 code, where destination lines end.
 
 Usage: scripts/generate-world-data.py [path/to/ne_50m_admin_0_countries.geojson]
 Without an argument the file is downloaded from the natural-earth-vector repository.
 """
+import base64
 import json
 import os
+import struct
 import sys
 import urllib.request
 
 SOURCE_URL = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
               "master/geojson/ne_50m_admin_0_countries.geojson")
 WIDTH, HEIGHT, SPACING = 1000, 400, 10
+# Finer grids for zoomed-in views: on screen, each keeps about the spacing of the world view.
+DETAIL_SPACINGS = (5, 2.5)
 LAT_TOP, LAT_SPAN = 80.0, 140.0
 OUTPUT = os.path.join(os.path.dirname(__file__), "..", "Sources", "HectorApp", "Map", "WorldData.swift")
 
@@ -57,6 +63,29 @@ def inside_ring(x, y, ring):
     return inside
 
 
+def land_cells(shapes, spacing):
+    """(column, row, code) of every grid cell whose center is on land, row by row. A cell takes
+    the first shape that holds it, in the source's order."""
+    columns, rows = round(WIDTH / spacing), round(HEIGHT / spacing)
+    found = {}
+    for code, (x0, y0, x1, y1), polygon in shapes:
+        # Only the cells inside the shape's bounding box.
+        first_col = max(0, int(((x0 + 180) / 360 * WIDTH) / spacing - 1))
+        last_col = min(columns - 1, int(((x1 + 180) / 360 * WIDTH) / spacing + 1))
+        first_row = max(0, int(((LAT_TOP - y1) / LAT_SPAN * HEIGHT) / spacing - 1))
+        last_row = min(rows - 1, int(((LAT_TOP - y0) / LAT_SPAN * HEIGHT) / spacing + 1))
+        for row in range(first_row, last_row + 1):
+            for col in range(first_col, last_col + 1):
+                if (col, row) in found:
+                    continue
+                lon = (col * spacing + spacing / 2) / WIDTH * 360 - 180
+                lat = LAT_TOP - (row * spacing + spacing / 2) / HEIGHT * LAT_SPAN
+                if x0 <= lon <= x1 and y0 <= lat <= y1 and inside_ring(lon, lat, polygon[0]) \
+                        and not any(inside_ring(lon, lat, hole) for hole in polygon[1:]):
+                    found[(col, row)] = code
+    return [(col, row, found[(col, row)]) for row in range(rows) for col in range(columns) if (col, row) in found]
+
+
 def main():
     data = load(sys.argv[1] if len(sys.argv) > 1 else None)
     shapes = []   # (code, bbox, polygon)
@@ -77,17 +106,15 @@ def main():
     codes = sorted(labels)
     index = {code: i for i, code in enumerate(codes)}
     dots = []
-    for row in range(HEIGHT // SPACING):
-        for col in range(WIDTH // SPACING):
-            x = col * SPACING + SPACING / 2
-            y = row * SPACING + SPACING / 2
-            lon = x / WIDTH * 360 - 180
-            lat = LAT_TOP - y / HEIGHT * LAT_SPAN
-            for code, (x0, y0, x1, y1), polygon in shapes:
-                if x0 <= lon <= x1 and y0 <= lat <= y1 and inside_ring(lon, lat, polygon[0]) \
-                        and not any(inside_ring(lon, lat, hole) for hole in polygon[1:]):
-                    dots += [int(x), int(y), index[code]]
-                    break
+    for col, row, code in land_cells(shapes, SPACING):
+        dots += [int(col * SPACING + SPACING / 2), int(row * SPACING + SPACING / 2), index[code]]
+
+    # Detail grids: little-endian UInt16 triples (column, row, country index).
+    details = []
+    for spacing in DETAIL_SPACINGS:
+        cells = land_cells(shapes, spacing)
+        packed = b"".join(struct.pack("<HHH", col, row, index[code]) for col, row, code in cells)
+        details.append((spacing, len(cells), base64.b64encode(packed).decode()))
 
     def chunks(values, size):
         return [", ".join(values[i:i + size]) for i in range(0, len(values), size)]
@@ -118,13 +145,20 @@ def main():
         "    static let dots: [Int16] = [",
         *[f"        {line}," for line in chunks([str(v) for v in dots], 24)],
         "    ]",
+        "",
+        "    /// Finer land grids for zoomed-in views (see `WorldDots`): spacing, dot count, and base64 of",
+        "    /// little-endian UInt16 triples (column, row, index into `countryCodes`).",
+        "    static let detailGrids: [(spacing: Double, count: Int, base64: String)] = [",
+        *[f'        ({spacing}, {count}, "{data}"),' for spacing, count, data in details],
+        "    ]",
         "}",
         "",
     ]
     os.makedirs(os.path.dirname(OUTPUT), exist_ok=True)
     with open(OUTPUT, "w") as f:
         f.write("\n".join(lines))
-    print(f"{len(codes)} countries, {len(dots) // 3} dots -> {os.path.normpath(OUTPUT)}")
+    detail = ", ".join(f"{count} at {spacing:g}" for spacing, count, _ in details)
+    print(f"{len(codes)} countries, {len(dots) // 3} dots ({detail}) -> {os.path.normpath(OUTPUT)}")
 
 
 if __name__ == "__main__":
