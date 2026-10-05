@@ -160,7 +160,10 @@ struct MenuBarPanel: View {
 @Observable
 final class AppPreferences {
     var keepsRunningInMenuBar: Bool {
-        didSet { UserDefaults.standard.set(keepsRunningInMenuBar, forKey: MenuBarMode.key) }
+        didSet {
+            guard keepsRunningInMenuBar != oldValue else { return }
+            UserDefaults.standard.set(keepsRunningInMenuBar, forKey: MenuBarMode.key)
+        }
     }
 
     init() {
