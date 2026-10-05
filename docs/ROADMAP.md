@@ -157,7 +157,10 @@ Hector already blocks ads and trackers for the whole Mac the way a Pi-hole does:
 - [ ] **Wildcard blocking:** block `example.com` and every subdomain, which /etc/hosts cannot express (lists ship each subdomain separately today)
 - [ ] **A query log per app:** which app asked for which name, blocked or allowed, with counts per day (Pi-hole's dashboard, for one Mac)
 - [ ] **Allowlist** that wins over lists, one click from the log ("unblock this")
-- [ ] **More lists from the catalog**, all public and maintained: OISD (big and small), HaGeZi (Light, Normal, Pro, threat intelligence), AdGuard DNS filter, 1Hosts, Peter Lowe's list; each with its license, checked like today's lists
+  - [x] In /etc/hosts mode (0.4.4): Blocklists → Allowlist; an entry unblocks its name and the names below it in lists and overrides personal domain rules, which say so
+  - [ ] One click from the query log, once the resolver exists
+- [ ] **More lists from the catalog**
+  - [x] HaGeZi Light in hosts format (0.4.4); Normal and Pro exceed the per-list limit of /etc/hosts mode, all public and maintained: OISD (big and small), HaGeZi (Light, Normal, Pro, threat intelligence), AdGuard DNS filter, 1Hosts, Peter Lowe's list; each with its license, checked like today's lists
 - [ ] **Design:** the helper listens on 127.0.0.1:53 and `[::1]:53` as an unprivileged child (port 53 bound by root, then handed over), and forwards to the user's DNS servers or to DNS over HTTPS; macOS is pointed at it with a resolver configuration that can be undone in one step. A crash must fall back to the normal DNS, never cut the Mac off
 - [ ] Measure first: lookup latency and memory against /etc/hosts with 100,000+ domains (today: 43,112 list domains, 6 ms for a blocked name, 30 to 50 ms for normal names, no visible cost in mDNSResponder)
 - [ ] Later: serve other devices on the network (a real Pi-hole replacement), off by default

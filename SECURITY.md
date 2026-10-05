@@ -41,7 +41,7 @@ The root side reads at most 48 MB (lists) or 256 MB (country CSV) and kills the 
 
 ## Hosts lists
 
-Hosts lists (StevenBlack Unified, EasyPrivacy) are downloaded **for the helper** (by its unprivileged child, see above), not by the app, and bounded on every side:
+Hosts lists (StevenBlack Unified, EasyPrivacy, HaGeZi Light) are downloaded **for the helper** (by its unprivileged child, see above), not by the app, and bounded on every side:
 
 - **No URL crosses the socket.** A blocklist carries list identifiers only (`"hostsLists": ["stevenblack-unified"]`). The helper accepts identifiers of its own built-in catalog (`HostsListCatalog`) and refuses any other; the URLs are constants in the code. There are no custom lists: a custom URL would let any process that obtained the authorization make root fetch an arbitrary address (local services included) and feed /etc/hosts with an arbitrary file.
 - **Why the helper downloads.** If the app downloaded and sent the domains, a request would carry 100,000 names (beyond the 5,000-rule and 4 MB limits), and a non-root process could inject a crafted set. With identifiers only, requests stay small and the helper alone decides what it trusts. The requests go through `URLSession` with an ephemeral configuration (no cookies, no cache), in the unprivileged child.

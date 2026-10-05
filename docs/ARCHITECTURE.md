@@ -116,8 +116,11 @@ Subscribed lists (`Blocklist.hostsLists`, identifiers of the built-in `HostsList
 |---|---|---|---|
 | StevenBlack Unified | `raw.githubusercontent.com/StevenBlack/hosts/master/hosts` | hosts (`0.0.0.0 name`) | ~72,000 domains, 2.2 MB |
 | EasyPrivacy | `raw.githubusercontent.com/hectorm/hmirror/master/data/easyprivacy/list.txt` | one name per line | ~43,000 domains, 0.9 MB |
+| HaGeZi Light | `raw.githubusercontent.com/hagezi/dns-blocklists-legacy/main/hosts/light.txt` | hosts (`0.0.0.0 name`), subdomains listed | ~122,000 domains (GPL-3.0) |
 
 EasyPrivacy itself is an Adblock Plus filter list; hMirror, the source of the hBlock project, extracts the domains of its whole-domain rules daily. Rules that only match a path or a third-party context cannot be expressed in a hosts file and are not in it. The two lists overlap by about 1,700 domains.
+
+HaGeZi Normal (~334,000 names) and Pro (~432,000) in hosts format exceed the 300,000-per-list limit and are left for the local resolver. The **allowlist** (`Blocklist.allowedDomains`) is applied by the compiler, in the helper: an entry removes its name and every name below it from the lists, and its exact name from the personal domain rules; `HelperStatus.allowlistEffects` reports what each entry removed so the app can show it.
 
 Design:
 

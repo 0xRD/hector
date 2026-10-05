@@ -95,7 +95,8 @@ final class BlockingController {
         let ruleChanges = Set(before.keys).union(after.keys).filter { before[$0]?.isEnabled != after[$0]?.isEnabled }.count
         let countryChanges = applied.blockedCountries.symmetricDifference(draft.blockedCountries).count
         let listChanges = applied.hostsLists.symmetricDifference(draft.hostsLists).count
-        return ruleChanges + countryChanges + listChanges
+        let allowChanges = applied.allowedDomains.symmetricDifference(draft.allowedDomains).count
+        return ruleChanges + countryChanges + listChanges + allowChanges
     }
 
     func isPending(_ rule: Rule) -> Bool {
@@ -237,6 +238,38 @@ final class BlockingController {
     /// `false` when the installed helper predates hosts lists and would ignore them.
     var helperSupportsLists: Bool {
         helperStatus?.hostsLists != nil
+    }
+
+    // MARK: - Allowlist
+
+    /// Adds an allowlist entry; `false` when the text is not a host name.
+    @discardableResult
+    func allow(_ text: String) -> Bool {
+        draft.setAllowed(text.trimmingCharacters(in: .whitespaces), allowed: true)
+    }
+
+    func disallow(_ domain: String) {
+        draft.setAllowed(domain, allowed: false)
+    }
+
+    /// Whether an entry is in the draft but not applied yet, or the other way round.
+    func isAllowPending(_ domain: String) -> Bool {
+        draft.allowedDomains.contains(domain) != applied.allowedDomains.contains(domain)
+    }
+
+    /// What the helper reports this entry overrode, once applied; `nil` before or with an older helper.
+    func allowlistEffect(_ domain: String) -> AllowlistEffect? {
+        helperStatus?.allowlistEffects?.first { $0.domain == domain }
+    }
+
+    /// The allowlist entry that cancels this rule (the allowlist wins), or `nil`.
+    func overridingEntry(for rule: Rule) -> String? {
+        draft.allowlistEntry(overriding: rule.target)
+    }
+
+    /// `false` when the installed helper predates the allowlist and would refuse it.
+    var helperSupportsAllowlist: Bool {
+        helperStatus?.allowlistEffects != nil
     }
 
     func addressRule(_ address: IPAddress) -> Rule? {

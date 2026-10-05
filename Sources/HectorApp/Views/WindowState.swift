@@ -31,6 +31,8 @@ final class WindowState {
     var showAllCountries = false
     var newRule = ""
     var newRuleNote = ""
+    /// The allowlist entry being typed in Blocklists.
+    var newAllowed = ""
     var showUninstall = false
     var uninstallPhase = UninstallPhase.confirm
     // Security screens

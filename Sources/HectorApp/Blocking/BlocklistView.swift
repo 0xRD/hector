@@ -22,6 +22,7 @@ struct BlocklistView: View {
                 CountriesSection()
                 HostsListsSection()
                 RulesSection()
+                AllowlistSection()
                 Banner(
                     "Blocking is for the whole Mac",
                     message: "Hector shows traffic per app but blocks for every app. Blocking a destination for a single app, the way LuLu or Little Snitch do, needs a Network Extension signed with a paid Apple Developer account.",
@@ -341,6 +342,7 @@ private struct RulesSection: View {
 /// The new-rule field, its note and the Add button, with inline validation.
 private struct RuleInput: View {
     @Environment(WindowState.self) private var state
+    @Environment(BlockingController.self) private var blocking
     let add: @MainActor () -> Void
 
     var body: some View {
@@ -365,6 +367,11 @@ private struct RuleInput: View {
                 Label("Not a valid domain, IP address or CIDR range.", systemImage: "exclamationmark.circle")
                     .font(.caption)
                     .foregroundStyle(Color.hectorDanger)
+            } else if let target = RuleTarget(state.newRule), let entry = blocking.draft.allowlistEntry(overriding: target) {
+                Label("\(entry) is on your allowlist, which wins: this rule would have no effect until you remove it there.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(Color.hectorWarning)
             }
         }
         .padding(Spacing.md)
@@ -398,6 +405,10 @@ private struct RuleRow: View {
                     if blocking.isPending(rule) {
                         StatusPill(rule.isEnabled ? "Not applied" : "Will be removed", kind: .warning, systemImage: "clock", size: .small)
                     }
+                    if rule.isEnabled, let entry = blocking.overridingEntry(for: rule) {
+                        StatusPill("Overridden by allowlist: \(entry)", kind: .info, systemImage: "checkmark.circle", size: .small)
+                            .help("The allowlist wins over your own rules. Remove \(entry) from the allowlist to block it again.")
+                    }
                 }
                 .font(.caption)
             }
@@ -427,5 +438,114 @@ private struct RuleRow: View {
         case .domain: "Domain"
         case .network(let cidr): cidr.isSingleAddress ? "IP" : "CIDR"
         }
+    }
+}
+
+/// Names that are never blocked by name. The allowlist wins over the hosts lists and over the
+/// user's own domain rules, and says so on every rule it cancels.
+private struct AllowlistSection: View {
+    @Environment(BlockingController.self) private var blocking
+    @Environment(WindowState.self) private var state
+
+    var body: some View {
+        @Bindable var state = state
+        let entries = blocking.draft.allowedDomains.sorted()
+        let isInvalid = !state.newAllowed.isEmpty && Blocklist.normalizedAllowedDomain(state.newAllowed) == nil
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            SectionHeader(
+                "Allowlist",
+                subtitle: "Names that are never blocked by name. An entry wins over the lists and over your own domain rules, and unblocks the names below it in lists (example.com unblocks ads.example.com). Addresses and countries still apply.",
+                systemImage: "checkmark.circle"
+            )
+            if blocking.isHelperReady && !blocking.helperSupportsAllowlist {
+                Banner("Update the helper to use the allowlist",
+                       message: "The installed helper does not know it yet; until it is updated, Apply refuses a blocklist with an allowlist.",
+                       kind: .warning, systemImage: "arrow.triangle.2.circlepath")
+            }
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    TextField("Domain, e.g. example.com", text: $state.newAllowed)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.dataMono)
+                        .onSubmit(add)
+                        .accessibilityLabel("New allowlist entry")
+                    Button("Allow", action: add)
+                        .disabled(Blocklist.normalizedAllowedDomain(state.newAllowed) == nil)
+                }
+                if isInvalid {
+                    Label("Not a valid domain.", systemImage: "exclamationmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(Color.hectorDanger)
+                }
+            }
+            .padding(Spacing.md)
+            .cardSurface(cornerRadius: Radius.md)
+            if !entries.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(entries, id: \.self) { entry in
+                        AllowlistRow(domain: entry)
+                        if entry != entries.last {
+                            Divider().padding(.leading, 14)
+                        }
+                    }
+                }
+                .padding(Spacing.xs)
+                .cardSurface()
+            }
+        }
+    }
+
+    private func add() {
+        if blocking.allow(state.newAllowed) {
+            state.newAllowed = ""
+        }
+    }
+}
+
+private struct AllowlistRow: View {
+    @Environment(BlockingController.self) private var blocking
+    let domain: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.hectorOK)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(domain).font(.dataMono).textSelection(.enabled)
+                HStack(spacing: 8) {
+                    if let effect = effectText { Text(effect).foregroundStyle(.secondary) }
+                    if blocking.isAllowPending(domain) {
+                        StatusPill("Not applied", kind: .warning, systemImage: "clock", size: .small)
+                    }
+                }
+                .font(.caption)
+            }
+            Spacer()
+            Button {
+                blocking.disallow(domain)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("Remove from the allowlist")
+            .accessibilityLabel("Remove \(domain) from the allowlist")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .hoverHighlight("allow:\(domain)", cornerRadius: Radius.sm)
+    }
+
+    /// What the helper reported for this entry at the last apply.
+    private var effectText: String? {
+        guard let effect = blocking.allowlistEffect(domain) else { return nil }
+        var parts: [String] = []
+        if effect.listDomainsRemoved > 0 {
+            let count = effect.listDomainsRemoved
+            parts.append("unblocks \(Display.count(count)) list name\(count == 1 ? "" : "s")")
+        }
+        if !effect.overriddenRules.isEmpty {
+            let count = effect.overriddenRules.count
+            parts.append("overrides \(count) of your rule\(count == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? "nothing to unblock right now" : parts.joined(separator: " · ")
     }
 }
