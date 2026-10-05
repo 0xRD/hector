@@ -16,6 +16,7 @@ Netbite becomes **Hector**, a small all-in-one security app for macOS. Netbite s
 - **0.4.4:** an allowlist in Blocklists (it wins over the lists and your own domain rules, and says so on each rule it cancels), the HaGeZi Light list, and a tidier interface: search and the details panel only where they apply, the panel opens when you pick something, Processes hides Apple's own processes by default, Keyboard taps groups identical taps and hides switched-off ones, Camera & mic shows what is on first, Connections shows one row per address with its ports, keyboard shortcuts for the map, and optional automatic VirusTotal lookups. Update the helper from Blocklists after installing: the allowlist needs it.
 - **0.4.5:** fixes 0.4.4 hanging at launch (100% CPU, no window) when macOS hides the menu bar icon because the menu bar is full. Releases are now launched on CI before they are published.
 - **0.4.6:** fixes hosts lists failing to download with the 0.4.5 helper ("error 1"): download children now make their own temporary folder after giving up root, and errors say what went wrong. Update the helper from Blocklists, then Update Now.
+- **0.4.7:** Processes has a right-click menu on every row (Reveal in Finder, Copy path, Copy PID, Open Activity Monitor) and can quit your own processes after asking; apps are asked to quit normally, so they can offer to save. Other users' and the system's processes cannot be quit from Hector.
 
 ## Install
 
