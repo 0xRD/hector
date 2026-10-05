@@ -39,6 +39,9 @@ jobs:
       - name: Build universal Hector.app
         run: scripts/bundle-app.sh --universal --zip
 
+      - name: Launch the app (crash, CPU and memory)
+        run: scripts/smoke-test.sh .build/Hector.app 20
+
       # Checks what users download, not the build folder: unpacked from the zip, both
       # architectures in every binary, a valid signature, the right version, a matching checksum.
       - name: Check the zip
