@@ -54,30 +54,21 @@ enum BrandGeometry {
     /// Two calm eyes, looking straight out, to one side, or resting (filled when open, stroked
     /// when resting).
     static func eyes(_ gaze: HectorGaze = .ahead) -> Path {
-        switch gaze {
-        case .left: return eyes(HectorEyes(x: -0.75))
-        case .right: return eyes(HectorEyes(x: 0.75))
-        case .ahead: return eyes(HectorEyes())
-        case .resting:
-            var path = Path()
-            for cx in [9.7, 14.3] as [CGFloat] {
+        var path = Path()
+        let shift: CGFloat = switch gaze {
+        case .left: -0.75
+        case .right: 0.75
+        case .ahead, .resting: 0
+        }
+        for x in [9.7, 14.3] as [CGFloat] {
+            let cx = x + shift
+            if gaze == .resting {
                 // Closed and content: a small downward curve.
                 path.move(to: CGPoint(x: cx - 0.75, y: 13.3))
                 path.addQuadCurve(to: CGPoint(x: cx + 0.75, y: 13.3), control: CGPoint(x: cx, y: 14.1))
+            } else {
+                path.addEllipse(in: CGRect(x: cx - 0.65, y: 12.6, width: 1.3, height: 1.6))
             }
-            return path
-        }
-    }
-
-    /// Open eyes at any position and openness, for the animated appearances.
-    static func eyes(_ pose: HectorEyes) -> Path {
-        var path = Path()
-        // Kept inside the visor slot (11.8 to 15.0).
-        let height = 1.6 * min(max(pose.openness, 0.08), 1.15)
-        let centerY = 13.4 + min(max(pose.y, -0.5), 0.5)
-        for x in [9.7, 14.3] as [CGFloat] {
-            let cx = x + min(max(pose.x, -0.9), 0.9)
-            path.addEllipse(in: CGRect(x: cx - 0.65, y: centerY - height / 2, width: 1.3, height: height))
         }
         return path
     }
@@ -170,14 +161,6 @@ enum HectorGaze {
     case resting
 }
 
-/// Where open eyes look, in grid units from straight ahead (x to the right, y down), and how
-/// open they are (1: open, 0: shut).
-struct HectorEyes: Equatable {
-    var x: CGFloat = 0
-    var y: CGFloat = 0
-    var openness: CGFloat = 1
-}
-
 struct HectorMark: View {
     var lineWidth: CGFloat = 1.4
     var gaze: HectorGaze = .ahead
@@ -191,8 +174,6 @@ struct HectorMark: View {
     var crest: Color = .hectorCrest
     /// Forces the small details on or off; `nil` decides from the size.
     var detailed: Bool? = nil
-    /// Overrides `gaze` with eyes at any position, for the animated appearances.
-    var eyes: HectorEyes? = nil
 
     var body: some View {
         Canvas { context, size in
@@ -227,9 +208,7 @@ struct HectorMark: View {
         context.fill(shape, with: .color(face))
         context.stroke(shape, with: .color(ink), style: outline)
         if detailed {
-            if let eyes {
-                context.fill(BrandGeometry.eyes(eyes), with: .color(ink))
-            } else if gaze == .resting {
+            if gaze == .resting {
                 context.stroke(BrandGeometry.eyes(gaze), with: .color(ink), style: StrokeStyle(lineWidth: lineWidth * 0.6, lineCap: .round))
             } else {
                 context.fill(BrandGeometry.eyes(gaze), with: .color(ink))
@@ -273,106 +252,6 @@ struct HectorPeek: View {
         }
         .aspectRatio(1 / showing, contentMode: .fit)
         .accessibilityHidden(true)
-    }
-}
-
-/// Hector on watch over the map: he peeks over its bottom edge, sweeps it with his eyes, blinks,
-/// now and then hoists himself up for a better look, and turns attentive while a line is pointed
-/// at. Rests (eyes closed) while live updates are paused.
-///
-/// Driven by a `TimelineView` rather than state: the pose is a pure function of the time, so no
-/// `@State` is needed (see `WindowState`). Still under Reduce Motion.
-struct WatchingHector: View {
-    /// A line or a country is under the pointer.
-    var isAttentive = false
-    /// Live updates are paused: Hector rests.
-    var isResting = false
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// How much of the mark shows at rest, from the top, as in `HectorPeek`.
-    private static let showing: CGFloat = 0.62
-    /// How much more shows at the top of a hoist.
-    private static let hoist: CGFloat = 0.16
-
-    var body: some View {
-        if reduceMotion || isResting {
-            HectorPeek(gaze: isResting ? .resting : .right, showing: Self.showing)
-        } else {
-            TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-                let time = context.date.timeIntervalSinceReferenceDate
-                frame(eyes: eyes(at: time), rise: rise(at: time))
-            }
-        }
-    }
-
-    /// The mark in a frame tall enough for the hoist, clipped where the edge is.
-    private func frame(eyes: HectorEyes, rise: CGFloat) -> some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            HectorMark(detailed: true, eyes: eyes)
-                .frame(width: width, height: width)
-                .offset(y: (Self.hoist - rise * Self.hoist) * width)
-                .frame(height: proxy.size.height, alignment: .top)
-                .clipped()
-        }
-        .aspectRatio(1 / (Self.showing + Self.hoist), contentMode: .fit)
-        .accessibilityHidden(true)
-    }
-
-    /// The eyes sweep the map on a slow loop (right, up the middle, left, back), and blink.
-    private func eyes(at time: TimeInterval) -> HectorEyes {
-        var eyes: HectorEyes
-        if isAttentive {
-            // Wide open, toward the lines above.
-            eyes = HectorEyes(x: 0.55, y: -0.35, openness: 1.12)
-        } else {
-            // (seconds into the loop, x, y): held a while at each point, eased in between.
-            let path: [(TimeInterval, CGFloat, CGFloat)] = [
-                (0, 0.75, -0.1), (3.5, 0.75, -0.1), (4.4, 0.1, -0.4), (6.0, 0.1, -0.4),
-                (6.9, -0.75, -0.15), (9.4, -0.75, -0.15), (10.3, 0.0, 0.1), (11.4, 0.0, 0.1),
-                (12.3, 0.75, -0.1), (15.0, 0.75, -0.1),
-            ]
-            let t = time.truncatingRemainder(dividingBy: 15)
-            let next = path.firstIndex { $0.0 > t } ?? path.count - 1
-            let (t0, x0, y0) = path[max(next - 1, 0)]
-            let (t1, x1, y1) = path[next]
-            let progress = Self.ease(CGFloat((t - t0) / max(t1 - t0, 0.001)))
-            eyes = HectorEyes(x: x0 + (x1 - x0) * progress, y: y0 + (y1 - y0) * progress)
-        }
-        eyes.openness *= blink(at: time)
-        return eyes
-    }
-
-    /// 1 with the eyes open, down to 0 for a blink every 4.6 s, twice in a row every third time.
-    private func blink(at time: TimeInterval) -> CGFloat {
-        let period: TimeInterval = 4.6
-        let duration: TimeInterval = 0.16
-        let cycle = Int(time / period)
-        let t = time.truncatingRemainder(dividingBy: period)
-        let starts: [TimeInterval] = cycle % 3 == 0 ? [0, 0.28] : [0]
-        for start in starts where t >= start && t < start + duration {
-            return 1 - sin(CGFloat((t - start) / duration) * .pi)
-        }
-        return 1
-    }
-
-    /// 0 at rest, up to 1 when he hoists himself up: once every 19 s, for about 2.5 s.
-    private func rise(at time: TimeInterval) -> CGFloat {
-        if isAttentive { return 0.35 }
-        let t = time.truncatingRemainder(dividingBy: 19)
-        let start: TimeInterval = 13
-        switch t {
-        case start..<(start + 0.5): return Self.ease(CGFloat((t - start) / 0.5))
-        case (start + 0.5)..<(start + 2.2): return 1
-        case (start + 2.2)..<(start + 2.8): return 1 - Self.ease(CGFloat((t - start - 2.2) / 0.6))
-        default: return 0
-        }
-    }
-
-    private static func ease(_ x: CGFloat) -> CGFloat {
-        let x = min(max(x, 0), 1)
-        return x * x * (3 - 2 * x)
     }
 }
 
