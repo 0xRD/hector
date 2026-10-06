@@ -81,6 +81,7 @@ private struct VirusTotalSettings: View {
 private struct GeneralSettings: View {
     @Environment(WindowState.self) private var state
     @Environment(AppPreferences.self) private var preferences
+    @Environment(UpdateChecker.self) private var updates
 
     var body: some View {
         Form {
@@ -105,6 +106,38 @@ private struct GeneralSettings: View {
                 Text("Startup")
             } footer: {
                 Text("Blocking does not depend on this: the helper enforces your rules from boot, even when Hector is closed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle(isOn: Binding(get: { updates.isEnabled }, set: { updates.isEnabled = $0 })) {
+                    Text("Check for new versions weekly")
+                    Text("Asks GitHub for the number of Hector's latest release. Nothing is downloaded or installed by itself.")
+                }
+                LabeledContent {
+                    HStack(spacing: Spacing.sm) {
+                        if updates.status == .checking { ProgressView().controlSize(.small) }
+                        Button("Check Now") { Task { await updates.checkNow() } }
+                            .disabled(updates.status == .checking)
+                    }
+                } label: {
+                    Text("Version \(HectorVersion.current)")
+                    Text(updateStatus)
+                }
+                if let release = updates.availableRelease {
+                    HStack {
+                        Spacer()
+                        Button(UpdateChecker.installedWithHomebrew ? "How to Update…" : "Open Release Page…") {
+                            UpdateChecker.presentAvailable(release)
+                        }
+                    }
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text(UpdateChecker.installedWithHomebrew
+                     ? "Installed with Homebrew: \u{201C}brew upgrade hector\u{201D} updates Hector. The helper and your rules stay in place."
+                     : "Installed from a zip: download the new one from its release page. The helper and your rules stay in place.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -142,6 +175,17 @@ private struct GeneralSettings: View {
     }
 
     private var loginItem: LoginItem { .shared }
+
+    private var updateStatus: String {
+        switch updates.status {
+        case .checking: return "Checking…"
+        case .available(let release): return "Hector \(release.version) is available."
+        case .failed(let message): return message
+        case .upToDate, .idle:
+            guard let last = updates.lastCheck else { return updates.isEnabled ? "Not checked yet." : "Not checked automatically." }
+            return "Up to date · checked \(Display.relative(last))."
+        }
+    }
 
     private static let dataFiles = [
         (label: "Countries", name: "dbip-country-lite.csv"),

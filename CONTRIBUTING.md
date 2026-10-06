@@ -7,7 +7,7 @@ Thanks for helping. Hector runs with root privileges once the helper is installe
 - Everything in the project is in English: code, comments, docs, UI text, commit messages.
 - `HectorCore` stays free of UI code and privileged code. Code that needs root belongs in the helper and should be as small as possible.
 - No new third-party dependencies without discussing them in an issue first.
-- No telemetry, analytics or network calls other than the user-triggered DB-IP database downloads (countries, network names) and the hosts lists the user subscribed to.
+- No telemetry, analytics or network calls other than the user-triggered DB-IP database downloads (countries, network names), the hosts lists the user subscribed to, and the update check (off until the user accepts it).
 
 ## Workflow
 

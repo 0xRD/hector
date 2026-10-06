@@ -16,6 +16,7 @@ struct HectorApp: App {
     private let security = SecurityController()
     private let checkup = CheckupController()
     private let privacy = PrivacyController()
+    private let updates = UpdateChecker()
 
     var body: some Scene {
         Window("Hector", id: "main") {
@@ -26,6 +27,7 @@ struct HectorApp: App {
                 .environment(security)
                 .environment(checkup)
                 .environment(privacy)
+                .environment(updates)
                 .tint(.hectorOK)
                 // English words in dates and numbers formatted by SwiftUI (see `Display`).
                 .environment(\.locale, Display.locale)
@@ -45,6 +47,7 @@ struct HectorApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await updates.checkFromMenu() } }
                 Button("Uninstall Hector…") { windowState.showUninstall = true }
             }
         }
@@ -69,6 +72,7 @@ struct HectorApp: App {
                 .task {
                     monitor.start()
                     privacy.startMonitoring()
+                    updates.start()
                     await blocking.refresh()
                     #if DEBUG
                     await DebugSnapshot.renderPanelIfRequested(MenuBarPanel()
@@ -84,6 +88,7 @@ struct HectorApp: App {
                 .environment(security)
                 .environment(windowState)
                 .environment(preferences)
+                .environment(updates)
                 .tint(.hectorTint)
                 .environment(\.locale, Display.locale)
         }

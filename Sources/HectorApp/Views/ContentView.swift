@@ -9,6 +9,7 @@ struct ContentView: View {
     @Environment(WindowState.self) private var state
     @Environment(SecurityController.self) private var security
     @Environment(PrivacyController.self) private var privacy
+    @Environment(UpdateChecker.self) private var updates
     #if DEBUG
     @Environment(\.openSettings) private var openSettings
     #endif
@@ -103,6 +104,16 @@ struct ContentView: View {
                 }
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                if let release = updates.availableRelease {
+                    Button {
+                        UpdateChecker.presentAvailable(release)
+                    } label: {
+                        Label("Hector \(release.version)", systemImage: "arrow.down.circle.fill")
+                    }
+                    .labelStyle(BadgeLabelStyle(color: .hectorInfo, iconSize: 9))
+                    .buttonStyle(.plain)
+                    .help("Hector \(release.version) is available. You have \(HectorVersion.current).")
+                }
                 if blocking.isHelperReady {
                     Label("Blocking on", systemImage: "shield.fill")
                         .labelStyle(BadgeLabelStyle(color: .hectorOK, iconSize: 9))
@@ -167,6 +178,14 @@ struct ContentView: View {
         }
         #endif
         .sheet(isPresented: $state.showUninstall) { UninstallSheet() }
+        // Asked once, at the first launch: the check is off until the user turns it on.
+        .alert("Check for new versions of Hector?", isPresented: Binding(get: { updates.needsAnswer }, set: { _ in })) {
+            Button("Check Weekly") { updates.answer(enable: true) }
+            Button("Don\u{2019}t Check", role: .cancel) { updates.answer(enable: false) }
+        } message: {
+            Text("Once a week, Hector can ask GitHub for the number of its latest release, and tell you when a newer one is out. "
+                 + "It sends nothing about you or this Mac, and never downloads anything by itself. You can change this in Settings.")
+        }
         // Snapshots only as often as someone can see them: see ConnectionMonitor.Demand.
         .onAppear(perform: updateDemand)
         .onChange(of: state.sidebarSelection) {
