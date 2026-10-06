@@ -93,6 +93,10 @@ struct HectorApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // `scripts/bundle-app.sh` asks for the icon files of the bundle, then the app quits.
+        if let folder = ProcessInfo.processInfo.environment["HECTOR_WRITE_ICONSET"] {
+            exit(AppIconArtwork.writeIconset(to: URL(fileURLWithPath: folder)) ? 0 : 1)
+        }
         NSApp.applicationIconImage = AppIconArtwork.render(size: 512)
         if MenuBarMode.isEnabled && MenuBarMode.launchedAtLogin {
             // Started at login: the menu bar only, no window in the way.
@@ -175,6 +179,25 @@ struct AppIconArtwork: View {
                 .position(x: half, y: Self.wallTop + wallHeight / 2)
         }
         .frame(width: Self.bodySize, height: Self.bodySize)
+    }
+
+    /// Writes the PNGs of an `.iconset` folder, for `iconutil` to turn into the bundle's
+    /// AppIcon.icns: the icon Finder, the Dock and Launchpad show before the app runs.
+    @MainActor
+    static func writeIconset(to folder: URL) -> Bool {
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for points in [16, 32, 128, 256, 512] {
+            for scale in [1, 2] {
+                let pixels = CGFloat(points * scale)
+                let renderer = ImageRenderer(content: AppIconArtwork().scaleEffect(pixels / canvas).frame(width: pixels, height: pixels))
+                renderer.scale = 1
+                let name = scale == 1 ? "icon_\(points)x\(points).png" : "icon_\(points)x\(points)@2x.png"
+                guard let image = renderer.cgImage,
+                      let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]),
+                      (try? data.write(to: folder.appending(path: name))) != nil else { return false }
+            }
+        }
+        return true
     }
 
     @MainActor

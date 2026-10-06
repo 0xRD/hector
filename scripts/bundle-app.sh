@@ -33,6 +33,17 @@ cp "$BIN/HectorApp" "$APP/Contents/MacOS/Hector"
 # case-insensitive disk.
 cp "$BIN/hector" "$BIN/hectord" "$APP/Contents/Helpers/"
 
+# The icon is drawn in code (AppIconArtwork): the app writes it out, iconutil packs it. Without it,
+# Finder and the Dock show a generic icon until the app runs.
+ICONSET="$(mktemp -d)/AppIcon.iconset"
+if HECTOR_WRITE_ICONSET="$ICONSET" "$BIN/HectorApp" && iconutil -c icns -o "$APP/Contents/Resources/AppIcon.icns" "$ICONSET"; then
+    ICON_KEY="<key>CFBundleIconFile</key><string>AppIcon</string>"
+else
+    echo "warning: could not render the app icon; the bundle uses the generic one" >&2
+    ICON_KEY=""
+fi
+rm -rf "$(dirname "$ICONSET")"
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -43,11 +54,15 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>io.github.0xrd.hector</string>
     <key>CFBundleExecutable</key><string>Hector</string>
     <key>CFBundlePackageType</key><string>APPL</string>
+    $ICON_KEY
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
     <key>NSHighResolutionCapable</key><true/>
+    <!-- Keep the design of the macOS 15 SDK (no Liquid Glass) whatever SDK builds the app: the
+         releases are built with that SDK, so a local build looks like the published one. -->
+    <key>UIDesignRequiresCompatibility</key><true/>
     <key>NSHumanReadableCopyright</key><string>Hector contributors. GPL-3.0.</string>
 </dict>
 </plist>
