@@ -21,7 +21,7 @@ extension Blocklist {
         return nil
     }
 
-    /// The enabled rule that blocks exactly this address, if any.
+    /// The rule, switched on or off, that targets exactly this address, if any.
     public func addressRule(for address: IPAddress) -> Rule? {
         rules.first { rule in
             if case .network(let cidr) = rule.target { return cidr == CIDR(address) }

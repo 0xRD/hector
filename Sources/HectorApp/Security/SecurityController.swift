@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import HectorCore
 import Observation
@@ -205,10 +206,28 @@ final class SecurityController {
     // MARK: - VirusTotal
 
     /// Looks up one file. Only its SHA-256 leaves this Mac.
+    ///
+    /// Without an API key, or when VirusTotal refuses the key (rejected, or its quota spent), the
+    /// file's page on virustotal.com opens in the browser instead: the same hash, without the API.
     func checkVirusTotal(path: String, refresh: Bool = false) async {
-        guard virusTotal[path] != .checking else { return }
+        guard virusTotal[path] != .checking, !isDemo else { return }
+        guard hasAPIKey else {
+            await openVirusTotalPage(path: path)
+            return
+        }
         guard let client = makeClient(reportingTo: path) else { return }
-        await lookUp(path: path, client: client, refresh: refresh)
+        await lookUp(path: path, client: client, refresh: refresh, opensPageWhenRefused: true)
+    }
+
+    /// Opens the file's VirusTotal page in the browser. Only the SHA-256 is in the address.
+    func openVirusTotalPage(path: String) async {
+        let target = FileHash.hashTarget(for: URL(fileURLWithPath: path), signature: signature(of: path))
+        let hash = await Task.detached(priority: .userInitiated) { try? FileHash.sha256(of: target) }.value
+        guard let hash else {
+            virusTotal[path] = .failed("Could not read \(target.lastPathComponent) to compute its SHA-256.")
+            return
+        }
+        NSWorkspace.shared.open(VirusTotalClient.permalink(for: hash))
     }
 
     /// Looks up every path without a result yet, one after the other within the free-tier limits.
@@ -226,7 +245,7 @@ final class SecurityController {
             defer { isCheckingAll = false }
             for path in pending {
                 if Task.isCancelled { break }
-                await lookUp(path: path, client: client, refresh: false)
+                await lookUp(path: path, client: client, refresh: false, opensPageWhenRefused: false)
                 // The daily quota is gone: the rest would fail the same way.
                 if quotaExhausted { break }
             }
@@ -257,7 +276,9 @@ final class SecurityController {
         }
     }
 
-    private func lookUp(path: String, client: VirusTotalClient, refresh: Bool) async {
+    /// `opensPageWhenRefused`: for a lookup the user asked for by itself, open the file's page on
+    /// virustotal.com when the API refuses the key (never for "Check all", which would open dozens).
+    private func lookUp(path: String, client: VirusTotalClient, refresh: Bool, opensPageWhenRefused: Bool) async {
         virusTotal[path] = .checking
         let target = FileHash.hashTarget(for: URL(fileURLWithPath: path), signature: signature(of: path))
         do {
@@ -269,11 +290,21 @@ final class SecurityController {
         } catch is CancellationError {
             virusTotal[path] = nil
         } catch let error as VirusTotalError {
+            var refused = false
             switch error {
-            case .dailyQuotaExhausted, .rateLimited: quotaExhausted = true
+            case .dailyQuotaExhausted, .rateLimited:
+                quotaExhausted = true
+                refused = true
+            case .invalidAPIKey:
+                refused = true
             default: break
             }
-            virusTotal[path] = .failed(error.description)
+            if refused && opensPageWhenRefused {
+                virusTotal[path] = .failed(error.description + " Its page on virustotal.com was opened in your browser instead.")
+                await openVirusTotalPage(path: path)
+            } else {
+                virusTotal[path] = .failed(error.description)
+            }
         } catch {
             virusTotal[path] = .failed(String(describing: error))
         }
