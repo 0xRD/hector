@@ -248,6 +248,8 @@ private final class CannedTools: @unchecked Sendable {
         #expect(SecurityCheckup.guestAccount(.dictionary(["GuestEnabled": true])).status == .warning)
         #expect(SecurityCheckup.guestAccount(.dictionary(["GuestEnabled": false])).status == .pass)
         #expect(SecurityCheckup.guestAccount(.missing).status == .pass)
+        // A switch left behind without the Guest user lets nobody in.
+        #expect(SecurityCheckup.guestAccount(.dictionary(["GuestEnabled": true]), guestUserExists: false).status == .pass)
     }
 
     @Test func deviceManagementVerdicts() {
@@ -255,6 +257,51 @@ private final class CannedTools: @unchecked Sendable {
         let managed = SecurityCheckup.deviceManagement(ToolOutput(output: Samples.enrolled))
         #expect(managed.status == .warning)
         #expect(managed.finding.contains("mdm.example.com"))
+    }
+
+    @Test func pendingMacOSUpdates() throws {
+        let now = Date()
+        let offered = now.addingTimeInterval(-3 * 86_400)
+        let plist: [String: Any] = [
+            "LastSuccessfulDate": now,
+            "FirstOfferDateDictionary": ["MSU_UPDATE_26A434_patch_27.0.1_minor": offered],
+            "RecommendedUpdates": [
+                ["Display Name": "Command Line Tools for Xcode 27.0", "Display Version": "27.0",
+                 "Identifier": "Command Line Tools for Xcode 27.0"],
+                ["Display Name": "macOS\u{a0}27.0.1", "Display Version": "27.0.1", "MobileSoftwareUpdate": true,
+                 "Identifier": "MSU_UPDATE_26A434_patch_27.0.1_minor"],
+            ],
+        ]
+        let status = try #require(CheckupParsers.updateStatus(plist))
+        #expect(status.pending.map(\.name) == ["Command Line Tools for Xcode 27.0", "macOS 27.0.1"])
+        #expect(status.pending.map(\.isMacOS) == [false, true])
+        #expect(status.pending[1].offeredAt == offered)
+
+        let waiting = SecurityCheckup.macOSUpdates(status, systemVersion: "27.0", now: now)
+        #expect(waiting.status == .warning)
+        #expect(waiting.finding.contains("macOS 27.0.1"))
+        #expect(waiting.finding.contains("Command Line Tools"))
+        // Left aside for a month: a failure.
+        #expect(SecurityCheckup.macOSUpdates(status, systemVersion: "27.0", now: now.addingTimeInterval(40 * 86_400)).status == .fail)
+
+        let current = CheckupParsers.UpdateStatus(pending: [], lastCheck: now)
+        #expect(SecurityCheckup.macOSUpdates(current, systemVersion: "27.0", now: now).status == .pass)
+        let stale = CheckupParsers.UpdateStatus(pending: [], lastCheck: now.addingTimeInterval(-30 * 86_400))
+        #expect(SecurityCheckup.macOSUpdates(stale, systemVersion: "27.0", now: now).status == .warning)
+        #expect(SecurityCheckup.macOSUpdates(nil, systemVersion: "27.0", now: now).status == .unknown)
+        #expect(CheckupParsers.updateStatus(["AutomaticDownload": true]) == nil)
+    }
+
+    @Test func appStoreKeyIgnoredFromMacOS26() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "hector-commerce-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appending(path: "Library/Preferences/com.apple.commerce.plist")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try PropertyListSerialization.data(fromPropertyList: ["AutoUpdate": false], format: .binary, options: 0).write(to: url)
+        let sequoia = SecurityCheckup(root: root, tools: .none, systemVersion: OperatingSystemVersion(majorVersion: 15, minorVersion: 7, patchVersion: 0))
+        #expect(sequoia.gatherInputs().updates.installAppUpdates == false)
+        let newer = SecurityCheckup(root: root, tools: .none, systemVersion: OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 0))
+        #expect(newer.gatherInputs().updates.installAppUpdates == nil)
     }
 
     @Test func settingsLinksUseOnlyTheSettingsScheme() throws {
@@ -275,7 +322,8 @@ private final class CannedTools: @unchecked Sendable {
             try PropertyListSerialization.data(fromPropertyList: object, format: .binary, options: 0).write(to: url)
         }
         try plist(["AutomaticCheckEnabled": true, "AutomaticDownload": true, "CriticalUpdateInstall": true,
-                   "ConfigDataInstall": true, "AutomaticallyInstallMacOSUpdates": true],
+                   "ConfigDataInstall": true, "AutomaticallyInstallMacOSUpdates": true,
+                   "RecommendedUpdates": [[String: Any]](), "LastSuccessfulDate": Date()],
                   "Library/Preferences/com.apple.SoftwareUpdate.plist")
         try plist(["AutoUpdate": true], "Library/Preferences/com.apple.commerce.plist")
         try plist(["GuestEnabled": false, "lastUserName": "alex"], "Library/Preferences/com.apple.loginwindow.plist")
@@ -299,13 +347,13 @@ private final class CannedTools: @unchecked Sendable {
         ])
         let report = SecurityCheckup(root: root, tools: tools.runner).run()
 
-        #expect(report.results.count == 13)
-        #expect(Set(report.results.map(\.id)).count == 13)
+        #expect(report.results.count == 14)
+        #expect(Set(report.results.map(\.id)).count == 14)
         let byID = Dictionary(uniqueKeysWithValues: report.results.map { ($0.id, $0) })
         #expect(byID[SecurityCheckup.CheckID.firewall]?.status == .warning)
         #expect(byID[SecurityCheckup.CheckID.xprotect]?.finding.contains("5287") == true)
-        #expect(report.passedCount == 12)
-        #expect(report.summary == "12 of 13 checks pass")
+        #expect(report.passedCount == 13)
+        #expect(report.summary == "13 of 14 checks pass")
         // Only the fixed, read-only commands were run.
         #expect(Set(tools.invoked) == Set(tools.answers.keys))
         // Every fix has text, and every link opens System Settings only.

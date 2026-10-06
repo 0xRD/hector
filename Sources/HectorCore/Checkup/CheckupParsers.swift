@@ -238,6 +238,58 @@ public enum CheckupParsers {
         )
     }
 
+    /// An update Software Update found and has not installed yet.
+    public struct PendingUpdate: Equatable, Sendable {
+        public var name: String
+        public var version: String?
+        /// A macOS update (an `MSU_UPDATE_…` product), as opposed to tools such as the Command
+        /// Line Tools.
+        public var isMacOS: Bool
+        /// When Software Update first offered it.
+        public var offeredAt: Date?
+
+        public init(name: String, version: String? = nil, isMacOS: Bool, offeredAt: Date? = nil) {
+            self.name = name
+            self.version = version
+            self.isMacOS = isMacOS
+            self.offeredAt = offeredAt
+        }
+    }
+
+    /// What Software Update last found, from `com.apple.SoftwareUpdate`: the updates waiting
+    /// (`RecommendedUpdates`) and when it last checked (`LastSuccessfulDate`). The list is kept by
+    /// macOS's own background checks, so reading it never contacts Apple. `nil` when the
+    /// dictionary has neither key.
+    public struct UpdateStatus: Equatable, Sendable {
+        public var pending: [PendingUpdate]
+        public var lastCheck: Date?
+
+        public init(pending: [PendingUpdate], lastCheck: Date?) {
+            self.pending = pending
+            self.lastCheck = lastCheck
+        }
+    }
+
+    public static func updateStatus(_ softwareUpdate: [String: Any]?) -> UpdateStatus? {
+        guard let softwareUpdate else { return nil }
+        let entries = softwareUpdate["RecommendedUpdates"] as? [[String: Any]]
+        let lastCheck = softwareUpdate["LastSuccessfulDate"] as? Date
+        guard entries != nil || lastCheck != nil else { return nil }
+        let offered = softwareUpdate["FirstOfferDateDictionary"] as? [String: Any] ?? [:]
+        let pending: [PendingUpdate] = (entries ?? []).compactMap { entry in
+            let identifier = (entry["Identifier"] as? String) ?? (entry["Product Key"] as? String) ?? ""
+            let rawName = (entry["Display Name"] as? String) ?? identifier
+            // Display names use a no-break space ("macOS\u{a0}27.0.1").
+            let name = rawName.replacingOccurrences(of: "\u{a0}", with: " ").trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { return nil }
+            let isMacOS = bool(entry["MobileSoftwareUpdate"]) == true || identifier.hasPrefix("MSU_UPDATE_")
+                || name.hasPrefix("macOS ")
+            return PendingUpdate(name: name, version: entry["Display Version"] as? String, isMacOS: isMacOS,
+                                 offeredAt: offered[identifier] as? Date)
+        }
+        return UpdateStatus(pending: pending, lastCheck: lastCheck)
+    }
+
     /// The XProtect version from its bundle's Info.plist (`CFBundleShortVersionString`, a plain
     /// number such as "5287").
     public static func xprotectVersion(_ infoPlist: [String: Any]?) -> String? {

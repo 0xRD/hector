@@ -2,7 +2,8 @@ import Darwin
 import Foundation
 
 /// Reviews the Mac's main security settings: SIP, Gatekeeper, XProtect, FileVault, the firewall,
-/// automatic updates, sharing services, automatic login, the guest account and MDM enrollment.
+/// automatic updates, pending macOS updates, sharing services, automatic login, the guest account
+/// and MDM enrollment.
 ///
 /// Read-only by design: it runs Apple's own tools by absolute path with fixed argument arrays
 /// (never through a shell, never a path found on disk) and reads world-readable preference files.
@@ -64,6 +65,7 @@ public struct SecurityCheckup: Sendable {
         public static let fileVault = "filevault"
         public static let firewall = "firewall"
         public static let automaticUpdates = "automatic-updates"
+        public static let macOSUpdates = "macos-updates"
         public static let remoteLogin = "remote-login"
         public static let screenSharing = "screen-sharing"
         public static let fileSharing = "file-sharing"
@@ -77,10 +79,18 @@ public struct SecurityCheckup: Sendable {
     /// tests can use a folder of fixtures.
     public var root: URL
     public var tools: ToolRunner
+    /// The macOS version the settings belong to. Injectable for tests.
+    public var systemVersion: OperatingSystemVersion
+    /// Whether a local user exists. Injectable for tests.
+    public var userExists: @Sendable (String) -> Bool
 
-    public init(root: URL = URL(fileURLWithPath: "/"), tools: ToolRunner = .live) {
+    public init(root: URL = URL(fileURLWithPath: "/"), tools: ToolRunner = .live,
+                systemVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion,
+                userExists: @escaping @Sendable (String) -> Bool = { getpwnam($0) != nil }) {
         self.root = root
         self.tools = tools
+        self.systemVersion = systemVersion
+        self.userExists = userExists
     }
 
     public func run() -> CheckupReport {
@@ -114,11 +124,19 @@ public struct SecurityCheckup: Sendable {
     struct Inputs {
         var outputs: [Command: ToolOutput] = [:]
         var updates = CheckupParsers.UpdateSettings()
+        /// `nil` when Software Update's state could not be read.
+        var updateStatus: CheckupParsers.UpdateStatus?
+        /// "27.0", for the update check's finding.
+        var systemVersion = ""
+        var now = Date()
         var xprotect: XProtectInfo?
         var loginWindow: FileRead = .missing
         /// `/etc/kcpassword` holds the automatic login password; it exists only while automatic
         /// login is on. Only root can read it, but anyone can see that it exists.
         var kcpasswordExists = false
+        /// The Guest user record. "Allow guests to log in" creates it and removing the switch
+        /// deletes it; `GuestEnabled` alone can stay behind after the guest was turned off.
+        var guestUserExists = true
         /// Contents of the Remote Management state file, when present.
         var remoteManagement: String?
     }
@@ -128,15 +146,22 @@ public struct SecurityCheckup: Sendable {
         inputs.outputs = runTools()
 
         let softwareUpdate = readPlist("Library/Preferences/com.apple.SoftwareUpdate.plist").values
-        let commerce = readPlist("Library/Preferences/com.apple.commerce.plist").values
+        // From macOS 26 the App Store's automatic updates are a setting of the App Store app,
+        // no longer the `AutoUpdate` key of com.apple.commerce: a value left there by an older
+        // macOS says nothing, so it is not read.
+        let commerce = systemVersion.majorVersion >= 26 ? nil : readPlist("Library/Preferences/com.apple.commerce.plist").values
         let managedSoftwareUpdate = readPlist("Library/Managed Preferences/com.apple.SoftwareUpdate.plist").values
         let managedCommerce = readPlist("Library/Managed Preferences/com.apple.commerce.plist").values
         inputs.updates = CheckupParsers.updateSettings(softwareUpdate: softwareUpdate, commerce: commerce,
                                                        managedSoftwareUpdate: managedSoftwareUpdate,
                                                        managedCommerce: managedCommerce)
+        inputs.updateStatus = CheckupParsers.updateStatus(softwareUpdate)
+        inputs.systemVersion = [systemVersion.majorVersion, systemVersion.minorVersion, systemVersion.patchVersion]
+            .enumerated().filter { $0.offset < 2 || $0.element > 0 }.map { String($0.element) }.joined(separator: ".")
         inputs.xprotect = readXProtect()
         inputs.loginWindow = readPlist("Library/Preferences/com.apple.loginwindow.plist")
         inputs.kcpasswordExists = FileManager.default.fileExists(atPath: path("etc/kcpassword"))
+        inputs.guestUserExists = userExists("Guest")
         let managementFile = path("Library/Application Support/Apple/Remote Desktop/RemoteManagement.launchd")
         inputs.remoteManagement = try? String(contentsOfFile: managementFile, encoding: .utf8)
         return inputs
@@ -197,6 +222,7 @@ public struct SecurityCheckup: Sendable {
             fileVault(inputs.outputs[.fileVault]),
             firewall(inputs.outputs[.firewall], stealth: inputs.outputs[.stealthMode]),
             automaticUpdates(inputs.updates),
+            macOSUpdates(inputs.updateStatus, systemVersion: inputs.systemVersion, now: inputs.now),
             remoteLogin(launchd),
             screenSharing(launchd, remoteManagement: inputs.remoteManagement),
             sharingService(launchd, id: CheckID.fileSharing, title: "File Sharing", label: "com.apple.smbd",
@@ -204,7 +230,7 @@ public struct SecurityCheckup: Sendable {
             sharingService(launchd, id: CheckID.remoteAppleEvents, title: "Remote Apple Events", label: "com.apple.AEServer",
                            whenOn: "On: apps on other Macs can send Apple events to this one."),
             automaticLogin(inputs.loginWindow, kcpasswordExists: inputs.kcpasswordExists),
-            guestAccount(inputs.loginWindow),
+            guestAccount(inputs.loginWindow, guestUserExists: inputs.guestUserExists),
             deviceManagement(inputs.outputs[.enrollment]),
         ]
     }
@@ -354,6 +380,33 @@ public struct SecurityCheckup: Sendable {
         return result(.pass, "macOS updates and security responses download and install automatically.")
     }
 
+    /// Updates waiting in Software Update. A macOS update left aside for a month is a failure:
+    /// the security fixes it carries are public by then.
+    static func macOSUpdates(_ status: CheckupParsers.UpdateStatus?, systemVersion: String, now: Date) -> CheckResult {
+        let fix = "System Settings → General → Software Update → Update Now (or Restart Now when it is downloaded)."
+        func result(_ status: CheckResult.Status, _ finding: String) -> CheckResult {
+            CheckResult(id: CheckID.macOSUpdates, title: "macOS up to date", status: status, finding: finding,
+                        howToFix: fix, settingsURL: SettingsPane.softwareUpdate)
+        }
+        guard let status else { return result(.unknown, "Unknown: Software Update's state could not be read.") }
+        let running = systemVersion.isEmpty ? "" : " (this Mac runs macOS \(systemVersion))"
+        let macOS = status.pending.filter(\.isMacOS)
+        let others = status.pending.filter { !$0.isMacOS }.map(\.name)
+        let othersNote = others.isEmpty ? "" : " Also waiting: " + Display.list(others) + "."
+        if !macOS.isEmpty {
+            let names = Display.list(macOS.map(\.name))
+            let oldest = macOS.compactMap(\.offeredAt).min()
+            let days = oldest.map { Int(now.timeIntervalSince($0) / 86_400) } ?? 0
+            let one = macOS.count == 1
+            let available = oldest.map { (one ? "has" : "have") + " been available since \(Display.day($0))" } ?? (one ? "is available" : "are available")
+            return result(days >= 30 ? .fail : .warning, "\(names) \(available)\(running), not installed yet.\(othersNote)")
+        }
+        if let lastCheck = status.lastCheck, now.timeIntervalSince(lastCheck) > 14 * 86_400 {
+            return result(.warning, "No update was found, but Software Update has not checked since \(Display.day(lastCheck)).")
+        }
+        return result(.pass, "Up to date\(running).\(othersNote)")
+    }
+
     /// `true` when launchd's overrides turn `label` on. Services absent from the list keep the
     /// default of their plist, which is off for every sharing service checked here.
     private static func isEnabled(_ label: String, in overrides: [String: Bool]) -> Bool {
@@ -432,7 +485,7 @@ public struct SecurityCheckup: Sendable {
         return result(.pass, "Off: a password is needed after every start.")
     }
 
-    static func guestAccount(_ loginWindow: FileRead) -> CheckResult {
+    static func guestAccount(_ loginWindow: FileRead, guestUserExists: Bool = true) -> CheckResult {
         let fix = "System Settings → Users & Groups → Guest User (ⓘ) → turn off “Allow guests to log in to this computer”."
         func result(_ status: CheckResult.Status, _ finding: String) -> CheckResult {
             CheckResult(id: CheckID.guestAccount, title: "Guest account", status: status, finding: finding,
@@ -442,9 +495,10 @@ public struct SecurityCheckup: Sendable {
             return result(.unknown, "Unknown: the login window settings could not be read.")
         }
         // Missing means the default: off.
-        return CheckupParsers.bool(loginWindow.values?["GuestEnabled"]) == true
-            ? result(.warning, "On: anyone can log in as Guest, without a password.")
-            : result(.pass, "Off.")
+        guard CheckupParsers.bool(loginWindow.values?["GuestEnabled"]) == true else { return result(.pass, "Off.") }
+        // The switch can outlive the account: without a Guest user, there is nobody to log in as.
+        guard guestUserExists else { return result(.pass, "Off: there is no Guest user on this Mac.") }
+        return result(.warning, "On: anyone can log in as Guest, without a password.")
     }
 
     static func deviceManagement(_ output: ToolOutput?) -> CheckResult {
