@@ -11,6 +11,8 @@ import Observation
 @Observable
 final class WindowState {
     var sidebarSelection: SidebarItem? = .allApps
+    /// Sidebar sections the user folded, by title.
+    var collapsedSidebarSections: Set<String> = []
     /// The app the Connections screen is narrowed to; `nil` shows every app.
     var appFilter: AppGroup.ID?
     var selectedDestination: DestinationRef?
