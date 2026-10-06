@@ -98,8 +98,15 @@ struct WorldMapView: View {
                     state.mapViewport = .world
                     return
                 }
-                let points = rows.filter { $0.destination.country == country }.compactMap(canvasEndpoint)
-                state.mapViewport = MapViewport.fitting(points, in: size)
+                // Framed from the country alone, not from `rows`: the task can run with the rows of
+                // the previous filter (another country's, so none would match), which left the
+                // map where it was when going from one country straight to another. Every line
+                // to the country ends within `MapGeometry.endpointSpread` of its label point.
+                guard let center = MapGeometry.canvasPoint(country: country) else { return }
+                let spread = MapGeometry.endpointSpread
+                let corners = [CGPoint(x: center.x - spread, y: center.y - spread),
+                               CGPoint(x: center.x + spread, y: center.y + spread)]
+                state.mapViewport = MapViewport.fitting(corners, in: size)
             }
         }
         .accessibilityElement(children: .ignore)

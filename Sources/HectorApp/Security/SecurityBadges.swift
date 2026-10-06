@@ -110,7 +110,9 @@ struct VirusTotalBadge: View {
                 Button("Check") { Task { await security.checkVirusTotal(path: path) } }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
-                    .help("Send the file's SHA-256 (never the file) to VirusTotal")
+                    .help(security.hasAPIKey
+                          ? "Send the file's SHA-256 (never the file) to VirusTotal"
+                          : "Open the file's page on virustotal.com (its SHA-256 only). Add an API key in Settings to see results here.")
             }
         } else {
             Text("–").foregroundStyle(.tertiary)
@@ -161,10 +163,10 @@ struct CodeDetailsSection: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 DetailRow("Trust") { SignatureBadge(security: security, path: path) }
                 if let problem = info.validationError { DetailRow("Problem", value: problem) }
-                if let signer = info.signerName { DetailRow("Signer", value: signer) }
+                if let signer = info.signerName { DetailRow("Signer", value: signer, copyable: true) }
                 if info.isSigned {
-                    DetailRow("Team ID", value: info.teamIdentifier ?? "–", monospaced: true)
-                    DetailRow("Identifier", value: info.signingIdentifier ?? "–")
+                    DetailRow("Team ID", value: info.teamIdentifier ?? "–", monospaced: true, copyable: info.teamIdentifier != nil)
+                    DetailRow("Identifier", value: info.signingIdentifier ?? "–", copyable: info.signingIdentifier != nil)
                     DetailRow("Notarized", value: info.isNotarized ? "Yes" : (info.isApplePlatform || info.isAppStore ? "Not needed" : "No"))
                     DetailRow("Hardened runtime", value: info.hasHardenedRuntime ? "Yes" : "No")
                 }
@@ -187,7 +189,8 @@ struct CodeDetailsSection: View {
                     VirusTotalBadge(security: security, path: path)
                     if let label = lookup.report?.threatLabel { Text(label).font(.callout).foregroundStyle(.secondary) }
                 }
-                Text(lookup.sha256).font(.system(.caption, design: .monospaced)).textSelection(.enabled).foregroundStyle(.secondary)
+                CopyableText(lookup.sha256, font: .system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
                 HStack {
                     Link("Open the report", destination: lookup.permalink)
                     Button("Refresh") { Task { await security.checkVirusTotal(path: path, refresh: true) } }
@@ -209,8 +212,13 @@ struct CodeDetailsSection: View {
             }
         case nil:
             VStack(alignment: .leading, spacing: 6) {
-                Button("Check with VirusTotal") { Task { await security.checkVirusTotal(path: path) } }
-                Text("Only the file's SHA-256 is sent, never the file.").font(.caption).foregroundStyle(.secondary)
+                Button(security.hasAPIKey ? "Check with VirusTotal" : "Open on VirusTotal") {
+                    Task { await security.checkVirusTotal(path: path) }
+                }
+                Text(security.hasAPIKey
+                     ? "Only the file's SHA-256 is sent, never the file."
+                     : "Opens the file's page on virustotal.com in your browser: only its SHA-256 is in the address. Add an API key in Settings (⌘,) to see results here.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }

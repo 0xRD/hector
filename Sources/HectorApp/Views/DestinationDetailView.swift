@@ -11,12 +11,9 @@ struct DestinationDetailView: View {
 
     var body: some View {
         if let row {
-            ScrollView {
+            InspectorScrollView {
                 content(row)
-                    .padding(Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .canvasBackground()
         } else {
             EmptyStateView(
                 "Pick a destination",

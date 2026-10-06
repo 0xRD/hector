@@ -70,6 +70,9 @@ final class ConnectionMonitor {
     }()
 
     @ObservationIgnored private var geo: GeoIPDatabase?
+
+    /// The country of an address, once the country database is loaded.
+    func country(for address: IPAddress) -> String? { geo?.country(for: address) }
     @ObservationIgnored private var networkNames: ASNDatabase?
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var hostnames: [IPAddress: String] = [:]

@@ -31,6 +31,7 @@ extension CheckResult {
         case SecurityCheckup.CheckID.fileVault: "internaldrive"
         case SecurityCheckup.CheckID.firewall: "flame"
         case SecurityCheckup.CheckID.automaticUpdates: "arrow.down.circle"
+        case SecurityCheckup.CheckID.macOSUpdates: "arrow.triangle.2.circlepath.circle"
         case SecurityCheckup.CheckID.remoteLogin: "terminal"
         case SecurityCheckup.CheckID.screenSharing: "rectangle.on.rectangle"
         case SecurityCheckup.CheckID.fileSharing: "folder"

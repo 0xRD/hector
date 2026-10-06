@@ -61,7 +61,7 @@ Netbite is the network module: which app talks to which server, where that serve
 - **Persistence.** Everything set to start by itself: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions. Each with its code signature, and a note on anything odd.
 - **Processes.** What runs right now, as a tree or a flat list: user, arguments, signature, connections. Code running from a temporary, Downloads or hidden folder, or deleted after launch, is flagged; downloads show where they came from.
 - **VirusTotal hash lookups.** For one item, all of them, or automatically after each scan if you switch it on, within the free tier (4 per minute, 500 per day), cached for 7 days. Only the SHA-256 leaves your Mac, never the file. The key is yours and stays in your Keychain (Settings, ⌘,).
-- **Security checkup.** SIP, Gatekeeper, XProtect, FileVault, the firewall, automatic updates, Remote Login, Screen Sharing and Remote Management, File Sharing, Remote Apple Events, automatic login, the guest account and MDM enrollment. Each says what was found and how to fix it, with a button to the right System Settings pane. Read-only, no root, no password.
+- **Security checkup.** SIP, Gatekeeper, XProtect, FileVault, the firewall, automatic updates, macOS updates waiting to be installed, Remote Login, Screen Sharing and Remote Management, File Sharing, Remote Apple Events, automatic login, the guest account and MDM enrollment. Each says what was found and how to fix it, with a button to the right System Settings pane. Read-only, no root, no password.
 
 <table>
   <tr>
@@ -123,6 +123,8 @@ brew install --cask 0xrd/tap/hector
 ```
 
 `brew update && brew upgrade` then picks up each release. Or download the latest `Hector-x.y.z-macOS.zip` from [Releases](../../releases), move **Hector.app** to Applications, and open it. The release notes explain the one-time Gatekeeper step: Hector is not notarized, because notarization needs a paid Apple Developer account.
+
+At the first launch Hector asks whether it may check for new versions; the check is off unless you accept. When on, it looks once a week (or when you choose **Hector → Check for Updates…**) and tells you how to update: `brew upgrade hector`, or the release page for the zip. It never downloads or installs anything by itself. Change it in **Settings → General → Updates**.
 
 To block, install the helper from the Blocklists screen; macOS asks for an administrator password once. Without it, Hector observes your own apps and blocks nothing.
 
@@ -270,7 +272,7 @@ To check that nothing is left, without root: `scripts/check-uninstall.sh`.
 
 ## Privacy
 
-Hector has no telemetry, no account and no server. Everything stays on your Mac. It makes only these network requests: the DB-IP database downloads (countries, and network names if you want them), when you start them from the CLI (`hector geo update`, `hector geo update --asn`) or the app; the hosts lists you subscribe to, downloaded by the helper from GitHub when you apply them and checked weekly (a conditional request that usually transfers nothing); and reverse DNS lookups of the addresses your apps already contact, through your system resolver. The starting point of the map is the region set in macOS, not a location lookup.
+Hector has no telemetry, no account and no server. Everything stays on your Mac. It makes only these network requests: the DB-IP database downloads (countries, and network names if you want them), when you start them from the CLI (`hector geo update`, `hector geo update --asn`) or the app; the hosts lists you subscribe to, downloaded by the helper from GitHub when you apply them and checked weekly (a conditional request that usually transfers nothing); reverse DNS lookups of the addresses your apps already contact, through your system resolver; and, only if you turned it on, a weekly request to `api.github.com` for the number of Hector's latest release (no cookie, nothing about your Mac). The starting point of the map is the region set in macOS, not a location lookup.
 
 ## Project layout
 

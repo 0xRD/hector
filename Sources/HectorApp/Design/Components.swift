@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // Reusable building blocks of the Hector interface. See docs/DESIGN.md.
@@ -316,6 +317,34 @@ extension View {
     }
 }
 
+/// The scrolling body of a details panel (inspector): padded, on the canvas.
+///
+/// The scroll view ignores the top safe area and pads its content by it instead. Left to
+/// SwiftUI, a scroll view under the toolbar was inset twice with the macOS 15 design (builds with
+/// that SDK, or with UIDesignRequiresCompatibility): the AppKit controls inside (buttons, links,
+/// selectable text) sat a toolbar's height below where they were drawn, so clicks on them hit
+/// nothing. Padding the content keeps the drawing and the controls together, in both designs.
+struct InspectorScrollView<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ScrollView {
+                content
+                    .padding(Spacing.lg)
+                    .padding(.top, proxy.safeAreaInsets.top)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .ignoresSafeArea(.container, edges: .top)
+        }
+        .canvasBackground()
+    }
+}
+
 /// A padded card that fills the available width.
 ///
 ///     Card { SectionHeader("Details", style: .eyebrow); DetailRow("Path", value: path) }
@@ -525,22 +554,94 @@ struct DetailRow<Value: View>: View {
     }
 }
 
-/// The text value of a `DetailRow`: selectable, optionally monospaced.
+/// The text value of a `DetailRow`: selectable, optionally monospaced, or copied with one click.
 struct DetailValueText: View {
     let text: String
     let monospaced: Bool
+    var copyable = false
 
     var body: some View {
-        Text(text)
-            .font(monospaced ? Font.dataMonoCallout : Font.callout)
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
+        if copyable {
+            CopyableText(text, font: monospaced ? Font.dataMonoCallout : Font.callout)
+        } else {
+            Text(text)
+                .font(monospaced ? Font.dataMonoCallout : Font.callout)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
 extension DetailRow where Value == DetailValueText {
-    init(_ label: String, value: String, monospaced: Bool = false, labelWidth: CGFloat = 104) {
-        self.init(label, labelWidth: labelWidth) { DetailValueText(text: value, monospaced: monospaced) }
+    init(_ label: String, value: String, monospaced: Bool = false, copyable: Bool = false, labelWidth: CGFloat = 104) {
+        self.init(label, labelWidth: labelWidth) { DetailValueText(text: value, monospaced: monospaced, copyable: copyable) }
+    }
+}
+
+/// The value last copied with a click, to confirm it for a moment. Shared, like `HoverState`,
+/// because `@State` is off limits in this package.
+@MainActor
+@Observable
+final class CopyFeedback {
+    static let shared = CopyFeedback()
+
+    private(set) var copiedID: AnyHashable?
+
+    func copy(_ text: String, id: AnyHashable) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copiedID = id
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.4))
+            if self?.copiedID == id { self?.copiedID = nil }
+        }
+    }
+}
+
+/// A value copied to the clipboard when clicked: a copy icon shows under the pointer, and
+/// "Copied" for a moment after the click.
+///
+///     CopyableText(process.executablePath, font: .dataMonoCallout)
+struct CopyableText: View {
+    let text: String
+    let font: Font
+    /// Tells apart equal values shown in different places, for the hover and the confirmation.
+    let id: String
+
+    init(_ text: String, font: Font = .callout, id: String? = nil) {
+        self.text = text
+        self.font = font
+        self.id = "copy:" + (id ?? text)
+    }
+
+    var body: some View {
+        let copied = CopyFeedback.shared.copiedID == AnyHashable(id)
+        let hovered = HoverState.shared.isHovered(id)
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Text(text)
+                .font(font)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if copied {
+                Label("Copied", systemImage: "checkmark")
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.hectorOK)
+                    .fixedSize()
+                    .transition(.opacity)
+            } else if hovered {
+                Image(systemName: "doc.on.doc")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+        }
+        .hoverHighlight(id, cornerRadius: Radius.xs)
+        .onTapGesture { CopyFeedback.shared.copy(text, id: AnyHashable(id)) }
+        .motion(Motion.quick, value: copied)
+        .help("Click to copy")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Copies the value")
     }
 }
 

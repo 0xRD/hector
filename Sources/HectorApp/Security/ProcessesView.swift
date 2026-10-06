@@ -15,6 +15,8 @@ struct ProcessRow: Identifiable {
 /// Running processes, in the spirit of TaskExplorer: tree, signature, flags, connections.
 struct ProcessesView: View {
     @Environment(SecurityController.self) private var security
+    @Environment(BlockingController.self) private var blocking
+    @Environment(ConnectionMonitor.self) private var monitor
     @Environment(WindowState.self) private var state
 
     var body: some View {
@@ -43,7 +45,7 @@ struct ProcessesView: View {
         }
         .fillsSplitPane()
         .inspector(isPresented: $state.showProcessDetails) {
-            ProcessDetailView(security: security, row: selectedRow)
+            ProcessDetailView(security: security, blocking: blocking, monitor: monitor, row: selectedRow)
                 .fillsSplitPane()
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
@@ -107,7 +109,8 @@ struct ProcessesView: View {
             }
             .width(min: 90, ideal: 120, max: 160)
             TableColumn("Network") { row in
-                ConnectionCountCell(connections: row.process.connections)
+                ConnectionCountCell(connections: row.process.connections,
+                                    blocked: row.process.connections.map { blockedCount($0) } ?? 0)
             }
             .width(min: 50, ideal: 70, max: 90)
             TableColumn("VirusTotal") { row in
@@ -121,6 +124,15 @@ struct ProcessesView: View {
                 ProcessActions.menu(for: process, security: security)
             }
         }
+    }
+
+    /// How many of `connections` go to an address the applied blocklist blocks.
+    private func blockedCount(_ connections: [SocketInfo]) -> Int {
+        let applied = blocking.applied
+        return connections.filter { socket in
+            guard let address = socket.remoteAddress else { return false }
+            return applied.blockReason(for: address, country: monitor.country(for: address)) != nil
+        }.count
     }
 
     private var visibleRows: [ProcessRow] {
@@ -195,15 +207,24 @@ private struct ProcessNameCell: View {
     }
 }
 
+/// The number of connections, red when they all go to blocked addresses and honey when some do.
 private struct ConnectionCountCell: View {
     let connections: [SocketInfo]?
+    /// Connections to an address the applied blocklist blocks.
+    let blocked: Int
 
     var body: some View {
         if let connections {
             if connections.isEmpty {
                 Text("0").foregroundStyle(.tertiary)
-            } else {
+            } else if blocked == 0 {
                 StatusPill("\(connections.count)", kind: .ok, systemImage: "network", size: .small)
+            } else if blocked == connections.count {
+                StatusPill("\(connections.count)", kind: .danger, systemImage: "nosign", size: .small)
+                    .help(blocked == 1 ? "Its connection goes to a blocked address" : "All \(blocked) connections go to blocked addresses")
+            } else {
+                StatusPill("\(blocked)/\(connections.count)", kind: .warning, systemImage: "nosign", size: .small)
+                    .help("\(blocked) of \(connections.count) connections go to blocked addresses")
             }
         } else {
             Text("–").foregroundStyle(.tertiary).help("Needs the helper")
@@ -213,16 +234,15 @@ private struct ConnectionCountCell: View {
 
 struct ProcessDetailView: View {
     let security: SecurityController
+    let blocking: BlockingController
+    let monitor: ConnectionMonitor
     let row: ProcessRow?
 
     var body: some View {
         if let row {
-            ScrollView {
+            InspectorScrollView {
                 content(row)
-                    .padding(Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .canvasBackground()
         } else {
             EmptyStateView("No process selected", systemImage: "cpu",
                            message: "Pick a process to see its code, its parent and its connections.", compact: true)
@@ -238,10 +258,17 @@ struct ProcessDetailView: View {
                 PathIcon(path: process.appBundlePath ?? process.executablePath, size: 40)
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     SectionHeader("Process", style: .eyebrow)
-                    Text(process.displayName).font(Font.sectionTitle).textSelection(.enabled)
+                    CopyableText(process.displayName, font: Font.sectionTitle, id: "process-name")
                     HStack(spacing: Spacing.xs) {
                         CodeTag("PID \(process.pid)")
+                            .onTapGesture { CopyFeedback.shared.copy(String(process.pid), id: "process-pid") }
+                            .help("Click to copy the PID")
                         if process.appName != nil, process.appName != process.name { CodeTag(process.name) }
+                        if CopyFeedback.shared.copiedID == AnyHashable("process-pid") {
+                            Label("Copied", systemImage: "checkmark")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Color.hectorOK)
+                        }
                     }
                 }
             }
@@ -252,14 +279,14 @@ struct ProcessDetailView: View {
 
             Card {
                 SectionHeader("Details", systemImage: "list.bullet.rectangle", style: .eyebrow)
-                DetailRow("Parent", value: parentLabel(process))
-                DetailRow("User", value: process.userName.map { "\($0) (\(process.userID))" } ?? String(process.userID))
+                DetailRow("Parent", value: parentLabel(process), copyable: true)
+                DetailRow("User", value: process.userName.map { "\($0) (\(process.userID))" } ?? String(process.userID), copyable: true)
                 if let started = process.startedAt {
-                    DetailRow("Started", value: Display.dateTime(started, seconds: true))
+                    DetailRow("Started", value: Display.dateTime(started, seconds: true), copyable: true)
                 }
-                if let path = process.executablePath { DetailRow("Executable", value: path, monospaced: true) }
+                if let path = process.executablePath { DetailRow("Executable", value: path, monospaced: true, copyable: true) }
                 if process.arguments.count > 1 {
-                    DetailRow("Arguments", value: process.arguments.dropFirst().joined(separator: " "), monospaced: true)
+                    DetailRow("Arguments", value: process.arguments.dropFirst().joined(separator: " "), monospaced: true, copyable: true)
                 }
             }
 
@@ -267,7 +294,7 @@ struct ProcessDetailView: View {
                 QuarantineSection(info: quarantine)
             }
 
-            connections(process.connections)
+            connections(process.connections, of: process)
 
             if let path = process.executablePath {
                 CodeDetailsSection(security: security, path: path)
@@ -288,7 +315,7 @@ struct ProcessDetailView: View {
     }
 
     @ViewBuilder
-    private func connections(_ connections: [SocketInfo]?) -> some View {
+    private func connections(_ connections: [SocketInfo]?, of process: RunningProcess) -> some View {
         Card {
             SectionHeader("Connections", systemImage: "network", style: .eyebrow)
             if let connections {
@@ -296,13 +323,60 @@ struct ProcessDetailView: View {
                     Text("None right now").font(.callout).foregroundStyle(.secondary)
                 } else {
                     ForEach(Array(connections.enumerated()), id: \.offset) { _, socket in
-                        Text(connectionLabel(socket)).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+                        let blocked = socket.remoteAddress.map {
+                            blocking.applied.blockReason(for: $0, country: monitor.country(for: $0)) != nil
+                        } ?? false
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                            CopyableText(connectionLabel(socket), font: .system(.callout, design: .monospaced),
+                                         id: "connection:\(connectionLabel(socket))")
+                                .foregroundStyle(blocked ? Color.hectorDanger : Color.primary)
+                            if let address = socket.remoteAddress, !address.isLocalOrPrivate {
+                                blockButton(address, process: process)
+                            }
+                        }
+                    }
+                    if blocking.pendingChanges > 0 {
+                        PendingBar(compact: true)
                     }
                 }
             } else {
                 Text("Readable through the helper only (another user's process).").font(.callout).foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Blocks the remote address for every app, or takes the rule back; like the Connections
+    /// screen, it only changes the draft until the user applies it.
+    private func blockButton(_ address: IPAddress, process: RunningProcess) -> some View {
+        let rule = blocking.addressRule(address)
+        // Blocked by something else than this address's own rule: a network or a country. The
+        // address's own rule, once switched off in the draft, is a pending change, not that.
+        let enforced: Bool
+        switch blocking.applied.blockReason(for: address, country: monitor.country(for: address)) {
+        case .network(let cidr)?: enforced = cidr != CIDR(address)
+        case .country?: enforced = true
+        case nil: enforced = false
+        }
+        let label: String
+        if rule == nil {
+            label = enforced ? "Blocked by a wider rule" : "Block"
+        } else {
+            label = "Unblock"
+        }
+        return Button {
+            blocking.toggleAddress(address, note: "\(process.displayName) · \(address.description)")
+        } label: {
+            Label(label, systemImage: rule == nil ? "nosign" : "arrow.uturn.backward")
+                .labelStyle(.iconOnly)
+                .foregroundStyle(rule == nil ? (enforced ? Color.secondary : Color.hectorDanger) : Color.hectorOK)
+        }
+        .buttonStyle(.borderless)
+        .disabled(rule == nil && enforced)
+        .help(rule == nil
+              ? (enforced ? "\(address.description) is already blocked by a network or country rule (see Blocklists)."
+                          : "Block \(address.description) for every app on this Mac. Nothing changes until you apply.")
+              : (blocking.isPending(rule!) ? "Remove the pending rule for \(address.description)." : "Unblock \(address.description). Nothing changes until you apply."))
+        .accessibilityLabel(rule == nil ? "Block \(address.description)" : "Unblock \(address.description)")
     }
 
     private func connectionLabel(_ socket: SocketInfo) -> String {
@@ -330,8 +404,8 @@ private struct QuarantineSection: View {
             if let date = info.downloadedAt {
                 DetailRow("On", value: Display.dateTime(date))
             }
-            if let url = info.dataURL { DetailRow("From", value: url, monospaced: true) }
-            if let origin = info.originURL { DetailRow("Page", value: origin, monospaced: true) }
+            if let url = info.dataURL { DetailRow("From", value: url, monospaced: true, copyable: true) }
+            if let origin = info.originURL { DetailRow("Page", value: origin, monospaced: true, copyable: true) }
             DetailRow("Opened", value: info.userApproved ? "Approved by the user in Gatekeeper" : "Not approved yet")
         }
     }

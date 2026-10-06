@@ -272,13 +272,21 @@ final class BlockingController {
         helperStatus?.allowlistEffects != nil
     }
 
+    /// The draft's rule that blocks exactly `address`, when it is switched on. A rule switched off
+    /// in Blocklists blocks nothing, so the address reads as not blocked.
     func addressRule(_ address: IPAddress) -> Rule? {
-        draft.addressRule(for: address)
+        draft.addressRule(for: address).flatMap { $0.isEnabled ? $0 : nil }
     }
 
+    /// Removes the address's rule when it is on; switches it back on when it is off (keeping its
+    /// note); adds one otherwise.
     func toggleAddress(_ address: IPAddress, note: String) {
         if let rule = draft.addressRule(for: address) {
-            draft.rules.removeAll { $0.id == rule.id }
+            if rule.isEnabled {
+                draft.rules.removeAll { $0.id == rule.id }
+            } else {
+                setRule(rule.id, enabled: true)
+            }
         } else {
             draft.rules.append(Rule(target: .network(CIDR(address)), note: note, source: .connections))
         }

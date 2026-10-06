@@ -90,13 +90,16 @@ struct MapGeometry {
         return canvasPoint(longitude: WorldData.labelPoints[index * 2], latitude: WorldData.labelPoints[index * 2 + 1])
     }
 
+    /// How far from its country's label point a destination's line may end, in canvas units.
+    static let endpointSpread: CGFloat = 9
+
     /// Where the line to `address` ends, in canvas units: its country, nudged by a stable offset
     /// derived from the address so that several destinations in one country fan out.
     static func canvasEndpoint(country: String, address: IPAddress) -> CGPoint? {
         guard let center = canvasPoint(country: country) else { return nil }
         let hash = fnv1a(address.description)
         let angle = Double(hash % 360) * .pi / 180
-        let radius = (0.35 + Double((hash >> 9) % 100) / 100 * 0.65) * 9
+        let radius = (0.35 + Double((hash >> 9) % 100) / 100 * 0.65) * endpointSpread
         return CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
     }
 

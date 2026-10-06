@@ -7,7 +7,7 @@ Thanks for helping. Hector runs with root privileges once the helper is installe
 - Everything in the project is in English: code, comments, docs, UI text, commit messages.
 - `HectorCore` stays free of UI code and privileged code. Code that needs root belongs in the helper and should be as small as possible.
 - No new third-party dependencies without discussing them in an issue first.
-- No telemetry, analytics or network calls other than the user-triggered DB-IP database downloads (countries, network names) and the hosts lists the user subscribed to.
+- No telemetry, analytics or network calls other than the user-triggered DB-IP database downloads (countries, network names), the hosts lists the user subscribed to, and the update check (off until the user accepts it).
 
 ## Workflow
 
@@ -32,6 +32,7 @@ Debug builds of the app read these environment variables, so UI changes can be c
 - `HECTOR_DEBUG_SCREEN=NAME` opens a screen at launch: `blocklists`, `persistence`, `processes`, `checkup`, `taps` or `devices`;
 - `HECTOR_DEBUG_APP=NAME` narrows Connections (map and list) to the app with that name;
 - `HECTOR_DEBUG_PROCESS=PID` selects that process on the Processes screen and opens its details;
+- `HECTOR_DEBUG_CLICK=X,Y` clicks the window at that point (in points from its top-left corner) just before the snapshot, through the window like a real click; `X,Y;X,Y` clicks several points in turn;
 - `HECTOR_DEBUG_COUNTRY=US` filters Connections to one country; `HECTOR_DEBUG_HOVER_COUNTRY=US` hovers its bubble on the world map;
 - `HECTOR_DEBUG_SETTINGS=1` opens the Settings window;
 - `HECTOR_APPEARANCE=light` or `dark` forces the appearance;

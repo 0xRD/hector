@@ -232,12 +232,9 @@ struct PersistenceDetailView: View {
 
     var body: some View {
         if let item {
-            ScrollView {
+            InspectorScrollView {
                 content(item)
-                    .padding(Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .canvasBackground()
         } else {
             EmptyStateView("No item selected", systemImage: "list.bullet.rectangle",
                            message: "Pick an item to see what it runs and who signed it.", compact: true)
