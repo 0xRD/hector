@@ -16,6 +16,8 @@ import SwiftUI
 ///   taps or devices.
 /// - `HECTOR_DEBUG_APP=NAME` narrows Connections, map and list, to the app with that name.
 /// - `HECTOR_DEBUG_PROCESS=PID` selects that process on the Processes screen and shows its details.
+/// - `HECTOR_DEBUG_CLICK=X,Y` clicks the window at that point, in points from its top-left corner,
+///   just before the snapshot; `X,Y;X,Y` clicks several points in turn.
 /// - `HECTOR_APPEARANCE=light` or `dark` forces the appearance, whatever the system uses.
 /// - `HECTOR_DEMO=1` shows fixed sample data instead of this Mac's (see `DemoData`).
 @MainActor
@@ -58,8 +60,21 @@ enum DebugSnapshot {
                 NSApp.windows.filter { $0.identifier?.rawValue == "main" || $0.title == "Hector" }.forEach { $0.close() }
             }
         }
-        guard let path = environment["HECTOR_SNAPSHOT"] else { return }
         let delay = environment["HECTOR_SNAPSHOT_DELAY"].flatMap(Double.init) ?? 6
+        if let list = environment["HECTOR_DEBUG_CLICK"] {
+            let points: [CGPoint] = list.split(separator: ";").compactMap { point in
+                let values = point.split(separator: ",").compactMap { Double($0) }
+                return values.count == 2 ? CGPoint(x: values[0], y: values[1]) : nil
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(max(delay - 1 - Double(points.count) * 0.5, 0.5)))
+                for point in points {
+                    await click(at: point)
+                    try? await Task.sleep(for: .milliseconds(350))
+                }
+            }
+        }
+        guard let path = environment["HECTOR_SNAPSHOT"] else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))
             write(to: URL(fileURLWithPath: path))
@@ -97,6 +112,31 @@ enum DebugSnapshot {
         let renderer = ImageRenderer(content: panel.background(Color(nsColor: .windowBackgroundColor)))
         renderer.scale = 2
         savePNG(renderer.cgImage, to: URL(fileURLWithPath: path))
+    }
+
+    /// `HECTOR_DEBUG_CLICK=X,Y` clicks the main window at that point (from its top-left corner,
+    /// in points) just before the snapshot; `X,Y;X,Y` clicks several points in turn. The events go
+    /// through the window like real ones, so a script can check that a control reacts.
+    private static func click(at point: CGPoint) async {
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentViewController != nil }),
+              let frameView = window.contentView?.superview else { return }
+        // Clicks on a window that is not key only bring it forward: wait until it is.
+        for _ in 0..<60 where !window.isKeyWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        let location = CGPoint(x: point.x, y: frameView.bounds.height - point.y)
+        let hit = frameView.hitTest(location)
+        FileHandle.standardError.write(Data("hector: clicking \(point), hit \(hit.map { String(describing: type(of: $0)) } ?? "nothing")\n".utf8))
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                                                 pressure: type == .leftMouseDown ? 1 : 0) else { continue }
+            NSApp.sendEvent(event)
+            // A person holds the button for a moment, and the view can update in between.
+            try? await Task.sleep(for: .milliseconds(150))
+        }
     }
 
     private static func savePNG(_ image: CGImage?, to url: URL) {

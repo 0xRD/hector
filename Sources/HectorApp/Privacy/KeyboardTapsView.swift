@@ -206,12 +206,9 @@ struct KeyboardTapDetailView: View {
 
     var body: some View {
         if let tap {
-            ScrollView {
+            InspectorScrollView {
                 content(tap)
-                    .padding(Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .canvasBackground()
         } else {
             EmptyStateView("No tap selected", systemImage: "keyboard",
                            message: "Pick a tap to see which app receives the keystrokes and who signed it.", compact: true)

@@ -217,12 +217,9 @@ struct ProcessDetailView: View {
 
     var body: some View {
         if let row {
-            ScrollView {
+            InspectorScrollView {
                 content(row)
-                    .padding(Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .canvasBackground()
         } else {
             EmptyStateView("No process selected", systemImage: "cpu",
                            message: "Pick a process to see its code, its parent and its connections.", compact: true)

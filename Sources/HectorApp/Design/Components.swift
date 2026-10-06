@@ -316,6 +316,34 @@ extension View {
     }
 }
 
+/// The scrolling body of a details panel (inspector): padded, on the canvas.
+///
+/// The scroll view ignores the top safe area and pads its content by it instead. Left to
+/// SwiftUI, a scroll view under the toolbar was inset twice with the macOS 15 design (builds with
+/// that SDK, or with UIDesignRequiresCompatibility): the AppKit controls inside (buttons, links,
+/// selectable text) sat a toolbar's height below where they were drawn, so clicks on them hit
+/// nothing. Padding the content keeps the drawing and the controls together, in both designs.
+struct InspectorScrollView<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ScrollView {
+                content
+                    .padding(Spacing.lg)
+                    .padding(.top, proxy.safeAreaInsets.top)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .ignoresSafeArea(.container, edges: .top)
+        }
+        .canvasBackground()
+    }
+}
+
 /// A padded card that fills the available width.
 ///
 ///     Card { SectionHeader("Details", style: .eyebrow); DetailRow("Path", value: path) }
