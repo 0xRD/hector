@@ -54,8 +54,10 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [x] Settings → General → Open Hector at login (`SMAppService.mainApp`, no Developer ID needed); shows when it was switched off in System Settings
 - [x] Menu bar mode: keeps running with the window closed (no Dock icon then), a template Hector in the menu bar (watching while blocking, resting otherwise; camera and mic symbols when in use), a panel with the blocking state, devices in use and the last camera and mic events; Settings → General → Keep running in the menu bar (on by default)
   - [ ] Check on a real login that "Open at login" starts Hector in the menu bar without a window (the launch event's login-item flag, untested with `SMAppService`)
-- [ ] Notifications: a camera or microphone turning on, a new keyboard tap that is active, a new persistence item, a new app making connections (each switchable)
+- [x] Notifications: a camera or microphone turning on, a new keyboard tap that is active, a new persistence item, a new app making connections (each switchable in Settings → Notifications, all off by default; a click opens the screen)
 - [ ] Persistence watch, real-time alerts (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
+  - [x] Launch folders watched with FSEvents while the notification is on, a rescan every hour for the rest (login items and background tasks through the helper, extensions, profiles); "New" label until marked as seen; what was seen is kept across launches, each category taken as known the first time it can be read
+  - [ ] Watch the background task database directly (root only: needs a helper event, not a poll)
 - [ ] Persistence actions (Reveal in Finder and Copy path exist): for user-scope items, disable or move to the Trash after confirmation (system items through the helper, with the authorization prompt)
 - [ ] Checkup: more checks
   - [x] macOS version behind the latest: "macOS up to date", from what Software Update already found (0.4.9)
@@ -156,7 +158,8 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 - [x] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined (`hector devices --watch`, Privacy → Camera & mic)
   - [ ] Check on a real Mac (see [NEXT_STEPS.md](NEXT_STEPS.md)): built-in and USB cameras, headsets, AirPods, Continuity Camera, virtual devices
   - [x] Which app uses a camera: Control Center's `sensor-indicators` log names the bundle ID behind the green indicator, readable by a normal user; trusted only when the sender is Control Center's own executable
-  - [ ] Notifications when a device turns on, and a log kept across launches
+  - [x] Notifications when a device turns on (Settings → Notifications)
+  - [ ] A log kept across launches
 - [x] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it (`hector checkup`, Checkup screen)
 - [ ] Check the checkup's parsers and verdicts against real output on macOS 15 and 26/27 (see NEXT_STEPS.md)
 
@@ -189,7 +192,7 @@ Design, verified list URLs and a phased plan: [LOCAL_DNS.md](LOCAL_DNS.md). The 
 - [ ] Processes listening on the network, not just on this Mac
 - [ ] Exportable report (JSON or HTML) and an event timeline
 - [ ] Menu bar extra: live counters (done: live connections in the menu bar panel), pause blocking
-- [ ] Notification when an app contacts a new country (with the notifications of the screen review)
+- [ ] Notification when an app contacts a new country (the "new app" notification exists; per country is left)
 - [ ] Optional Network Extension module for contributors with a developer account, to block per app and prompt on new connections
 
 ## Out of scope

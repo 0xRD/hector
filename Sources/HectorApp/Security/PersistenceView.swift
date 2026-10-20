@@ -81,11 +81,17 @@ struct PersistenceView: View {
                     .toggleStyle(.checkbox)
                     .onChange(of: security.includeAppleItems) { Task { await security.scanPersistence() } }
                 checkAllButton(items)
+                if !security.newPersistenceItems.isEmpty {
+                    Button("Mark as Seen") { security.markPersistenceAsSeen() }
+                        .fixedSize()
+                        .help("Removes the “New” label from the items that appeared since an earlier scan")
+                }
                 Button {
                     Task { await security.scanPersistence() }
                 } label: {
                     Label("Rescan", systemImage: "arrow.clockwise")
                 }
+                .fixedSize()
                 .disabled(security.isScanningPersistence)
             }
             ForEach(sourceNotes, id: \.self) { note in
@@ -191,6 +197,10 @@ private struct PersistenceRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(item.label).fontWeight(.medium).lineLimit(1)
+                    if security.newPersistenceItems.contains(item.id) {
+                        StatusPill("New", kind: .info, showsIcon: false, size: .small)
+                            .help("Appeared since an earlier scan")
+                    }
                     if item.isDisabled == true {
                         Text("Disabled").font(.caption2).foregroundStyle(.secondary)
                     }

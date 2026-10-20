@@ -59,6 +59,9 @@ final class ConnectionMonitor {
     }
 
     @ObservationIgnored var demand = Demand.live
+    /// Called after each snapshot with the apps that have connections, for the "new app"
+    /// notification.
+    @ObservationIgnored var onAppsWithConnections: (([AppGroup]) -> Void)?
     @ObservationIgnored private var lastSnapshotAt = ContinuousClock.now - .seconds(3600)
 
     /// Where lines on the map start: the country the Mac is set to. No network lookup involved.
@@ -272,6 +275,9 @@ final class ConnectionMonitor {
 
         unreadableProcessCount = snapshot.unreadableProcessCount
         lastUpdate = now
+        if let onAppsWithConnections {
+            onAppsWithConnections(apps.values.filter { $0.liveCount > 0 })
+        }
     }
 
     private static func record(_ value: Int, into history: inout [Int]) {

@@ -8,12 +8,58 @@ struct SettingsView: View {
         TabView {
             GeneralSettings()
                 .tabItem { Label("General", systemImage: "gearshape") }
+            NotificationSettings()
+                .tabItem { Label("Notifications", systemImage: "bell") }
             VirusTotalSettings()
                 .tabItem { Label("VirusTotal", systemImage: "shield.lefthalf.filled") }
             AboutHector()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 520)
+    }
+}
+
+/// Which events Hector notifies about. All off until turned on.
+private struct NotificationSettings: View {
+    @Environment(Notifier.self) private var notifier
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(AlertKind.allCases) { kind in
+                    Toggle(isOn: Binding(get: { notifier.isEnabled(kind) }, set: { notifier.setEnabled(kind, $0) })) {
+                        Text(kind.title)
+                        Text(kind.detail)
+                    }
+                }
+            } header: {
+                Text("Notify me when")
+            } footer: {
+                Text("""
+                Notifications are made on this Mac and go nowhere else. They need Hector running, in the window or the                 menu bar (Settings → General). Clicking one opens the screen it is about.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            switch notifier.permission {
+            case .denied:
+                Section {
+                    LabeledContent("macOS does not allow Hector's notifications") {
+                        Button("Open Notifications Settings") { notifier.openNotificationSettings() }
+                    }
+                }
+            case .unavailable:
+                Section {
+                    Text("Notifications need Hector.app: this copy runs outside an app bundle.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            case .notAsked, .allowed:
+                EmptyView()
+            }
+        }
+        .formStyle(.grouped)
+        .task { await notifier.refreshPermission() }
     }
 }
 

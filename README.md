@@ -58,7 +58,7 @@ Netbite is the network module: which app talks to which server, where that serve
 
 ### Security
 
-- **Persistence.** Everything set to start by itself: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions. Each with its code signature, and a note on anything odd.
+- **Persistence.** Everything set to start by itself: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions. Each with its code signature, and a note on anything odd. What appeared since an earlier scan is labeled "New".
 - **Processes.** What runs right now, as a tree or a flat list: user, arguments, signature, connections. Code running from a temporary, Downloads or hidden folder, or deleted after launch, is flagged; downloads show where they came from.
 - **VirusTotal hash lookups.** For one item, all of them, or automatically after each scan if you switch it on, within the free tier (4 per minute, 500 per day), cached for 7 days. Only the SHA-256 leaves your Mac, never the file. The key is yours and stays in your Keychain (Settings, ⌘,).
 - **Security checkup.** SIP, Gatekeeper, XProtect, third-party kernel extensions, FileVault, the screen lock, the firewall, automatic updates, macOS updates waiting to be installed, Remote Login, Screen Sharing and Remote Management, File Sharing, Remote Apple Events, AirDrop, automatic login, the guest account, Find My Mac, MDM enrollment and Lockdown Mode (information only). Each says what was found and how to fix it, with a button to the right System Settings pane, and what changed since the previous checkup. Read-only, no root, no password.
@@ -95,6 +95,7 @@ Netbite is the network module: which app talks to which server, where that serve
 
 - **Keyboard taps.** Every app that intercepts keystrokes through an event tap: whether it can change them or only listen, whether it sees every app or one, and who signed it. Read from the public event tap list, with no permission.
 - **Camera and microphone.** A live "in use now" view, and a log of every time a camera or an audio input turns on or off, with the app recording from the microphone. Which app uses a camera is not shown: macOS has no public way to tell. Hector never opens a device, so no permission is asked.
+- **Notifications, if you want them** (Settings → Notifications, all off by default): a camera or microphone turning on, an app starting to read keystrokes with an active tap, something new set to start by itself (the launch folders are watched as they change), an app connecting for the first time. Made on this Mac; a click opens the screen it is about.
 
 ### The `hector` command line
 
@@ -284,6 +285,7 @@ Sources/HectorCore/   Library shared by the CLI, the app and the helper
   Rules/               Blocklist model, compiler, pf anchor and /etc/hosts rendering, hosts lists
                        (catalog, parser, downloader)
   Privacy/             Keyboard event taps, camera and microphone state and log
+  Watch/               What was already seen (for "new" alerts), launch folder watching (FSEvents)
 Sources/hector/       Command-line tool
 Sources/HectorApp/    SwiftUI app: live monitor, world map, details panel, blocklists
 Sources/hectord/      Privileged helper (root): enforces blocklists with pf and /etc/hosts
