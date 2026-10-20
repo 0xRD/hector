@@ -55,13 +55,22 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [x] Menu bar mode: keeps running with the window closed (no Dock icon then), a template Hector in the menu bar (watching while blocking, resting otherwise; camera and mic symbols when in use), a panel with the blocking state, devices in use and the last camera and mic events; Settings → General → Keep running in the menu bar (on by default)
   - [ ] Check on a real login that "Open at login" starts Hector in the menu bar without a window (the launch event's login-item flag, untested with `SMAppService`)
 - [ ] Notifications: a camera or microphone turning on, a new keyboard tap that is active, a new persistence item, a new app making connections (each switchable)
-- [ ] Persistence watch (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
+- [ ] Persistence watch, real-time alerts (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
 - [ ] Persistence actions (Reveal in Finder and Copy path exist): for user-scope items, disable or move to the Trash after confirmation (system items through the helper, with the authorization prompt)
-- [ ] Checkup: more checks: screen lock and password after sleep, Find My, firewall stealth mode advice, AirDrop set to Everyone, Bluetooth sharing, macOS version behind the latest, Startup Security policy (reduced security, kernel extensions allowed), Lockdown Mode status (information only), and the date of the last check so a change shows
+- [ ] Checkup: more checks
+  - [x] macOS version behind the latest: "macOS up to date", from what Software Update already found (0.4.9)
+  - [x] Screen lock and password after sleep (`sysadminctl -screenLock status`), Find My Mac (`FMMEnabled`), AirDrop set to Everyone, third-party kernel extensions loaded (`kmutil showloaded`), Lockdown Mode (information only)
+  - [x] Firewall stealth mode: shown in the firewall finding and its advice
+  - [x] What changed since the last checkup: kept across launches, a banner counts the changes and each changed check says what it was before
+  - [ ] Startup Security policy (reduced security, kernel extensions allowed): `bputil -d` needs root, so it waits for a helper request
+  - [ ] Bluetooth Sharing: no readable switch found on macOS 26 and 27
 - [x] Processes: a row menu (Reveal in Finder, Copy path, Copy PID, Open Activity Monitor) and "Quit" for the user's own processes, after confirmation; the PID is checked again (owner and start time) so a reused number is never signalled
 - [ ] Processes: CPU and memory columns
-- [ ] Connections: traffic per app (bytes in and out) if it can be read without private frameworks; research `nettop`'s source
+- [ ] Connections: traffic per app (bytes in and out); see "Bytes per connection" in 0.5
 - [ ] First launch: a short onboarding (what each screen does, install the helper for blocking, optional VirusTotal key, open at login)
+  - [x] The first launch asks once whether to check for new versions (0.4.9); the rest is to do
+- [x] Updates: an opt-in check for new versions, off by default and asked at the first launch, at most once a week from `api.github.com`; tells how to update (Homebrew or the zip), never downloads anything (0.4.9)
+- [x] Processes: copy a value of the details panel by clicking it; block or unblock each connection's address; the Network column counts connections to blocked addresses (0.4.9)
 
 ## 0.1: core and CLI
 
@@ -176,12 +185,11 @@ Design, verified list URLs and a phased plan: [LOCAL_DNS.md](LOCAL_DNS.md). The 
 
 ## Later
 
-- [ ] **Hector in the app, a few small appearances** (detail, for personality): poses of the crested-helmet character drawn in code like the app icon (`HectorMark`, `AppIconArtwork`), no binary assets. Ideas: peering over the edge of the destination map; keeping watch beside Camera & mic (eyes open while monitoring, resting when paused); in the empty states ("All quiet", "Pick a destination"); a shield pose on the "Blocking on" footer. Small and calm, never in the way of the data; follow the tone in `docs/DESIGN.md`
-- [ ] Real-time alerts when a new launch agent, daemon or login item appears (in the spirit of BlockBlock)
+- [ ] **Hector in the app, a few small appearances** (detail, for personality). Done: peering over the edge of the map, keeping watch in Camera & mic and the menu bar (eyes open while monitoring, resting when paused), the empty states. Left: the shield pose on the "Blocking on" footer: poses of the crested-helmet character drawn in code like the app icon (`HectorMark`, `AppIconArtwork`), no binary assets. Ideas: peering over the edge of the destination map; keeping watch beside Camera & mic (eyes open while monitoring, resting when paused); in the empty states ("All quiet", "Pick a destination"); a shield pose on the "Blocking on" footer. Small and calm, never in the way of the data; follow the tone in `docs/DESIGN.md`
 - [ ] Processes listening on the network, not just on this Mac
 - [ ] Exportable report (JSON or HTML) and an event timeline
-- [ ] Menu bar extra: live counters, pause blocking
-- [ ] Notification when an app contacts a new country
+- [ ] Menu bar extra: live counters (done: live connections in the menu bar panel), pause blocking
+- [ ] Notification when an app contacts a new country (with the notifications of the screen review)
 - [ ] Optional Network Extension module for contributors with a developer account, to block per app and prompt on new connections
 
 ## Out of scope
