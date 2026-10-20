@@ -51,6 +51,22 @@ private enum Samples {
 
     """
 
+    static let screenLockDelay = "2026-10-20 19:19:22.518 sysadminctl[14537:1553062] screenLock delay is 300 seconds\n"
+    static let screenLockLong = "2026-10-20 19:19:22.518 sysadminctl[14537:1553062] screenLock delay is 3600 seconds\n"
+    static let screenLockImmediate = "2026-10-20 19:19:22.518 sysadminctl[1:2] screenLock delay is immediate\n"
+    static let screenLockOff = "2026-10-20 19:19:22.518 sysadminctl[1:2] screenLock is off\n"
+
+    // `kmutil showloaded --list-only` on macOS 27, shortened.
+    static let kextsApple = """
+        3  221 0                  0          0          com.apple.kpi.bsd (27.0.0) 4F99A015-04DC-33E2-AED7-D999C931A6EC <>
+      263    0 0xfffffe00078b0460 0x9cc      0x9cc      com.apple.driver.usb.cdc.ecm (5.0.0) 131416F4-8FF0-3375-A84B-DD30B7BC8ACB <259 219 72>
+
+    """
+    static let kextsThirdParty = kextsApple + """
+      270    0 0xfffffe0007900000 0x4000     0x4000     com.example.driver.Widget (2.1) 11111111-2222-3333-4444-555555555555 <6 5 3>
+
+    """
+
     static let overrides = """
     disabled services = {
     \t"com.apple.ftpd" => disabled
@@ -158,6 +174,29 @@ private final class CannedTools: @unchecked Sendable {
         #expect(!CheckupParsers.UpdateSettings(installConfigData: false).installsSecurityResponses)
     }
 
+    @Test func parsesScreenLock() {
+        #expect(CheckupParsers.screenLock(Samples.screenLockDelay) == .after(seconds: 300))
+        #expect(CheckupParsers.screenLock(Samples.screenLockImmediate) == .immediate)
+        #expect(CheckupParsers.screenLock(Samples.screenLockOff) == .off)
+        #expect(CheckupParsers.screenLock("Unknown state for screenLock (x)") == nil)
+        #expect(CheckupParsers.screenLock("screenLock delay is soon seconds") == nil)
+    }
+
+    @Test func parsesKernelExtensions() {
+        #expect(CheckupParsers.thirdPartyKernelExtensions(Samples.kextsApple) == [])
+        #expect(CheckupParsers.thirdPartyKernelExtensions(Samples.kextsThirdParty) == ["com.example.driver.Widget"])
+        // No row at all is not "none loaded".
+        #expect(CheckupParsers.thirdPartyKernelExtensions("Error: something") == nil)
+        #expect(CheckupParsers.thirdPartyKernelExtensions("") == nil)
+    }
+
+    @Test func parsesAirDropModes() {
+        #expect(CheckupParsers.airDropMode("Off") == .off)
+        #expect(CheckupParsers.airDropMode("Contacts Only") == .contactsOnly)
+        #expect(CheckupParsers.airDropMode("Everyone") == .everyone)
+        #expect(CheckupParsers.airDropMode(1) == nil)
+    }
+
     @Test func comparesXProtectVersions() {
         #expect(CheckupParsers.isNewer("5287", than: "999"))
         #expect(!CheckupParsers.isNewer("5272", than: "5287"))
@@ -252,6 +291,49 @@ private final class CannedTools: @unchecked Sendable {
         #expect(SecurityCheckup.guestAccount(.dictionary(["GuestEnabled": true]), guestUserExists: false).status == .pass)
     }
 
+    @Test func screenLockVerdicts() {
+        let soon = SecurityCheckup.screenLock(ToolOutput(output: "", errorOutput: Samples.screenLockDelay))
+        #expect(soon.status == .pass)
+        #expect(soon.finding.contains("5 minutes"))
+        let late = SecurityCheckup.screenLock(ToolOutput(output: "", errorOutput: Samples.screenLockLong))
+        #expect(late.status == .warning)
+        #expect(late.finding.contains("1 hour"))
+        #expect(SecurityCheckup.screenLock(ToolOutput(output: Samples.screenLockImmediate)).status == .pass)
+        #expect(SecurityCheckup.screenLock(ToolOutput(output: Samples.screenLockOff)).status == .fail)
+        #expect(SecurityCheckup.screenLock(nil).status == .unknown)
+        #expect(SecurityCheckup.delayText(5) == "5 seconds")
+        #expect(SecurityCheckup.delayText(60) == "1 minute")
+        #expect(SecurityCheckup.delayText(28_800) == "8 hours")
+    }
+
+    @Test func kernelExtensionVerdicts() {
+        #expect(SecurityCheckup.kernelExtensions(ToolOutput(output: Samples.kextsApple)).status == .pass)
+        let other = SecurityCheckup.kernelExtensions(ToolOutput(output: Samples.kextsThirdParty))
+        #expect(other.status == .warning)
+        #expect(other.finding.contains("com.example.driver.Widget"))
+        #expect(SecurityCheckup.kernelExtensions(ToolOutput(output: "")).status == .unknown)
+        #expect(SecurityCheckup.kernelExtensions(nil).status == .unknown)
+    }
+
+    @Test func airDropFindMyAndLockdownVerdicts() {
+        #expect(SecurityCheckup.airDrop(.missing).status == .pass)
+        #expect(SecurityCheckup.airDrop(.dictionary(["DiscoverableMode": "Off"])).status == .pass)
+        #expect(SecurityCheckup.airDrop(.dictionary(["DiscoverableMode": "Everyone"])).status == .warning)
+        #expect(SecurityCheckup.airDrop(.dictionary(["DiscoverableMode": "Somebody"])).status == .unknown)
+        #expect(SecurityCheckup.airDrop(.unreadable).status == .unknown)
+
+        #expect(SecurityCheckup.findMy(.dictionary(["FMMEnabled": 1])).status == .pass)
+        #expect(SecurityCheckup.findMy(.dictionary(["FMMEnabled": false])).status == .warning)
+        #expect(SecurityCheckup.findMy(.missing).status == .warning)
+        #expect(SecurityCheckup.findMy(.unreadable).status == .unknown)
+
+        // Information only: never a warning.
+        #expect(SecurityCheckup.lockdownMode(.missing).status == .pass)
+        let on = SecurityCheckup.lockdownMode(.dictionary(["LDMGlobalEnabled": true]))
+        #expect(on.status == .pass)
+        #expect(on.finding.hasPrefix("On"))
+    }
+
     @Test func deviceManagementVerdicts() {
         #expect(SecurityCheckup.deviceManagement(ToolOutput(output: Samples.notEnrolled)).status == .pass)
         let managed = SecurityCheckup.deviceManagement(ToolOutput(output: Samples.enrolled))
@@ -329,6 +411,8 @@ private final class CannedTools: @unchecked Sendable {
         try plist(["GuestEnabled": false, "lastUserName": "alex"], "Library/Preferences/com.apple.loginwindow.plist")
         try plist(["CFBundleShortVersionString": "5287", "CFBundleIdentifier": "com.apple.XProtectFramework.XProtect"],
                   "Library/Apple/System/Library/CoreServices/XProtect.bundle/Contents/Info.plist")
+        try plist(["FMMEnabled": true], "Library/Preferences/com.apple.FindMyMac.plist")
+        try plist(["DiscoverableMode": "Contacts Only"], "home/Library/Preferences/com.apple.sharingd.plist")
         return root
     }
 
@@ -344,16 +428,19 @@ private final class CannedTools: @unchecked Sendable {
             "\(firewall) --getstealthmode": ToolOutput(output: Samples.stealthOff),
             "/bin/launchctl print-disabled system": ToolOutput(output: "disabled services = {\n\t\"com.openssh.sshd\" => disabled\n}\n"),
             "/usr/bin/profiles status -type enrollment": ToolOutput(output: Samples.notEnrolled),
+            "/usr/sbin/sysadminctl -screenLock status": ToolOutput(output: "", errorOutput: Samples.screenLockImmediate),
+            "/usr/bin/kmutil showloaded --list-only --variant-suffix release": ToolOutput(output: Samples.kextsApple),
         ])
-        let report = SecurityCheckup(root: root, tools: tools.runner).run()
+        let report = SecurityCheckup(root: root, home: root.appending(path: "home"), tools: tools.runner).run()
 
-        #expect(report.results.count == 14)
-        #expect(Set(report.results.map(\.id)).count == 14)
+        #expect(report.results.count == 19)
+        #expect(Set(report.results.map(\.id)).count == 19)
         let byID = Dictionary(uniqueKeysWithValues: report.results.map { ($0.id, $0) })
         #expect(byID[SecurityCheckup.CheckID.firewall]?.status == .warning)
         #expect(byID[SecurityCheckup.CheckID.xprotect]?.finding.contains("5287") == true)
-        #expect(report.passedCount == 13)
-        #expect(report.summary == "13 of 14 checks pass")
+        #expect(byID[SecurityCheckup.CheckID.airDrop]?.finding.hasPrefix("Contacts Only") == true)
+        #expect(report.passedCount == 18)
+        #expect(report.summary == "18 of 19 checks pass")
         // Only the fixed, read-only commands were run.
         #expect(Set(tools.invoked) == Set(tools.answers.keys))
         // Every fix has text, and every link opens System Settings only.
@@ -365,9 +452,10 @@ private final class CannedTools: @unchecked Sendable {
 
     @Test func missingToolsGiveUnknownNotPass() {
         let root = FileManager.default.temporaryDirectory.appending(path: "hector-checkup-empty-\(UUID().uuidString)")
-        let report = SecurityCheckup(root: root, tools: .none).run()
+        let report = SecurityCheckup(root: root, home: root, tools: .none).run()
         let toolChecks = [SecurityCheckup.CheckID.sip, SecurityCheckup.CheckID.gatekeeper, SecurityCheckup.CheckID.fileVault,
                           SecurityCheckup.CheckID.firewall, SecurityCheckup.CheckID.remoteLogin,
+                          SecurityCheckup.CheckID.screenLock, SecurityCheckup.CheckID.kernelExtensions,
                           SecurityCheckup.CheckID.deviceManagement, SecurityCheckup.CheckID.xprotect]
         for id in toolChecks {
             #expect(report.results.first { $0.id == id }?.status == .unknown)

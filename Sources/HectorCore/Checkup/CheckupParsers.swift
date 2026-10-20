@@ -290,6 +290,70 @@ public enum CheckupParsers {
         return UpdateStatus(pending: pending, lastCheck: lastCheck)
     }
 
+    // MARK: - sysadminctl -screenLock status
+
+    public enum ScreenLock: Equatable, Sendable {
+        case off
+        /// A password is asked as soon as the screen saver starts or the display sleeps.
+        case immediate
+        /// A password is asked once the screen saver has run this many seconds.
+        case after(seconds: Int)
+    }
+
+    /// Parses `sysadminctl -screenLock status`, which prints its answer on standard error
+    /// ("screenLock delay is 300 seconds", "screenLock delay is immediate", "screenLock is off").
+    public static func screenLock(_ text: String) -> ScreenLock? {
+        let lower = text.lowercased()
+        if lower.contains("screenlock is off") { return .off }
+        if lower.contains("screenlock delay is immediate") { return .immediate }
+        guard let range = lower.range(of: "screenlock delay is ") else { return nil }
+        let number = lower[range.upperBound...].prefix { $0.isASCII && $0.isNumber }
+        guard !number.isEmpty, number.count <= 7, let seconds = Int(number),
+              lower[range.upperBound...].dropFirst(number.count).hasPrefix(" second") else { return nil }
+        return seconds == 0 ? .immediate : .after(seconds: seconds)
+    }
+
+    // MARK: - kmutil showloaded
+
+    /// Bundle identifiers of the loaded kernel extensions that are not Apple's, from
+    /// `kmutil showloaded --list-only` (one row per extension: index, references, address,
+    /// sizes, then the identifier and its version in parentheses). `nil` when no row is found:
+    /// Apple's own always are.
+    public static func thirdPartyKernelExtensions(_ text: String) -> [String]? {
+        var identifiers: [String] = []
+        var rows = 0
+        for line in text.split(whereSeparator: \.isNewline) {
+            let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+            guard fields.count >= 6, Int(fields[0]) != nil,
+                  let index = fields.firstIndex(where: { $0.hasPrefix("(") && $0.hasSuffix(")") }), index > 0 else { continue }
+            let identifier = String(fields[index - 1])
+            guard identifier.contains(".") else { continue }
+            rows += 1
+            if !identifier.hasPrefix("com.apple.") { identifiers.append(identifier) }
+        }
+        return rows == 0 ? nil : identifiers
+    }
+
+    // MARK: - AirDrop
+
+    public enum AirDropMode: Equatable, Sendable {
+        case off
+        case contactsOnly
+        case everyone
+    }
+
+    /// AirDrop's "Allow me to be discovered by" (`DiscoverableMode` in the user's
+    /// com.apple.sharingd): `nil` for a value this parser does not know.
+    public static func airDropMode(_ value: Any?) -> AirDropMode? {
+        guard let text = (value as? String)?.lowercased() else { return nil }
+        switch text {
+        case "off": return .off
+        case "contacts only": return .contactsOnly
+        case let mode where mode.hasPrefix("everyone"): return .everyone
+        default: return nil
+        }
+    }
+
     /// The XProtect version from its bundle's Info.plist (`CFBundleShortVersionString`, a plain
     /// number such as "5287").
     public static func xprotectVersion(_ infoPlist: [String: Any]?) -> String? {

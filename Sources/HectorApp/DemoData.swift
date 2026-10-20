@@ -515,10 +515,20 @@ enum DemoData {
                         howToFix: "XProtect updates itself while “Install Security Responses and system files” is on: "
                             + "System Settings → General → Software Update → Automatic Updates (ⓘ).",
                         settingsURL: SettingsPane.softwareUpdate),
+            CheckResult(id: ID.kernelExtensions, title: "Kernel extensions", status: .pass,
+                        finding: "None from other developers: only Apple's code runs in the kernel.",
+                        howToFix: "Remove the app that installed it if you no longer use it, or update it to a version that uses a system "
+                            + "extension. Allowed extensions are listed in System Settings → General → Login Items & Extensions.",
+                        settingsURL: SettingsPane.loginItems),
             CheckResult(id: ID.fileVault, title: "FileVault", status: .pass,
                         finding: "On: the disk is encrypted and unreadable without your password.",
                         howToFix: "System Settings → Privacy & Security → FileVault → Turn On…, and keep the recovery key somewhere safe.",
                         settingsURL: SettingsPane.privacySecurity),
+            CheckResult(id: ID.screenLock, title: "Screen lock", status: .pass,
+                        finding: "A password is asked as soon as the screen saver starts or the display sleeps.",
+                        howToFix: "System Settings → Lock Screen → “Require password after screen saver begins or display is turned off”: "
+                            + "Immediately, or within 5 minutes.",
+                        settingsURL: SettingsPane.lockScreen),
             CheckResult(id: ID.firewall, title: "Firewall", status: .warning,
                         finding: "Off: any app that listens on the network can be reached from it.",
                         howToFix: "System Settings → Network → Firewall → turn it on. Under Options…, “Enable stealth mode” also stops "
@@ -539,6 +549,11 @@ enum DemoData {
                         howToFix: sharingFix("File Sharing"), settingsURL: SettingsPane.sharing),
             CheckResult(id: ID.remoteAppleEvents, title: "Remote Apple Events", status: .pass, finding: "Off.",
                         howToFix: sharingFix("Remote Apple Events"), settingsURL: SettingsPane.sharing),
+            CheckResult(id: ID.airDrop, title: "AirDrop", status: .pass,
+                        finding: "Contacts Only: only people in your contacts can see this Mac.",
+                        howToFix: "Control Center → AirDrop, or Finder → Go → AirDrop → “Allow me to be discovered by”: Contacts Only, "
+                            + "or No One when you do not use it.",
+                        settingsURL: SettingsPane.airDrop),
             CheckResult(id: ID.automaticLogin, title: "Automatic login", status: .pass,
                         finding: "Off: a password is needed after every start.",
                         howToFix: "System Settings → Users & Groups → “Automatically log in as”: Off. Turning FileVault on also turns it off.",
@@ -546,13 +561,29 @@ enum DemoData {
             CheckResult(id: ID.guestAccount, title: "Guest account", status: .pass, finding: "Off.",
                         howToFix: "System Settings → Users & Groups → Guest User (ⓘ) → turn off “Allow guests to log in to this computer”.",
                         settingsURL: SettingsPane.usersGroups),
+            CheckResult(id: ID.findMy, title: "Find My Mac", status: .pass,
+                        finding: "On: a lost Mac can be located, locked or erased, and Activation Lock stops a thief reusing it.",
+                        howToFix: "System Settings → your name → iCloud → Find My Mac: On. It also turns on Activation Lock.",
+                        settingsURL: SettingsPane.appleAccount),
             CheckResult(id: ID.deviceManagement, title: "Device management (MDM)", status: .pass,
                         finding: "Not enrolled: no organization manages this Mac.",
                         howToFix: "Expected on a work or school Mac. Otherwise, see who manages it in System Settings → General → "
                             + "Device Management, and remove any profile you do not recognize.",
                         settingsURL: SettingsPane.deviceManagement),
+            CheckResult(id: ID.lockdownMode, title: "Lockdown Mode", status: .pass,
+                        finding: "Off, as on most Macs. Information only: worth turning on if you may be personally targeted.",
+                        howToFix: "System Settings → Privacy & Security → Lockdown Mode. Meant for people who may be personally targeted "
+                            + "by sophisticated attacks; it turns off features that such attacks use.",
+                        settingsURL: SettingsPane.privacySecurity),
         ]
         return CheckupReport(checkedAt: ago(120), duration: 0.8, ranAsRoot: false, results: results)
+    }
+
+    /// The checkup a week earlier: the screen lock was off, and has been fixed since.
+    static var previousCheckup: CheckupController.Snapshot {
+        var statuses = Dictionary(uniqueKeysWithValues: checkupReport.results.map { ($0.id, $0.status) })
+        statuses[SecurityCheckup.CheckID.screenLock] = .fail
+        return CheckupController.Snapshot(checkedAt: ago(7 * 86_400), statuses: statuses)
     }
 }
 #endif
