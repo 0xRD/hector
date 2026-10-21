@@ -135,9 +135,9 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
   - [x] Filter by country: the "N countries" figure opens a list of countries with their counts; picking one (or clicking a country on the map) filters the map and the list, like the app filter, with a removable chip; the search also matches country names
   - [x] One node per country, with a count bubble, lines thicker for more destinations, and a hover card listing the apps; individual destinations fan out only when zoomed in
   - [x] Zoom and pan: pinch and drag on the trackpad, buttons to zoom, fit what is shown and show the world (zoom stops at 6×: the land is a 3.6° dot grid)
-  - [ ] Zoom with ⌘ and the scroll wheel; keyboard shortcuts for the map buttons
+  - [x] Zoom with ⌘ and the scroll wheel; keyboard shortcuts for the map buttons
     - [x] Keyboard shortcuts: ⌘= zoom in, ⌘- zoom out, ⌘9 fit, ⌘0 whole world, shown in the buttons' tooltips (to try on a Mac)
-    - [ ] ⌘ and the scroll wheel (SwiftUI has no scroll-wheel event: needs an `NSEvent` monitor or an AppKit view under the map)
+    - [x] ⌘ and the scroll wheel, or two fingers on a trackpad: an AppKit view under the map with a local `NSEvent` monitor, zooming around the pointer; other scrolls are left alone
   - [ ] Later: city-level points would need a city database (DB-IP City Lite is about 130 MB); decide whether the gain is worth the size
 
 - [x] Rename the app, the bundle, the helper, the CLI and the docs to Hector, with migration from Netbite 0.3 (helper, blocklist, data, VirusTotal key)
