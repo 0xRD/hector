@@ -50,6 +50,8 @@ final class WindowState {
     var processesAsTree = true
     /// Apple's own processes are most of the list and rarely the question.
     var processesShowApple = false
+    /// Sorting by CPU or memory shows a flat list: a tree has no single order.
+    var processesSort = ProcessSort.name
     /// A switched-off tap receives nothing; apps such as DockDoor leave dozens of them.
     var tapsShowSwitchedOff = false
     // Settings
@@ -72,6 +74,22 @@ final class WindowState {
             } else if self.hovered == ref {
                 self.hovered = nil
             }
+        }
+    }
+}
+
+enum ProcessSort: String, CaseIterable, Identifiable {
+    case name
+    case cpu
+    case memory
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .name: "Name"
+        case .cpu: "CPU"
+        case .memory: "Memory"
         }
     }
 }

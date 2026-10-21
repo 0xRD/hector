@@ -242,3 +242,47 @@ import Testing
         #expect(throws: ProcessControl.Refusal.exited) { try ProcessControl.verify(seen) }
     }
 }
+
+@Suite struct ProcessUsageTests {
+    @Test func convertsMachTicksAndComputesCPUShare() {
+        // Whatever the timebase, a tick count of zero is zero, and the conversion never shrinks
+        // ticks on Intel (1/1) or grows them less than 125/3 on Apple silicon.
+        #expect(ProcessCollector.nanoseconds(machTicks: 0) == 0)
+        let ticks: UInt64 = 3_000_000
+        let nanoseconds = ProcessCollector.nanoseconds(machTicks: ticks)
+        #expect(nanoseconds == ticks || nanoseconds == 125_000_000)
+        #expect(ProcessCollector.nanoseconds(machTicks: .max / 2) > 0)
+
+        #expect(ProcessCollector.cpuPercent(from: 0, to: 500_000_000, over: 1) == 50)
+        #expect(ProcessCollector.cpuPercent(from: 0, to: 2_000_000_000, over: 1) == 200)
+        // A reused PID restarts its counter: no figure rather than a wrong one.
+        #expect(ProcessCollector.cpuPercent(from: 10, to: 5, over: 1) == nil)
+        #expect(ProcessCollector.cpuPercent(from: 0, to: 5, over: 0) == nil)
+    }
+
+    @Test func snapshotMeasuresThisProcess() throws {
+        let snapshot = ProcessCollector().snapshot()
+        let me = try #require(snapshot.processes.first { $0.pid == getpid() })
+        #expect((me.memoryFootprint ?? 0) > 1_000_000)
+        #expect(me.cpuPercent != nil)
+    }
+
+    @Test func fillsUsageMissingFromAnOldHelper() throws {
+        let old = ProcessSnapshot(takenAt: Date(), processes: [
+            RunningProcess(pid: getpid(), parentPID: 1, userID: getuid(), name: "tests"),
+        ], ranAsRoot: true)
+        let filled = old.fillingUsage()
+        #expect((filled.processes[0].memoryFootprint ?? 0) > 0)
+        // A snapshot that already has figures is left alone.
+        var current = old
+        current.processes[0].memoryFootprint = 42
+        #expect(current.fillingUsage().processes[0].memoryFootprint == 42)
+    }
+
+    @Test func oldHelperAnswersStillDecode() throws {
+        let json = #"{"pid":12,"parentPID":1,"userID":501,"name":"old","arguments":[]}"#
+        let process = try JSONDecoder().decode(RunningProcess.self, from: Data(json.utf8))
+        #expect(process.cpuPercent == nil)
+        #expect(process.memoryFootprint == nil)
+    }
+}

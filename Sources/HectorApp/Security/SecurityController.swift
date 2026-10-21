@@ -183,7 +183,7 @@ final class SecurityController {
         let (snapshot, throughHelper, flags) = await Task.detached(priority: .userInitiated) {
             var snapshot: ProcessSnapshot?
             if HelperClient.isInstalled, case .processes(let fromHelper)? = try? HelperClient.sendChecked(.processes, timeout: 10) {
-                snapshot = fromHelper
+                snapshot = fromHelper.fillingUsage()
             }
             let result = snapshot ?? ProcessCollector().snapshot()
             let flags = Dictionary(uniqueKeysWithValues: result.processes.map {

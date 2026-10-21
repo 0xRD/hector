@@ -20,6 +20,11 @@ public struct RunningProcess: Codable, Hashable, Identifiable, Sendable {
     public var appName: String?
     /// Connected internet sockets; `nil` when the process's descriptors could not be read.
     public var connections: [SocketInfo]?
+    /// Share of one CPU core used while the snapshot was taken (100 is a full core); `nil` when
+    /// it could not be read (another user's process without root).
+    public var cpuPercent: Double?
+    /// Physical memory footprint in bytes, as Activity Monitor's "Memory" column shows it.
+    public var memoryFootprint: UInt64?
 
     public var id: Int32 { pid }
 
@@ -34,7 +39,8 @@ public struct RunningProcess: Codable, Hashable, Identifiable, Sendable {
 
     public init(pid: Int32, parentPID: Int32, userID: UInt32, userName: String? = nil, name: String,
                 executablePath: String? = nil, arguments: [String] = [], startedAt: Date? = nil,
-                appBundlePath: String? = nil, appName: String? = nil, connections: [SocketInfo]? = nil) {
+                appBundlePath: String? = nil, appName: String? = nil, connections: [SocketInfo]? = nil,
+                cpuPercent: Double? = nil, memoryFootprint: UInt64? = nil) {
         self.pid = pid
         self.parentPID = parentPID
         self.userID = userID
@@ -46,6 +52,8 @@ public struct RunningProcess: Codable, Hashable, Identifiable, Sendable {
         self.appBundlePath = appBundlePath
         self.appName = appName
         self.connections = connections
+        self.cpuPercent = cpuPercent
+        self.memoryFootprint = memoryFootprint
     }
 
     /// Name to show in a list: the app when known, else the process name.
@@ -81,8 +89,20 @@ public struct ProcessSnapshot: Codable, Sendable {
 }
 
 extension ProcessSnapshot {
-    /// Processes depth-first under their parents, each with its depth in the tree. A process whose
-    /// parent is not in the snapshot is a root; siblings keep their PID order.
+    /// A helper older than 0.5 sends no CPU or memory figures: they are measured here instead,
+    /// for the processes this user may read (their own). Unchanged when the snapshot has them.
+    public func fillingUsage() -> ProcessSnapshot {
+        guard processes.allSatisfy({ $0.cpuPercent == nil && $0.memoryFootprint == nil }) else { return self }
+        let usage = ProcessCollector.measureUsage(of: processes.map(\.pid))
+        var copy = self
+        for index in copy.processes.indices {
+            guard let measured = usage[copy.processes[index].pid] else { continue }
+            copy.processes[index].cpuPercent = measured.cpuPercent
+            copy.processes[index].memoryFootprint = measured.memoryFootprint
+        }
+        return copy
+    }
+
     /// The PIDs of `kept` and of every ancestor of them, so a tree filtered to some processes
     /// still shows the parents that connect them.
     public func withAncestors(_ kept: Set<Int32>) -> Set<Int32> {
@@ -100,6 +120,8 @@ extension ProcessSnapshot {
         return result
     }
 
+    /// Processes depth-first under their parents, each with its depth in the tree. A process whose
+    /// parent is not in the snapshot is a root; siblings keep their PID order.
     public func treeOrdered() -> [(process: RunningProcess, depth: Int)] {
         let pids = Set(processes.map(\.pid))
         var children: [Int32: [RunningProcess]] = [:]
@@ -133,12 +155,18 @@ extension ProcessSnapshot {
 public struct ProcessCollector: Sendable {
     public init() {}
 
+    /// CPU use is measured over the snapshot itself, at least this long.
+    static let minimumSampleInterval: TimeInterval = 0.25
+
     public func snapshot() -> ProcessSnapshot {
         var userNames: [UInt32: String] = [:]
         var bundles: [String: SocketCollector.AppBundle] = [:]
         var processes: [RunningProcess] = []
+        let pids = SocketCollector.allPIDs().filter { $0 > 0 }
+        let sampleStart = Date()
+        let before = Dictionary(uniqueKeysWithValues: pids.compactMap { pid in Self.usage(of: pid).map { (pid, $0) } })
 
-        for pid in SocketCollector.allPIDs() where pid > 0 {
+        for pid in pids {
             guard let info = Self.basicInfo(of: pid) else { continue }
             let path = SocketCollector.executablePath(of: pid)
             var bundle = SocketCollector.AppBundle()
@@ -166,8 +194,75 @@ public struct ProcessCollector: Sendable {
                 startedAt: info.startedAt, appBundlePath: bundle.path, appName: bundle.name, connections: sockets
             ))
         }
+        let elapsed = Date().timeIntervalSince(sampleStart)
+        if elapsed < Self.minimumSampleInterval { Thread.sleep(forTimeInterval: Self.minimumSampleInterval - elapsed) }
+        let interval = Date().timeIntervalSince(sampleStart)
+        for index in processes.indices {
+            guard let after = Self.usage(of: processes[index].pid) else { continue }
+            processes[index].memoryFootprint = after.footprint
+            if let start = before[processes[index].pid] {
+                processes[index].cpuPercent = Self.cpuPercent(from: start.cpuNanoseconds, to: after.cpuNanoseconds, over: interval)
+            }
+        }
         processes.sort { $0.pid < $1.pid }
         return ProcessSnapshot(takenAt: Date(), processes: processes, ranAsRoot: geteuid() == 0)
+    }
+
+    /// CPU share and memory of `pids`, sampled over `minimumSampleInterval`.
+    public static func measureUsage(of pids: [Int32]) -> [Int32: (cpuPercent: Double?, memoryFootprint: UInt64)] {
+        let start = Date()
+        let before = Dictionary(uniqueKeysWithValues: pids.compactMap { pid in usage(of: pid).map { (pid, $0) } })
+        guard !before.isEmpty else { return [:] }
+        Thread.sleep(forTimeInterval: minimumSampleInterval)
+        let interval = Date().timeIntervalSince(start)
+        var result: [Int32: (cpuPercent: Double?, memoryFootprint: UInt64)] = [:]
+        for (pid, first) in before {
+            guard let after = usage(of: pid) else { continue }
+            result[pid] = (cpuPercent(from: first.cpuNanoseconds, to: after.cpuNanoseconds, over: interval), after.footprint)
+        }
+        return result
+    }
+
+    struct Usage {
+        var cpuNanoseconds: UInt64
+        var footprint: UInt64
+    }
+
+    /// CPU time and memory footprint from `proc_pid_rusage`; `nil` for another user's process
+    /// without root, or a process that just exited.
+    static func usage(of pid: pid_t) -> Usage? {
+        var info = rusage_info_v2()
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V2, $0) }
+        }
+        guard result == 0 else { return nil }
+        let ticks = info.ri_user_time &+ info.ri_system_time
+        return Usage(cpuNanoseconds: nanoseconds(machTicks: ticks), footprint: info.ri_phys_footprint)
+    }
+
+    /// `rusage` CPU times are in Mach absolute time units: nanoseconds on Intel, 125/3 ns on
+    /// Apple silicon.
+    static func nanoseconds(machTicks ticks: UInt64) -> UInt64 {
+        let timebase = Self.timebase
+        guard timebase.denom != 0 else { return ticks }
+        // Full width, so no product overflows; a result past 64 bits (never in practice) saturates.
+        let product = ticks.multipliedFullWidth(by: UInt64(timebase.numer))
+        let denominator = UInt64(timebase.denom)
+        guard product.high < denominator else { return .max }
+        return denominator.dividingFullWidth(product).quotient
+    }
+
+    private static let timebase: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
+    /// Percent of one core between two CPU time readings; `nil` when the counter went back (the
+    /// PID was reused) or no time passed.
+    static func cpuPercent(from start: UInt64, to end: UInt64, over interval: TimeInterval) -> Double? {
+        guard end >= start, interval > 0 else { return nil }
+        return Double(end - start) / 1e9 / interval * 100
     }
 
     struct BasicInfo {

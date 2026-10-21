@@ -473,7 +473,15 @@ enum DemoData {
     ]
 
     static var processSnapshot: ProcessSnapshot {
-        ProcessSnapshot(takenAt: ago(30), processes: processList.sorted { $0.pid < $1.pid }, ranAsRoot: false)
+        // Made-up but stable CPU and memory figures, a few busy processes among quiet ones.
+        let processes = processList.sorted { $0.pid < $1.pid }.map { process -> RunningProcess in
+            var copy = process
+            let seed = Double((Int(process.pid) * 7919) % 1000)
+            copy.cpuPercent = process.pid % 5 == 0 ? seed / 40 : seed / 900
+            copy.memoryFootprint = UInt64(4 + Int(seed) % 600) * 1_048_576
+            return copy
+        }
+        return ProcessSnapshot(takenAt: ago(30), processes: processes, ranAsRoot: false)
     }
 
     static var processFlags: [Int32: Set<ProcessFlag>] {

@@ -67,7 +67,7 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
   - [ ] Startup Security policy (reduced security, kernel extensions allowed): `bputil -d` needs root, so it waits for a helper request
   - [ ] Bluetooth Sharing: no readable switch found on macOS 26 and 27
 - [x] Processes: a row menu (Reveal in Finder, Copy path, Copy PID, Open Activity Monitor) and "Quit" for the user's own processes, after confirmation; the PID is checked again (owner and start time) so a reused number is never signalled
-- [ ] Processes: CPU and memory columns
+- [x] Processes: CPU and memory columns (CPU measured over the snapshot itself, memory as Activity Monitor's footprint; sort by either; also in `hector processes`). Other users' processes need the updated helper; with an older one, only your own are measured
 - [ ] Connections: traffic per app (bytes in and out); see "Bytes per connection" in 0.5
 - [ ] First launch: a short onboarding (what each screen does, install the helper for blocking, optional VirusTotal key, open at login)
   - [x] The first launch asks once whether to check for new versions (0.4.9); the rest is to do

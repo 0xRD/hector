@@ -9,7 +9,7 @@ func processes(_ args: Arguments) throws {
     var throughHelper = false
     if geteuid() != 0, FileManager.default.fileExists(atPath: socket),
        case .processes(let fromHelper)? = try? HelperClient.sendChecked(.processes, socketPath: socket, timeout: 10) {
-        snapshot = fromHelper
+        snapshot = fromHelper.fillingUsage()
         throughHelper = true
     }
 
@@ -30,15 +30,17 @@ func processes(_ args: Arguments) throws {
         shown = tree.map { $0.process }
         depth = Dictionary(uniqueKeysWithValues: tree.map { ($0.process.pid, $0.depth) })
     }
-    print(pad("PID", 7) + pad("PPID", 7) + pad("USER", 12) + pad("CONN", 5) + "PROCESS")
+    print(pad("PID", 7) + pad("PPID", 7) + pad("USER", 12) + pad("%CPU", 6) + pad("MEM MB", 8) + pad("CONN", 5) + "PROCESS")
     for process in shown {
         let indent = String(repeating: "  ", count: depth[process.pid] ?? 0)
         let connections = process.connections.map { String($0.count) } ?? "-"
         let command = process.arguments.isEmpty ? (process.executablePath ?? process.name) : process.arguments.joined(separator: " ")
+        let cpu = process.cpuPercent.map { String(format: "%.1f", $0) } ?? "-"
+        let memory = process.memoryFootprint.map { String($0 / 1_048_576) } ?? "-"
         print(pad(String(process.pid), 7) + pad(String(process.parentPID), 7) + pad(process.userName ?? String(process.userID), 12)
-              + pad(connections, 5) + indent + LogText.sanitized(command))
+              + pad(cpu, 6) + pad(memory, 8) + pad(connections, 5) + indent + LogText.sanitized(command))
         for flag in (flags[process.pid] ?? []).sorted() {
-            print(String(repeating: " ", count: 31) + indent + "! \(flag.label)")
+            print(String(repeating: " ", count: 45) + indent + "! \(flag.label)")
         }
     }
     let flagged = flags.values.filter { !$0.isEmpty }.count

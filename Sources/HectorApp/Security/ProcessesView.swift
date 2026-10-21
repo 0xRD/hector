@@ -2,6 +2,24 @@ import HectorCore
 import SwiftUI
 
 /// One line of the process table.
+/// CPU and memory figures as the table shows them; "–" when they could not be read.
+enum ProcessUsage {
+    static func cpu(_ percent: Double?) -> String {
+        guard let percent else { return "–" }
+        if percent < 0.05 { return "0" }
+        return percent < 10 ? String(format: "%.1f", percent) : String(format: "%.0f", percent)
+    }
+
+    static func memory(_ bytes: UInt64?) -> String {
+        guard let bytes else { return "–" }
+        // In English like the rest of the interface, in binary units like Activity Monitor.
+        let megabytes = Double(bytes) / 1_048_576
+        if megabytes < 1 { return String(format: "%.0f KB", Double(bytes) / 1024) }
+        if megabytes < 1024 { return String(format: megabytes < 10 ? "%.1f MB" : "%.0f MB", megabytes) }
+        return String(format: "%.2f GB", megabytes / 1024)
+    }
+}
+
 struct ProcessRow: Identifiable {
     let process: RunningProcess
     /// Indentation in the tree; 0 in the flat list.
@@ -61,6 +79,13 @@ struct ProcessesView: View {
                 .help("Show Apple's own processes (from /System, /usr, /bin and /sbin)")
             Toggle("Tree", isOn: $state.processesAsTree).toggleStyle(.checkbox).fixedSize()
                 .help("Show children under their parent process")
+                .disabled(state.processesSort != .name)
+            Picker("Sort", selection: $state.processesSort) {
+                ForEach(ProcessSort.allCases) { Text("By \($0.label)").tag($0) }
+            }
+            .labelsHidden()
+            .fixedSize()
+            .help("Sort by CPU or memory to see the busiest processes first (as a flat list)")
             Toggle("Flagged", isOn: $state.processesFlaggedOnly).toggleStyle(.checkbox).fixedSize()
                 .help("Only processes running from a temporary, Downloads or hidden folder, or deleted code")
             if security.isCheckingAll {
@@ -84,6 +109,7 @@ struct ProcessesView: View {
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
+            .fixedSize()
             .disabled(security.isLoadingProcesses)
             .keyboardShortcut("r", modifiers: .command)
         }
@@ -100,6 +126,16 @@ struct ProcessesView: View {
                 Text(String(row.process.pid)).monospacedDigit().foregroundStyle(.secondary)
             }
             .width(min: 50, ideal: 60, max: 80)
+            TableColumn("CPU") { row in
+                Text(ProcessUsage.cpu(row.process.cpuPercent)).monospacedDigit().foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .width(min: 44, ideal: 56, max: 70)
+            TableColumn("Memory") { row in
+                Text(ProcessUsage.memory(row.process.memoryFootprint)).monospacedDigit().foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .width(min: 60, ideal: 76, max: 96)
             TableColumn("User") { row in
                 Text(row.process.userName ?? String(row.process.userID)).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -138,11 +174,17 @@ struct ProcessesView: View {
     private var visibleRows: [ProcessRow] {
         guard let snapshot = security.processes else { return [] }
         let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
-        let flat = state.processesFlaggedOnly || !query.isEmpty || !state.processesAsTree
+        let flat = state.processesFlaggedOnly || !query.isEmpty || !state.processesAsTree || state.processesSort != .name
         let ordered: [(process: RunningProcess, depth: Int)]
         if flat {
-            let sorted = snapshot.processes.sorted {
+            let byName: (RunningProcess, RunningProcess) -> Bool = {
                 $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+            let sorted: [RunningProcess] = switch state.processesSort {
+            case .name: snapshot.processes.sorted(by: byName)
+            // Unreadable values (other users' processes without the helper) go last.
+            case .cpu: snapshot.processes.sorted { ($0.cpuPercent ?? -1, $1.displayName) > ($1.cpuPercent ?? -1, $0.displayName) }
+            case .memory: snapshot.processes.sorted { ($0.memoryFootprint ?? 0, $1.displayName) > ($1.memoryFootprint ?? 0, $0.displayName) }
             }
             ordered = sorted.map { (process: $0, depth: 0) }
         } else {
@@ -283,6 +325,10 @@ struct ProcessDetailView: View {
                 DetailRow("User", value: process.userName.map { "\($0) (\(process.userID))" } ?? String(process.userID), copyable: true)
                 if let started = process.startedAt {
                     DetailRow("Started", value: Display.dateTime(started, seconds: true), copyable: true)
+                }
+                if process.cpuPercent != nil || process.memoryFootprint != nil {
+                    DetailRow("CPU", value: process.cpuPercent == nil ? "–" : ProcessUsage.cpu(process.cpuPercent) + " % of one core")
+                    DetailRow("Memory", value: ProcessUsage.memory(process.memoryFootprint))
                 }
                 if let path = process.executablePath { DetailRow("Executable", value: path, monospaced: true, copyable: true) }
                 if process.arguments.count > 1 {
