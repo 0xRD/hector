@@ -25,6 +25,12 @@ public struct RunningProcess: Codable, Hashable, Identifiable, Sendable {
     public var cpuPercent: Double?
     /// Physical memory footprint in bytes, as Activity Monitor's "Memory" column shows it.
     public var memoryFootprint: UInt64?
+    /// Sockets waiting for others to connect (see `SocketInfo.isListening`), one per protocol
+    /// and port; `nil` when the process's descriptors could not be read.
+    public var listening: [SocketInfo]?
+
+    /// Listens on an address other machines can reach.
+    public var listensOnNetwork: Bool { listening?.contains { $0.listeningScope == .network } == true }
 
     public var id: Int32 { pid }
 
@@ -40,7 +46,7 @@ public struct RunningProcess: Codable, Hashable, Identifiable, Sendable {
     public init(pid: Int32, parentPID: Int32, userID: UInt32, userName: String? = nil, name: String,
                 executablePath: String? = nil, arguments: [String] = [], startedAt: Date? = nil,
                 appBundlePath: String? = nil, appName: String? = nil, connections: [SocketInfo]? = nil,
-                cpuPercent: Double? = nil, memoryFootprint: UInt64? = nil) {
+                cpuPercent: Double? = nil, memoryFootprint: UInt64? = nil, listening: [SocketInfo]? = nil) {
         self.pid = pid
         self.parentPID = parentPID
         self.userID = userID
@@ -54,6 +60,7 @@ public struct RunningProcess: Codable, Hashable, Identifiable, Sendable {
         self.connections = connections
         self.cpuPercent = cpuPercent
         self.memoryFootprint = memoryFootprint
+        self.listening = listening
     }
 
     /// Name to show in a list: the app when known, else the process name.
@@ -91,12 +98,15 @@ public struct ProcessSnapshot: Codable, Sendable {
 extension ProcessSnapshot {
     /// A helper older than 0.5 sends no CPU or memory figures: they are measured here instead,
     /// for the processes this user may read (their own). Unchanged when the snapshot has them.
+    /// Listening sockets are missing from those older helpers too, and are read the same way.
     public func fillingUsage() -> ProcessSnapshot {
-        guard processes.allSatisfy({ $0.cpuPercent == nil && $0.memoryFootprint == nil }) else { return self }
+        guard processes.allSatisfy({ $0.cpuPercent == nil && $0.memoryFootprint == nil && $0.listening == nil }) else { return self }
         let usage = ProcessCollector.measureUsage(of: processes.map(\.pid))
         var copy = self
         for index in copy.processes.indices {
-            guard let measured = usage[copy.processes[index].pid] else { continue }
+            let pid = copy.processes[index].pid
+            copy.processes[index].listening = ProcessCollector.sockets(of: pid).map(ProcessCollector.listening(in:))
+            guard let measured = usage[pid] else { continue }
             copy.processes[index].cpuPercent = measured.cpuPercent
             copy.processes[index].memoryFootprint = measured.memoryFootprint
         }
@@ -182,16 +192,14 @@ public struct ProcessCollector: Sendable {
             if userNames[uid] == nil, let entry = getpwuid(uid) {
                 userNames[uid] = String(cString: entry.pointee.pw_name)
             }
-            let sockets = SocketCollector.fileDescriptors(of: pid).map { fds in
-                fds.filter { $0.proc_fdtype == UInt32(PROX_FDTYPE_SOCKET) }
-                    .compactMap { SocketCollector.socketInfo(pid: pid, fd: $0.proc_fd) }
-                    .filter(\.hasRemote)
-            }
+            let allSockets = Self.sockets(of: pid)
+            let sockets = allSockets?.filter(\.hasRemote)
             let name = SocketCollector.processName(of: pid, path: path)
             processes.append(RunningProcess(
                 pid: pid, parentPID: info.parentPID, userID: uid, userName: userNames[uid],
                 name: name, executablePath: path, arguments: Self.arguments(of: pid)?.arguments ?? [],
-                startedAt: info.startedAt, appBundlePath: bundle.path, appName: bundle.name, connections: sockets
+                startedAt: info.startedAt, appBundlePath: bundle.path, appName: bundle.name, connections: sockets,
+                listening: allSockets.map(Self.listening(in:))
             ))
         }
         let elapsed = Date().timeIntervalSince(sampleStart)
@@ -221,6 +229,23 @@ public struct ProcessCollector: Sendable {
             result[pid] = (cpuPercent(from: first.cpuNanoseconds, to: after.cpuNanoseconds, over: interval), after.footprint)
         }
         return result
+    }
+
+    /// Every internet socket of `pid`; `nil` when its descriptors cannot be read.
+    static func sockets(of pid: pid_t) -> [SocketInfo]? {
+        SocketCollector.fileDescriptors(of: pid).map { fds in
+            fds.filter { $0.proc_fdtype == UInt32(PROX_FDTYPE_SOCKET) }
+                .compactMap { SocketCollector.socketInfo(pid: pid, fd: $0.proc_fd) }
+        }
+    }
+
+    /// The listening sockets among `sockets`, one per protocol, address and port (a server often
+    /// opens the same port for IPv4 and IPv6, or several times).
+    static func listening(in sockets: [SocketInfo]) -> [SocketInfo] {
+        var seen = Set<String>()
+        return sockets.filter(\.isListening)
+            .sorted { ($0.localPort, $0.transport.rawValue) < ($1.localPort, $1.transport.rawValue) }
+            .filter { seen.insert($0.listeningLabel).inserted }
     }
 
     struct Usage {

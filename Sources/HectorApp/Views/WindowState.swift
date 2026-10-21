@@ -47,6 +47,8 @@ final class WindowState {
     var selectedPersistenceItem: PersistenceItem.ID?
     var selectedProcess: RunningProcess.ID?
     var processesFlaggedOnly = false
+    /// Only processes other machines can connect to.
+    var processesListeningOnly = false
     var processesAsTree = true
     /// Apple's own processes are most of the list and rarely the question.
     var processesShowApple = false

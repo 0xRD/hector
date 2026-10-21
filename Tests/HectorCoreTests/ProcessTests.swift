@@ -286,3 +286,38 @@ import Testing
         #expect(process.memoryFootprint == nil)
     }
 }
+
+@Suite struct ListeningSocketTests {
+    private func tcp(_ local: String?, _ port: UInt16, state: String) -> SocketInfo {
+        SocketInfo(transport: .tcp, localAddress: local.flatMap(IPAddress.init), localPort: port,
+                   remoteAddress: nil, remotePort: 0, tcpState: state)
+    }
+
+    @Test func scopesListeningSockets() {
+        #expect(tcp(nil, 22, state: "LISTEN").listeningScope == .network)
+        #expect(tcp("192.168.1.20", 8080, state: "LISTEN").listeningScope == .network)
+        #expect(tcp("127.0.0.1", 5432, state: "LISTEN").listeningScope == .thisMac)
+        #expect(tcp("::1", 5432, state: "LISTEN").listeningScope == .thisMac)
+        #expect(tcp(nil, 51000, state: "ESTABLISHED").listeningScope == nil)
+        #expect(tcp("::1", 5432, state: "LISTEN").listeningLabel == "TCP [::1]:5432")
+        #expect(tcp(nil, 22, state: "LISTEN").listeningLabel == "TCP 22")
+    }
+
+    @Test func udpServersButNotClients() {
+        let server = SocketInfo(transport: .udp, localAddress: nil, localPort: 5353, remoteAddress: nil, remotePort: 0, tcpState: nil)
+        let client = SocketInfo(transport: .udp, localAddress: nil, localPort: 61000, remoteAddress: nil, remotePort: 0, tcpState: nil)
+        let connected = SocketInfo(transport: .udp, localAddress: nil, localPort: 5000,
+                                   remoteAddress: IPAddress("192.0.2.1"), remotePort: 443, tcpState: nil)
+        #expect(server.isListening)
+        #expect(!client.isListening)
+        #expect(!connected.isListening)
+    }
+
+    @Test func oneEntryPerPortAndProtocol() {
+        let twice = [tcp(nil, 22, state: "LISTEN"), tcp(nil, 22, state: "LISTEN"), tcp("127.0.0.1", 631, state: "LISTEN"),
+                     tcp(nil, 52000, state: "ESTABLISHED")]
+        #expect(ProcessCollector.listening(in: twice).map(\.listeningLabel) == ["TCP 22", "TCP 127.0.0.1:631"])
+        let process = RunningProcess(pid: 1, parentPID: 0, userID: 0, name: "sshd", listening: ProcessCollector.listening(in: twice))
+        #expect(process.listensOnNetwork)
+    }
+}

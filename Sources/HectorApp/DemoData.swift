@@ -479,6 +479,13 @@ enum DemoData {
             let seed = Double((Int(process.pid) * 7919) % 1000)
             copy.cpuPercent = process.pid % 5 == 0 ? seed / 40 : seed / 900
             copy.memoryFootprint = UInt64(4 + Int(seed) % 600) * 1_048_576
+            if process.pid == 1290 {
+                // The sync app serves its peers on the local network.
+                copy.listening = [SocketInfo(transport: .tcp, localAddress: nil, localPort: 22000, remoteAddress: nil,
+                                             remotePort: 0, tcpState: "LISTEN"),
+                                  SocketInfo(transport: .tcp, localAddress: IPAddress("127.0.0.1"), localPort: 8384,
+                                             remoteAddress: nil, remotePort: 0, tcpState: "LISTEN")]
+            }
             return copy
         }
         return ProcessSnapshot(takenAt: ago(30), processes: processes, ranAsRoot: false)

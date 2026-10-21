@@ -189,7 +189,7 @@ Design, verified list URLs and a phased plan: [LOCAL_DNS.md](LOCAL_DNS.md). The 
 ## Later
 
 - [ ] **Hector in the app, a few small appearances** (detail, for personality). Done: peering over the edge of the map, keeping watch in Camera & mic and the menu bar (eyes open while monitoring, resting when paused), the empty states. Left: the shield pose on the "Blocking on" footer: poses of the crested-helmet character drawn in code like the app icon (`HectorMark`, `AppIconArtwork`), no binary assets. Ideas: peering over the edge of the destination map; keeping watch beside Camera & mic (eyes open while monitoring, resting when paused); in the empty states ("All quiet", "Pick a destination"); a shield pose on the "Blocking on" footer. Small and calm, never in the way of the data; follow the tone in `docs/DESIGN.md`
-- [ ] Processes listening on the network, not just on this Mac
+- [x] Processes listening on the network, not just on this Mac: the ports of each process, network or loopback, a "Listening" filter in Processes and `hector processes --listening`
 - [ ] Exportable report (JSON or HTML) and an event timeline
 - [ ] Menu bar extra: live counters (done: live connections in the menu bar panel), pause blocking
 - [ ] Notification when an app contacts a new country (the "new app" notification exists; per country is left)

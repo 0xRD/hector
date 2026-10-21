@@ -47,6 +47,12 @@ struct ProcessesView: View {
                 EmptyStateView("Taking attendance…", systemImage: "cpu", message: "Listing every running process.")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .canvasBackground()
+            } else if rows.isEmpty && state.processesListeningOnly && !state.processesFlaggedOnly && state.search.isEmpty {
+                EmptyStateView("All quiet", systemImage: "antenna.radiowaves.left.and.right",
+                               message: "No process waits for connections from the network: whatever listens is reachable from this Mac only.",
+                               tint: .hectorOK, hector: .ahead)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .canvasBackground()
             } else if rows.isEmpty {
                 EmptyStateView(state.processesFlaggedOnly ? "All quiet" : "Nothing matches",
                                systemImage: state.processesFlaggedOnly ? "checkmark.shield" : "sparkle.magnifyingglass",
@@ -75,8 +81,6 @@ struct ProcessesView: View {
     private func header(rows: [ProcessRow]) -> some View {
         @Bindable var state = state
         return ScreenHeader("Running processes", subtitle: summary, systemImage: "cpu", tint: .hectorInfo, pinned: true) {
-            Toggle("Apple", isOn: $state.processesShowApple).toggleStyle(.checkbox).fixedSize()
-                .help("Show Apple's own processes (from /System, /usr, /bin and /sbin)")
             Toggle("Tree", isOn: $state.processesAsTree).toggleStyle(.checkbox).fixedSize()
                 .help("Show children under their parent process")
                 .disabled(state.processesSort != .name)
@@ -86,8 +90,19 @@ struct ProcessesView: View {
             .labelsHidden()
             .fixedSize()
             .help("Sort by CPU or memory to see the busiest processes first (as a flat list)")
-            Toggle("Flagged", isOn: $state.processesFlaggedOnly).toggleStyle(.checkbox).fixedSize()
-                .help("Only processes running from a temporary, Downloads or hidden folder, or deleted code")
+            Menu {
+                Toggle("Apple's Processes", isOn: $state.processesShowApple)
+                Divider()
+                Toggle("Only Listening on the Network", isOn: $state.processesListeningOnly)
+                Toggle("Only Flagged", isOn: $state.processesFlaggedOnly)
+            } label: {
+                let narrowed = state.processesListeningOnly || state.processesFlaggedOnly
+                Label(narrowed ? "Filtered" : "Show", systemImage: narrowed
+                      ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+            }
+            .fixedSize()
+            .help("Apple's own processes (from /System, /usr, /bin and /sbin); only the processes other machines can connect to; "
+                + "only those running from a temporary, Downloads or hidden folder, or deleted code")
             if security.isCheckingAll {
                 Button("Stop VirusTotal") { security.cancelVirusTotal() }
             } else {
@@ -145,8 +160,16 @@ struct ProcessesView: View {
             }
             .width(min: 90, ideal: 120, max: 160)
             TableColumn("Network") { row in
-                ConnectionCountCell(connections: row.process.connections,
-                                    blocked: row.process.connections.map { blockedCount($0) } ?? 0)
+                HStack(spacing: 4) {
+                    ConnectionCountCell(connections: row.process.connections,
+                                        blocked: row.process.connections.map { blockedCount($0) } ?? 0)
+                    if row.process.listensOnNetwork {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .foregroundStyle(Color.hectorWarning)
+                            .help("Listens on the network: " + (row.process.listening ?? [])
+                                .filter { $0.listeningScope == .network }.map(\.listeningLabel).joined(separator: ", "))
+                    }
+                }
             }
             .width(min: 50, ideal: 70, max: 90)
             TableColumn("VirusTotal") { row in
@@ -174,7 +197,7 @@ struct ProcessesView: View {
     private var visibleRows: [ProcessRow] {
         guard let snapshot = security.processes else { return [] }
         let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
-        let flat = state.processesFlaggedOnly || !query.isEmpty || !state.processesAsTree || state.processesSort != .name
+        let flat = state.processesFlaggedOnly || state.processesListeningOnly || !query.isEmpty || !state.processesAsTree || state.processesSort != .name
         let ordered: [(process: RunningProcess, depth: Int)]
         if flat {
             let byName: (RunningProcess, RunningProcess) -> Bool = {
@@ -193,11 +216,12 @@ struct ProcessesView: View {
         // Without Apple's processes: the others, plus (in the tree) the Apple parents that connect
         // them. A search or a flag always shows what it found, Apple or not.
         let thirdParty = Set(snapshot.processes.filter { !$0.isAppleSystemCode }.map(\.pid))
-        let shown = state.processesShowApple || !query.isEmpty || state.processesFlaggedOnly
+        let shown = state.processesShowApple || !query.isEmpty || state.processesFlaggedOnly || state.processesListeningOnly
             ? nil : (flat ? thirdParty : snapshot.withAncestors(thirdParty))
         return ordered.compactMap { entry -> ProcessRow? in
             let flags = security.processFlags[entry.process.pid] ?? []
             if state.processesFlaggedOnly && flags.isEmpty { return nil }
+            if state.processesListeningOnly && !entry.process.listensOnNetwork { return nil }
             if !query.isEmpty && !matches(entry.process, query) { return nil }
             if let shown, !shown.contains(entry.process.pid) { return nil }
             let isContext = shown != nil && !thirdParty.contains(entry.process.pid)
@@ -274,6 +298,32 @@ private struct ConnectionCountCell: View {
     }
 }
 
+/// The ports a process waits on, and who can reach them.
+private struct ListeningCard: View {
+    let sockets: [SocketInfo]
+
+    var body: some View {
+        Card {
+            SectionHeader("Listening", systemImage: "antenna.radiowaves.left.and.right", style: .eyebrow)
+            ForEach(sockets, id: \.listeningLabel) { socket in
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                    Text(socket.listeningLabel)
+                        .font(.system(.callout, design: .monospaced))
+                        .textSelection(.enabled)
+                    Spacer(minLength: Spacing.sm)
+                    if socket.listeningScope == .network {
+                        StatusPill("Network", kind: .warning, showsIcon: false, size: .small)
+                            .help("Other machines on the network can connect, unless the firewall stops them")
+                    } else {
+                        StatusPill("This Mac", kind: .neutral, showsIcon: false, size: .small)
+                            .help("Bound to the loopback address: only this Mac can connect")
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct ProcessDetailView: View {
     let security: SecurityController
     let blocking: BlockingController
@@ -341,6 +391,9 @@ struct ProcessDetailView: View {
             }
 
             connections(process.connections, of: process)
+            if let listening = process.listening, !listening.isEmpty {
+                ListeningCard(sockets: listening)
+            }
 
             if let path = process.executablePath {
                 CodeDetailsSection(security: security, path: path)
