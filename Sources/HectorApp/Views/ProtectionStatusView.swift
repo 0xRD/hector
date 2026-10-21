@@ -13,7 +13,12 @@ struct ProtectionStatusFooter: View {
             selection = .blocklists
         } label: {
             HStack(spacing: 10) {
-                SymbolTile(verdict.symbol, tint: verdict.kind.color, size: 30)
+                if verdict.kind == .ok {
+                    // Hector with his shield up while something is blocked.
+                    HectorShield(tint: verdict.kind.color).frame(width: 30, height: 30)
+                } else {
+                    SymbolTile(verdict.symbol, tint: verdict.kind.color, size: 30)
+                }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verdict.title)
                         .font(.callout.weight(.semibold))

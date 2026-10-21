@@ -255,6 +255,57 @@ struct HectorPeek: View {
     }
 }
 
+/// Hector holding his round shield (an aspis) in front of him: what the app shows while it
+/// blocks. The shield takes the status color; Hector stands a little back, behind it.
+///
+///     HectorShield().frame(width: 30, height: 30)
+struct HectorShield: View {
+    var gaze: HectorGaze = .ahead
+    /// The face of the shield.
+    var tint: Color = .hectorOK
+    var ink: Color = .hectorInfo
+
+    var body: some View {
+        GeometryReader { proxy in
+            let side: CGFloat = min(proxy.size.width, proxy.size.height)
+            ZStack(alignment: .topLeading) {
+                HectorMark(gaze: gaze, ink: ink, detailed: side >= 24)
+                    .frame(width: side * 0.84, height: side * 0.84)
+                Canvas { context, size in
+                    let scale: CGFloat = min(size.width, size.height) / BrandGeometry.grid
+                    context.scaleBy(x: scale, y: scale)
+                    drawShield(in: context, detailed: side >= 24)
+                }
+                .frame(width: side, height: side)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityHidden(true)
+    }
+
+    private func drawShield(in context: GraphicsContext, detailed: Bool) {
+        let center = CGPoint(x: 17.9, y: 17.9)
+        let face = Path(ellipseIn: CGRect(x: center.x - 5.8, y: center.y - 5.8, width: 11.6, height: 11.6))
+        let shading = GraphicsContext.Shading.linearGradient(
+            Gradient(colors: [tint, tint.opacity(0.72)]),
+            startPoint: CGPoint(x: center.x, y: center.y - 5.8),
+            endPoint: CGPoint(x: center.x, y: center.y + 5.8)
+        )
+        context.fill(face, with: shading)
+        if detailed {
+            // The bronze rim of an aspis, and a light catching its top.
+            let rim = Path(ellipseIn: CGRect(x: center.x - 4.1, y: center.y - 4.1, width: 8.2, height: 8.2))
+            context.stroke(rim, with: .color(.white.opacity(0.4)), style: StrokeStyle(lineWidth: 0.7))
+            var shine = Path()
+            shine.addArc(center: center, radius: 4.95, startAngle: .degrees(-150), endAngle: .degrees(-100), clockwise: false)
+            context.stroke(shine, with: .color(.white.opacity(0.55)), style: StrokeStyle(lineWidth: 0.8, lineCap: .round))
+        }
+        let boss = Path(ellipseIn: CGRect(x: center.x - 1.3, y: center.y - 1.3, width: 2.6, height: 2.6))
+        context.fill(boss, with: .color(ink.opacity(0.85)))
+        context.stroke(face, with: .color(ink), style: StrokeStyle(lineWidth: 1.3))
+    }
+}
+
 /// The Netbite network module glyph: a globe with a bite out of its top-right edge.
 /// Use it where the network module is named (its sidebar entry, its screens).
 ///

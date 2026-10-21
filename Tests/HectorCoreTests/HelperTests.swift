@@ -94,9 +94,13 @@ import Testing
             .refreshHostsLists(authorization: Data()),
         ]
         let current = HelperInfo.current
-        #expect(Set(requests.map(\.capability)) == Set(HelperCapability.allCases))
+        #expect(Set(requests.map(\.capability)) == Set(HelperCapability.allCases).subtracting(HelperCapability.replyFeatures))
         #expect(requests.allSatisfy { current.supports($0.capability) })
         #expect(!current.isOutdated)
+        // Same version and protocol, but without the process figures: an update is offered.
+        let withoutUsage = HelperInfo(version: current.version, protocolVersion: current.protocolVersion,
+                                      capabilities: current.capabilities.filter { $0 != HelperCapability.processUsage.rawValue })
+        #expect(withoutUsage.isOutdated)
         // Only what touches the rules is serialized; snapshots never wait behind an apply.
         #expect(requests.filter(\.touchesRules).map(\.capability).sorted { $0.rawValue < $1.rawValue }
                 == [.apply, .flush, .refreshHostsLists, .status])

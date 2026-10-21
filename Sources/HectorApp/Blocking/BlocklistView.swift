@@ -102,9 +102,11 @@ private struct HelperCard: View {
             Text(status.pfEnabled && status.anchorLoaded ? "Blocking is on" : "Helper ready, nothing enforced yet")
                 .font(.headline)
             Text(summary(status)).foregroundStyle(.secondary)
-            if status.version != HectorVersion.current {
+            if status.version != HectorVersion.current || blocking.helperOutdated {
                 HStack {
-                    Label("The helper is version \(status.version); this app is \(HectorVersion.current). Update it to get every feature and the latest security fixes.",
+                    Label(status.version != HectorVersion.current
+                          ? "The helper is version \(status.version); this app is \(HectorVersion.current). Update it to get every feature and the latest security fixes."
+                          : "The helper lacks features of this build of Hector (such as CPU, memory and ports of every process). Update it.",
                           systemImage: "arrow.triangle.2.circlepath")
                         .font(.caption)
                         .foregroundStyle(.orange)

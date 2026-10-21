@@ -67,7 +67,7 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
   - [ ] Startup Security policy (reduced security, kernel extensions allowed): `bputil -d` needs root, so it waits for a helper request
   - [ ] Bluetooth Sharing: no readable switch found on macOS 26 and 27
 - [x] Processes: a row menu (Reveal in Finder, Copy path, Copy PID, Open Activity Monitor) and "Quit" for the user's own processes, after confirmation; the PID is checked again (owner and start time) so a reused number is never signalled
-- [x] Processes: CPU and memory columns (CPU measured over the snapshot itself, memory as Activity Monitor's footprint; sort by either; also in `hector processes`). Other users' processes need the updated helper; with an older one, only your own are measured
+- [x] Processes: CPU and memory columns (CPU measured over the snapshot itself, memory as Activity Monitor's footprint; click a column header to sort by it; also in `hector processes`). Other users' processes need the updated helper; with an older one, only your own are measured
 - [ ] Connections: traffic per app (bytes in and out); see "Bytes per connection" in 0.5
 - [ ] First launch: a short onboarding (what each screen does, install the helper for blocking, optional VirusTotal key, open at login)
   - [x] The first launch asks once whether to check for new versions (0.4.9); the rest is to do
@@ -188,7 +188,7 @@ Design, verified list URLs and a phased plan: [LOCAL_DNS.md](LOCAL_DNS.md). The 
 
 ## Later
 
-- [ ] **Hector in the app, a few small appearances** (detail, for personality). Done: peering over the edge of the map, keeping watch in Camera & mic and the menu bar (eyes open while monitoring, resting when paused), the empty states. Left: the shield pose on the "Blocking on" footer: poses of the crested-helmet character drawn in code like the app icon (`HectorMark`, `AppIconArtwork`), no binary assets. Ideas: peering over the edge of the destination map; keeping watch beside Camera & mic (eyes open while monitoring, resting when paused); in the empty states ("All quiet", "Pick a destination"); a shield pose on the "Blocking on" footer. Small and calm, never in the way of the data; follow the tone in `docs/DESIGN.md`
+- [x] **Hector in the app, a few small appearances** (detail, for personality): peering over the edge of the map, keeping watch in Camera & mic and the menu bar (eyes open while monitoring, resting when paused), the empty states, and his shield up on the "Blocking on" footer (`HectorShield`): poses of the crested-helmet character drawn in code like the app icon (`HectorMark`, `AppIconArtwork`), no binary assets. Ideas: peering over the edge of the destination map; keeping watch beside Camera & mic (eyes open while monitoring, resting when paused); in the empty states ("All quiet", "Pick a destination"); a shield pose on the "Blocking on" footer. Small and calm, never in the way of the data; follow the tone in `docs/DESIGN.md`
 - [x] Processes listening on the network, not just on this Mac: the ports of each process, network or loopback, a "Listening" filter in Processes and `hector processes --listening`
 - [ ] Exportable report (JSON or HTML) and an event timeline
 - [ ] Menu bar extra: live counters (done: live connections in the menu bar panel), pause blocking

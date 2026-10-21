@@ -27,7 +27,20 @@ struct ProcessRow: Identifiable {
     let flags: Set<ProcessFlag>
     /// Shown only to connect the tree (an Apple parent of a third-party process): dimmed.
     var isContext = false
+    /// Trust of the executable's signature, most trusted first; `Int.max` when not known yet.
+    var signatureRank = Int.max
     var id: Int32 { process.pid }
+
+    // Sort keys of the table's columns. Unreadable figures (another user's process without the
+    // helper) sort as the lowest value.
+    var nameKey: String { process.displayName.lowercased() }
+    var pidKey: Int32 { process.pid }
+    var cpuKey: Double { process.cpuPercent ?? -1 }
+    var memoryKey: UInt64 { process.memoryFootprint ?? 0 }
+    var userKey: String { process.userName ?? String(process.userID) }
+    /// Connections, with listening on the network counted as a half so such processes come
+    /// right after those with as many connections.
+    var networkKey: Double { Double(process.connections?.count ?? -1) + (process.listensOnNetwork ? 0.5 : 0) }
 }
 
 /// Running processes, in the spirit of TaskExplorer: tree, signature, flags, connections.
@@ -81,15 +94,14 @@ struct ProcessesView: View {
     private func header(rows: [ProcessRow]) -> some View {
         @Bindable var state = state
         return ScreenHeader("Running processes", subtitle: summary, systemImage: "cpu", tint: .hectorInfo, pinned: true) {
-            Toggle("Tree", isOn: $state.processesAsTree).toggleStyle(.checkbox).fixedSize()
-                .help("Show children under their parent process")
-                .disabled(state.processesSort != .name)
-            Picker("Sort", selection: $state.processesSort) {
-                ForEach(ProcessSort.allCases) { Text("By \($0.label)").tag($0) }
-            }
-            .labelsHidden()
-            .fixedSize()
-            .help("Sort by CPU or memory to see the busiest processes first (as a flat list)")
+            // Sorting by a column replaces the tree; checking Tree again drops the sort.
+            Toggle("Tree", isOn: Binding(get: { state.processesAsTree && state.processesSortOrder.isEmpty },
+                                         set: { tree in
+                                             state.processesAsTree = tree
+                                             if tree { state.processesSortOrder = [] }
+                                         }))
+                .toggleStyle(.checkbox).fixedSize()
+                .help("Show children under their parent process. Click a column header to sort instead.")
             Menu {
                 Toggle("Apple's Processes", isOn: $state.processesShowApple)
                 Divider()
@@ -132,34 +144,37 @@ struct ProcessesView: View {
 
     private func table(_ rows: [ProcessRow]) -> some View {
         @Bindable var state = state
-        return Table(rows, selection: $state.selectedProcess) {
-            TableColumn("Process") { row in
+        // Ideal widths add up to what fits beside the details panel in the default window, so the
+        // last columns are not pushed out of sight.
+        return Table(rows, selection: $state.selectedProcess, sortOrder: $state.processesSortOrder) {
+            TableColumn("Process", value: \.nameKey) { row in
                 ProcessNameCell(row: row)
             }
-            .width(min: 220, ideal: 320)
-            TableColumn("PID") { row in
+            .width(min: 160, ideal: 200)
+            TableColumn("PID", value: \.pidKey) { row in
                 Text(String(row.process.pid)).monospacedDigit().foregroundStyle(.secondary)
             }
-            .width(min: 50, ideal: 60, max: 80)
-            TableColumn("CPU") { row in
+            .width(min: 44, ideal: 52, max: 80)
+            // The busiest first on the first click.
+            TableColumn("CPU", sortUsing: KeyPathComparator(\ProcessRow.cpuKey, order: .reverse)) { row in
                 Text(ProcessUsage.cpu(row.process.cpuPercent)).monospacedDigit().foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .width(min: 44, ideal: 56, max: 70)
-            TableColumn("Memory") { row in
+            .width(min: 44, ideal: 52, max: 70)
+            TableColumn("Memory", sortUsing: KeyPathComparator(\ProcessRow.memoryKey, order: .reverse)) { row in
                 Text(ProcessUsage.memory(row.process.memoryFootprint)).monospacedDigit().foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .width(min: 60, ideal: 76, max: 96)
-            TableColumn("User") { row in
+            .width(min: 60, ideal: 70, max: 96)
+            TableColumn("User", value: \.userKey) { row in
                 Text(row.process.userName ?? String(row.process.userID)).foregroundStyle(.secondary).lineLimit(1)
             }
-            .width(min: 60, ideal: 90, max: 140)
-            TableColumn("Signature") { row in
+            .width(min: 56, ideal: 64, max: 140)
+            TableColumn("Signature", value: \.signatureRank) { row in
                 SignatureBadge(security: security, path: row.process.executablePath)
             }
-            .width(min: 90, ideal: 120, max: 160)
-            TableColumn("Network") { row in
+            .width(min: 84, ideal: 100, max: 160)
+            TableColumn("Network", sortUsing: KeyPathComparator(\ProcessRow.networkKey, order: .reverse)) { row in
                 HStack(spacing: 4) {
                     ConnectionCountCell(connections: row.process.connections,
                                         blocked: row.process.connections.map { blockedCount($0) } ?? 0)
@@ -171,11 +186,11 @@ struct ProcessesView: View {
                     }
                 }
             }
-            .width(min: 50, ideal: 70, max: 90)
+            .width(min: 56, ideal: 64, max: 90)
             TableColumn("VirusTotal") { row in
                 VirusTotalBadge(security: security, path: row.process.executablePath)
             }
-            .width(min: 70, ideal: 90, max: 120)
+            .width(min: 60, ideal: 72, max: 120)
         }
         .contextMenu(forSelectionType: Int32.self) { pids in
             if pids.count == 1, let pid = pids.first,
@@ -197,17 +212,14 @@ struct ProcessesView: View {
     private var visibleRows: [ProcessRow] {
         guard let snapshot = security.processes else { return [] }
         let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
-        let flat = state.processesFlaggedOnly || state.processesListeningOnly || !query.isEmpty || !state.processesAsTree || state.processesSort != .name
+        let sortOrder = state.processesSortOrder
+        let flat = state.processesFlaggedOnly || state.processesListeningOnly || !query.isEmpty || !state.processesAsTree
+            || !sortOrder.isEmpty
         let ordered: [(process: RunningProcess, depth: Int)]
         if flat {
-            let byName: (RunningProcess, RunningProcess) -> Bool = {
+            // By name first, so rows the column sort finds equal keep a readable order.
+            let sorted = snapshot.processes.sorted {
                 $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
-            }
-            let sorted: [RunningProcess] = switch state.processesSort {
-            case .name: snapshot.processes.sorted(by: byName)
-            // Unreadable values (other users' processes without the helper) go last.
-            case .cpu: snapshot.processes.sorted { ($0.cpuPercent ?? -1, $1.displayName) > ($1.cpuPercent ?? -1, $0.displayName) }
-            case .memory: snapshot.processes.sorted { ($0.memoryFootprint ?? 0, $1.displayName) > ($1.memoryFootprint ?? 0, $0.displayName) }
             }
             ordered = sorted.map { (process: $0, depth: 0) }
         } else {
@@ -218,15 +230,18 @@ struct ProcessesView: View {
         let thirdParty = Set(snapshot.processes.filter { !$0.isAppleSystemCode }.map(\.pid))
         let shown = state.processesShowApple || !query.isEmpty || state.processesFlaggedOnly || state.processesListeningOnly
             ? nil : (flat ? thirdParty : snapshot.withAncestors(thirdParty))
-        return ordered.compactMap { entry -> ProcessRow? in
+        let rows = ordered.compactMap { entry -> ProcessRow? in
             let flags = security.processFlags[entry.process.pid] ?? []
             if state.processesFlaggedOnly && flags.isEmpty { return nil }
             if state.processesListeningOnly && !entry.process.listensOnNetwork { return nil }
             if !query.isEmpty && !matches(entry.process, query) { return nil }
             if let shown, !shown.contains(entry.process.pid) { return nil }
             let isContext = shown != nil && !thirdParty.contains(entry.process.pid)
-            return ProcessRow(process: entry.process, depth: entry.depth, flags: flags, isContext: isContext)
+            let trust = security.signature(of: entry.process.executablePath)?.trustLevel
+            return ProcessRow(process: entry.process, depth: entry.depth, flags: flags, isContext: isContext,
+                              signatureRank: trust.flatMap { TrustLevel.allCases.firstIndex(of: $0) } ?? Int.max)
         }
+        return sortOrder.isEmpty ? rows : rows.sorted(using: sortOrder)
     }
 
     private func matches(_ process: RunningProcess, _ query: String) -> Bool {

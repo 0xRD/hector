@@ -89,6 +89,12 @@ public enum HelperRequest: Codable, Sendable {
 /// One kind of request a helper understands.
 public enum HelperCapability: String, Codable, CaseIterable, Sendable {
     case hello, status, snapshot, apply, flush, processes, backgroundTasks, refreshHostsLists
+    /// `processes` replies carry each process's CPU, memory and listening ports.
+    case processUsage
+
+    /// What a reply carries rather than a request the helper takes. A helper without one of
+    /// these still answers, with less in it, and is reported as outdated.
+    public static let replyFeatures: Set<HelperCapability> = [.processUsage]
 }
 
 /// The helper's answer to `hello`.

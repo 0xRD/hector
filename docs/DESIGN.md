@@ -237,6 +237,9 @@ calm **face** behind the visor. Drawn in code on a 24 × 24 grid (`BrandGeometry
   `hectorCrest` (a brand-only clay, never used for a verdict), `face` `brandCream`. It follows
   light and dark mode; the cream face stays light in both, so the visor always reads.
 - Do not give it a sword or a spear, do not make it frown, do not straighten the crest.
+- **With his shield** (`HectorShield`): the mark a little smaller, behind a round aspis held low
+  on the right, its face in the status color with a pale rim and a dark boss. Only where
+  something is enforced: the sidebar's "Blocking on" footer. A shield, never a weapon.
 
 ### The app icon: `AppIconArtwork`
 
