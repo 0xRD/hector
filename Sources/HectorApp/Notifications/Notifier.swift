@@ -97,8 +97,11 @@ final class Notifier: NSObject {
 
     func refreshPermission() async {
         guard Self.isBundled else { return }
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        switch settings.authorizationStatus {
+        // Only the status crosses over: the settings object is not Sendable (Swift 6.1 refuses it).
+        let status = await withCheckedContinuation { (continuation: CheckedContinuation<UNAuthorizationStatus, Never>) in
+            UNUserNotificationCenter.current().getNotificationSettings { continuation.resume(returning: $0.authorizationStatus) }
+        }
+        switch status {
         case .authorized, .provisional: permission = .allowed
         case .denied: permission = .denied
         default: permission = .notAsked
