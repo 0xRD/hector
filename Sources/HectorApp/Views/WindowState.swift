@@ -32,6 +32,9 @@ final class WindowState {
     /// and switching screens cannot close another screen's panel (an inspector that goes away
     /// writes `false` to its binding).
     var showInspector = false
+    /// The destination whose panel the user closed: it stays closed for that one, even when
+    /// the live list writes the same selection again, and opens again for another pick.
+    var inspectorClosedFor: DestinationRef?
     var showPersistenceDetails = false
     var showProcessDetails = false
     var showTapDetails = false

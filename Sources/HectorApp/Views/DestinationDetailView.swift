@@ -8,6 +8,8 @@ struct DestinationDetailView: View {
     let row: DestinationRow?
     /// Every app that talks to the same address, on any port.
     let usedBy: [AppGroup]
+    /// Hides the panel.
+    var onClose: () -> Void = {}
 
     var body: some View {
         if let row {
@@ -29,6 +31,17 @@ struct DestinationDetailView: View {
     private func content(_ row: DestinationRow) -> some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             DestinationHero(row: row)
+                .padding(.trailing, 24)
+                .overlay(alignment: .topTrailing) {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Hide the details panel (⌥⌘I)")
+                    .accessibilityLabel("Hide details")
+                }
             detailsCard(row.destination)
             activityCard(row.destination)
             usedByCard

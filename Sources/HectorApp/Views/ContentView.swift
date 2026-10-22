@@ -39,7 +39,9 @@ struct ContentView: View {
         case .processes: state.showProcessDetails.toggle()
         case .keyboardTaps: state.showTapDetails.toggle()
         case .blocklists, .checkup, .captureDevices: break
-        default: state.showInspector.toggle()
+        default:
+            state.showInspector.toggle()
+            state.inspectorClosedFor = state.showInspector ? nil : state.selectedDestination
         }
     }
 
@@ -84,7 +86,10 @@ struct ContentView: View {
                 }
                 .fillsSplitPane()
                 .inspector(isPresented: $state.showInspector) {
-                    DestinationDetailView(row: selectedRow, usedBy: usedBySelected)
+                    DestinationDetailView(row: selectedRow, usedBy: usedBySelected) {
+                        state.showInspector = false
+                        state.inspectorClosedFor = state.selectedDestination
+                    }
                         .fillsSplitPane()
                         .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
                 }
@@ -135,7 +140,8 @@ struct ContentView: View {
                     } label: {
                         Label("Details", systemImage: "sidebar.trailing")
                     }
-                    .help("Show or hide the details panel")
+                    .keyboardShortcut("i", modifiers: [.command, .option])
+                    .help("Show or hide the details panel (⌥⌘I)")
                 }
                 SettingsLink {
                     Label("Settings", systemImage: "gearshape")
@@ -196,7 +202,9 @@ struct ContentView: View {
         .onChange(of: state.selectedPersistenceItem) { if state.selectedPersistenceItem != nil { state.showPersistenceDetails = true } }
         .onChange(of: state.selectedProcess) { if state.selectedProcess != nil { state.showProcessDetails = true } }
         .onChange(of: privacy.selectedTap) { if privacy.selectedTap != nil { state.showTapDetails = true } }
-        .onChange(of: state.selectedDestination) { if state.selectedDestination != nil { state.showInspector = true } }
+        .onChange(of: state.selectedDestination) {
+            if let selected = state.selectedDestination, selected != state.inspectorClosedFor { state.showInspector = true }
+        }
         // Closed while Hector stays in the menu bar: back to the slow pace at once.
         .onDisappear { monitor.demand = .hidden }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { _ in updateDemand() }
@@ -230,6 +238,7 @@ struct ContentView: View {
                 state: state,
                 onSelect: { row in
                     state.selectedDestination = row.id
+                    state.inspectorClosedFor = nil
                     state.showInspector = true
                 }
             )
