@@ -26,6 +26,10 @@ while [ "$elapsed" -lt "$SECONDS_TO_RUN" ]; do
     if ! kill -0 "$PID" 2>/dev/null; then
         echo "smoke test: Hector exited after $((elapsed + 5)) s" >&2
         tail -20 /tmp/hector-smoke.log >&2
+        # The crash report names the thread and the frame that stopped it.
+        sleep 3
+        report=$(ls -t "$HOME/Library/Logs/DiagnosticReports"/Hector*.ips 2>/dev/null | head -1 || true)
+        [ -n "$report" ] && head -c 6000 "$report" >&2
         exit 1
     fi
     set -- $(ps -o %cpu= -o rss= -p "$PID")

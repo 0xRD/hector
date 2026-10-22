@@ -97,11 +97,7 @@ final class Notifier: NSObject {
 
     func refreshPermission() async {
         guard Self.isBundled else { return }
-        // Only the status crosses over: the settings object is not Sendable (Swift 6.1 refuses it).
-        let status = await withCheckedContinuation { (continuation: CheckedContinuation<UNAuthorizationStatus, Never>) in
-            UNUserNotificationCenter.current().getNotificationSettings { continuation.resume(returning: $0.authorizationStatus) }
-        }
-        switch status {
+        switch await Self.authorizationStatus() {
         case .authorized, .provisional: permission = .allowed
         case .denied: permission = .denied
         default: permission = .notAsked
@@ -136,8 +132,22 @@ final class Notifier: NSObject {
         content.body = body
         content.threadIdentifier = kind.rawValue
         content.userInfo = ["kind": kind.rawValue]
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request) { _ in }
+        Self.deliver(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+    }
+
+    // Notification Center answers on its own queue. These calls are made outside the main actor,
+    // so their completion handlers are not main-actor closures: Swift 6 checks that at run time
+    // and stops the app when one runs on another thread.
+
+    /// Only the status comes back: the settings object is not Sendable.
+    nonisolated private static func authorizationStatus() async -> UNAuthorizationStatus {
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getNotificationSettings { continuation.resume(returning: $0.authorizationStatus) }
+        }
+    }
+
+    nonisolated private static func deliver(_ request: UNNotificationRequest) {
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 
     fileprivate func open(kindNamed name: String?) {
