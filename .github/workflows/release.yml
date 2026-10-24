@@ -37,14 +37,15 @@ jobs:
       - name: Test
         run: swift test
 
-      - name: Build universal Hector.app
-        run: scripts/bundle-app.sh --universal --zip
+      # Apple silicon only: Intel Macs are no longer supported (owner decision, 2026-10-24).
+      - name: Build Hector.app (arm64)
+        run: scripts/bundle-app.sh --zip
 
       - name: Launch the app (crash, CPU and memory)
         run: scripts/smoke-test.sh .build/Hector.app 20
 
       # Checks what users download, not the build folder: unpacked from the zip, both
-      # architectures in every binary, a valid signature, the right version, a matching checksum.
+      # arm64 (and no x86_64) in every binary, a valid signature, the right version, a matching checksum.
       - name: Check the zip
         run: |
           (cd .build && shasum -a 256 -c "$(basename "$ZIP").sha256")
@@ -54,8 +55,7 @@ jobs:
           for BIN in "$APP/Contents/MacOS/Hector" "$APP/Contents/Helpers/hector" "$APP/Contents/Helpers/hectord"; do
             ARCHS=$(lipo -archs "$BIN")
             echo "$BIN: $ARCHS"
-            case " $ARCHS " in *" arm64 "*) ;; *) echo "arm64 missing"; exit 1 ;; esac
-            case " $ARCHS " in *" x86_64 "*) ;; *) echo "x86_64 missing"; exit 1 ;; esac
+            test "$ARCHS" = "arm64" || { echo "expected arm64 only"; exit 1; }
           done
           codesign --verify --strict --deep "$APP"
           PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")

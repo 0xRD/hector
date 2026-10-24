@@ -192,6 +192,6 @@ Limits, also stated in the app:
 
 ## Distribution
 
-Releases are built by GitHub Actions from a tag: a universal (Apple silicon and Intel) `Hector.app`, ad-hoc signed, zipped with `ditto`, published with its SHA-256.
+Releases are built by GitHub Actions from a tag: an Apple silicon (arm64) `Hector.app`, ad-hoc signed, zipped with `ditto`, published with its SHA-256.
 
 Without notarization, Gatekeeper blocks the first launch of a downloaded app. Users allow it once in System Settings → Privacy & Security → Open Anyway, or remove the quarantine attribute. Building from source avoids the prompt entirely.

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  macOS 15+ · Apple silicon and Intel · Swift 6 · GPL-3.0 · no account, no telemetry
+  macOS 15+ · Apple silicon · Swift 6 · GPL-3.0 · no account, no telemetry
 </p>
 
 Hector is an open-source security app for macOS, in the spirit of Objective-See's tools ([LuLu](https://objective-see.org/products/lulu.html), [KnockKnock](https://objective-see.org/products/knockknock.html), [TaskExplorer](https://objective-see.org/products/taskexplorer.html), [ReiKey](https://objective-see.org/products/reikey.html)) and [Little Snitch](https://www.obdev.at/products/littlesnitch/), built to run **without a paid Apple Developer account**. He is named after the defender of Troy: the one who stands on the walls and keeps watch. He does not shout. He looks, tells you what he saw, and lets you decide.
@@ -130,7 +130,7 @@ To block, install the helper from the Blocklists screen; macOS asks for an admin
 
 ## Requirements
 
-- macOS 15 or later (Apple silicon or Intel)
+- macOS 15 or later on Apple silicon (Intel Macs: build from source with `scripts/bundle-app.sh --universal`)
 - Swift 6: Xcode 16 or later, or the matching Command Line Tools
 
 ## Build and test

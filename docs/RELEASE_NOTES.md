@@ -31,7 +31,7 @@ With Homebrew: `brew install --cask 0xrd/tap/hector` (or `brew upgrade` if you i
    - or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Hector.app`
 4. To block destinations, open **Blocklists** and click **Install helper…**. macOS asks for an administrator password once.
 
-Hector runs on macOS 15 or later, on Apple silicon and Intel.
+Hector runs on macOS 15 or later, on Apple silicon. Intel Macs are no longer supported by the release builds.
 
 The command-line tool ships inside the app. To use it from a terminal:
 
