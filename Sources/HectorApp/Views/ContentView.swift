@@ -246,7 +246,7 @@ struct ContentView: View {
             .insetSurface(cornerRadius: Radius.lg)
             // Hector peeks over the bottom edge of the map, in the South Pacific, watching the lines.
             .overlay(alignment: .bottomLeading) {
-                HectorPeek(gaze: .right)
+                LivelyHectorPeek(isAttentive: state.hovered != nil || state.hoveredCountry != nil, isResting: monitor.isPaused)
                     .frame(width: 34)
                     .padding(.leading, Spacing.xl)
                     .allowsHitTesting(false)

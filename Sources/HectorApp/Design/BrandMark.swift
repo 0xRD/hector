@@ -174,6 +174,8 @@ struct HectorMark: View {
     var crest: Color = .hectorCrest
     /// Forces the small details on or off; `nil` decides from the size.
     var detailed: Bool? = nil
+    /// Off when the eyes are drawn on their own layer, to move without redrawing the mark.
+    var showsEyes = true
 
     var body: some View {
         Canvas { context, size in
@@ -207,12 +209,14 @@ struct HectorMark: View {
         let shape = BrandGeometry.face()
         context.fill(shape, with: .color(face))
         context.stroke(shape, with: .color(ink), style: outline)
-        if detailed {
+        if detailed && showsEyes {
             if gaze == .resting {
                 context.stroke(BrandGeometry.eyes(gaze), with: .color(ink), style: StrokeStyle(lineWidth: lineWidth * 0.6, lineCap: .round))
             } else {
                 context.fill(BrandGeometry.eyes(gaze), with: .color(ink))
             }
+        }
+        if detailed {
             let mouth = StrokeStyle(lineWidth: lineWidth * 0.55, lineCap: .round)
             context.stroke(BrandGeometry.smile(), with: .color(ink), style: mouth)
         }
@@ -242,10 +246,11 @@ struct HectorPeek: View {
     var gaze: HectorGaze = .ahead
     /// How much of the mark shows, from the top (0.6: crest, helmet and eyes).
     var showing: CGFloat = 0.62
+    var showsEyes = true
 
     var body: some View {
         GeometryReader { proxy in
-            HectorMark(gaze: gaze, detailed: true)
+            HectorMark(gaze: gaze, detailed: true, showsEyes: showsEyes)
                 .frame(width: proxy.size.width, height: proxy.size.width)
                 .frame(height: proxy.size.height, alignment: .top)
                 .clipped()
