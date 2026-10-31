@@ -58,11 +58,13 @@ USAGE
       Nothing found is executed. Login items need root: they are read through the helper when it
       is installed.
 
-  hector processes [--json] [--flagged] [--tree]
-      Running processes with their parent, user, path and connections. Through the helper when it
-      is installed (arguments of every user), else your own processes in full and the others in part.
+  hector processes [--json] [--flagged] [--listening] [--tree]
+      Running processes with their parent, user, CPU, memory, path and connections. Through the
+      helper when it is installed (arguments of every user), else your own processes in full and
+      the others in part.
       --flagged   only processes running from a temporary, Downloads or hidden folder, or whose
                   executable was deleted
+      --listening only processes other machines can connect to
       --tree      indent children under their parent
 
   hector checkup [--json]

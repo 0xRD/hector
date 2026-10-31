@@ -132,10 +132,21 @@ struct PersistenceView: View {
                     SectionHeader(category.title, systemImage: category.symbol, style: .eyebrow)
                 }
             }
+            if let note = cronCoverageNote(items) {
+                Text(note).font(.caption).foregroundStyle(.secondary)
+            }
         }
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
         .canvasBackground()
+    }
+
+    /// An empty category has no section, and without root only some crontabs can be read: says
+    /// what was covered, so a missing section does not read as "no cron jobs on this Mac".
+    private func cronCoverageNote(_ items: [PersistenceItem]) -> String? {
+        guard state.search.isEmpty, security.persistence?.ranAsRoot == false else { return nil }
+        let found = items.contains { $0.category == .cronJob } ? "" : "No cron jobs in your crontab or /etc/crontab. "
+        return found + "The crontabs of root and other users cannot be read from here."
     }
 
     private var visibleItems: [PersistenceItem] {

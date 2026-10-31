@@ -369,6 +369,12 @@ enum DemoData {
             details: ["type": "app", "developer": "Example Notes Ltd"]
         ),
         PersistenceItem(
+            category: .cronJob, scope: .user, label: "/Users/demo/.local/bin/backup-notes --quiet",
+            executablePath: "/Users/demo/.local/bin/backup-notes",
+            arguments: ["/Users/demo/.local/bin/backup-notes", "--quiet"],
+            details: ["schedule": "0 9 * * 1", "user": "demo"]
+        ),
+        PersistenceItem(
             category: .systemExtension, scope: .system, label: "com.example.vpn.tunnel",
             executablePath: "/Applications/Example VPN.app", teamIdentifier: otherTeam,
             owningBundleIdentifier: "com.example.vpn", owningBundlePath: "/Applications/Example VPN.app",

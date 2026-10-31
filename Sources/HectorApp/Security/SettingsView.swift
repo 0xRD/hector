@@ -36,7 +36,7 @@ private struct NotificationSettings: View {
                 Text("Notify me when")
             } footer: {
                 Text("""
-                Notifications are made on this Mac and go nowhere else. They need Hector running, in the window or the                 menu bar (Settings → General). Clicking one opens the screen it is about.
+                Notifications are made on this Mac and go nowhere else. They need Hector running, in the window or the menu bar (Settings → General). Clicking one opens the screen it is about.
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
