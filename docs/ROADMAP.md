@@ -24,6 +24,8 @@ Hector is meant to run all the time and its helper runs as root, so these come b
   - [x] Update SECURITY.md with the result
   - [ ] Make the repository public
 
+- [ ] **Important, next release: root's crontab in Persistence.** The app reads only the user's own crontab and `/etc/crontab`; root's and other users' tabs in `/usr/lib/cron/tabs` need root, and root's crontab is a common place for malware to persist. Add a helper request for them. Keep the rule of `ProcessSnapshot.visible(to:)`: only the caller's and root's tabs, since cron lines can hold secrets. Check first that the helper can read that folder: macOS may refuse it even as root.
+
 ## Review of every screen on real data (2026-10-04)
 
 Every screen looked at with the owner's real data (about 60 connections, 59 persistence items, 630 processes, 37 keyboard taps). Bugs first, then UI, then new features.
