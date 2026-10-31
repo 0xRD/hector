@@ -1,3 +1,14 @@
+## What's new in 0.5
+
+- **Notifications:** four switches in Settings → Notifications, all off by default: a camera or microphone turning on, an app starting to read keystrokes, something new set to start by itself, and an app connecting for the first time. They are made on this Mac and go nowhere else.
+- **Persistence:** launch folders are watched while that notification is on, new items are labeled "New" until marked as seen, and the screen says which crontabs it could read.
+- **Checkup:** five more checks (screen lock, Find My Mac, AirDrop, third-party kernel extensions, Lockdown Mode), and it now says what changed since the last run.
+- **Processes:** CPU, memory and listening ports, with who can reach them; click a column header to sort, and use the "Show" menu or `hector processes --listening` to keep only what listens on the network.
+- **Connections:** zoom the map with ⌘ and the scroll wheel; the details panel stays closed once hidden, and has its own close button (⌥⌘I).
+- **Hector** watches the lines again, at no measurable cost, and holds his shield while blocking is on.
+
+Update the helper from Blocklists after installing, to see CPU, memory and ports for every user's processes.
+
 ## What's new in 0.4
 
 Netbite becomes **Hector**, a small all-in-one security app for macOS. Netbite stays the name of its network module, and 0.3 installs move over on their own: helper, blocklist, country database and VirusTotal key.
