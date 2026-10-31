@@ -27,6 +27,40 @@ public struct SocketInfo: Codable, Hashable, Sendable {
 
     /// Connected to a remote peer (as opposed to listening or unbound).
     public var hasRemote: Bool { remoteAddress != nil && remotePort != 0 }
+
+    /// Who can reach a listening socket.
+    public enum ListeningScope: String, Codable, Sendable {
+        /// Bound to every interface or to a network one: other machines can connect.
+        case network
+        /// Bound to the loopback address: only this Mac.
+        case thisMac
+    }
+
+    /// Waits for others: a TCP socket in `LISTEN`, or a UDP socket bound to a fixed port with no
+    /// peer. UDP sockets on ephemeral ports (49152 and up) are clients waiting for answers, not
+    /// servers.
+    public var isListening: Bool {
+        switch transport {
+        case .tcp: tcpState == "LISTEN"
+        case .udp: !hasRemote && localPort != 0 && localPort < 49152
+        }
+    }
+
+    /// `nil` when the socket is not listening.
+    public var listeningScope: ListeningScope? {
+        guard isListening else { return nil }
+        guard let local = localAddress else { return .network }
+        return Self.loopback.contains { $0.contains(local) } ? .thisMac : .network
+    }
+
+    private static let loopback: [CIDR] = ["127.0.0.0/8", "::1/128"].compactMap { CIDR($0) }
+
+    /// "TCP 22" or "UDP 127.0.0.1:53".
+    public var listeningLabel: String {
+        let protocolName = transport.rawValue.uppercased()
+        guard let local = localAddress else { return "\(protocolName) \(localPort)" }
+        return local.isV4 ? "\(protocolName) \(local):\(localPort)" : "\(protocolName) [\(local)]:\(localPort)"
+    }
 }
 
 /// The process that owns sockets, plus the app bundle it lives in when there is one.

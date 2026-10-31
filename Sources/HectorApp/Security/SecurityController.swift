@@ -27,6 +27,13 @@ final class SecurityController {
     private(set) var isScanningPersistence = false
     /// Why login items are missing, when the helper could not list them.
     private(set) var persistenceHelperIssue: String?
+    /// Items that appeared since an earlier scan (this launch or a previous one), until the user
+    /// marks them as seen.
+    private(set) var newPersistenceItems: Set<PersistenceItem.ID> = []
+    /// Called with the items that just appeared, after their signatures were read.
+    @ObservationIgnored var onNewPersistenceItems: (([PersistenceItem]) -> Void)?
+    @ObservationIgnored private let knownPersistenceFile = KnownSetFile(named: "known-persistence")
+    @ObservationIgnored private lazy var knownPersistence = knownPersistenceFile.load()
     var includeAppleItems = false
 
     // MARK: Processes
@@ -92,6 +99,7 @@ final class SecurityController {
         virusTotal = DemoData.virusTotal.mapValues { .done($0) }
         quarantine = DemoData.quarantine
         hasAPIKey = true
+        newPersistenceItems = [DemoData.selectedPersistenceItem]
     }
     #endif
 
@@ -102,16 +110,39 @@ final class SecurityController {
         isScanningPersistence = true
         defer { isScanningPersistence = false }
         let includeApple = includeAppleItems
-        let (report, issue) = await Task.detached(priority: .userInitiated) {
+        let (report, issue, readBackgroundTasks) = await Task.detached(priority: .userInitiated) {
             let (output, issue) = Self.backgroundTasksFromHelper()
             let options = PersistenceScanner.Options(includeApple: includeApple, backgroundTaskOutput: output)
-            return (PersistenceScanner().scan(options: options), issue)
+            return (PersistenceScanner().scan(options: options), issue, output != nil)
         }.value
         persistence = report
         persistenceHelperIssue = issue
+        let fresh = admitPersistence(report.items, readBackgroundTasks: readBackgroundTasks)
         let paths = report.items.filter { !$0.isInert }.compactMap(Self.codePath(of:))
         await analyzeSignatures(of: paths)
+        if !fresh.isEmpty { onNewPersistenceItems?(fresh) }
         lookUpAutomaticallyIfWanted(paths)
+    }
+
+    /// Records the scanned items as known and returns those never seen before. Each category is
+    /// its own group, so the first scan that can read one (login items need the helper) takes
+    /// what is there as known instead of announcing it. Apple's items are left out: the "Apple"
+    /// switch would otherwise make them all look new.
+    private func admitPersistence(_ items: [PersistenceItem], readBackgroundTasks: Bool) -> [PersistenceItem] {
+        let candidates = items.filter { $0.scope != .apple && !$0.isInert }
+        var fresh: Set<PersistenceItem.ID> = []
+        for category in PersistenceItem.Category.allCases {
+            if (category == .loginItem || category == .backgroundTask) && !readBackgroundTasks { continue }
+            let ids = candidates.filter { $0.category == category }.map(\.id)
+            fresh.formUnion(knownPersistence.admit(ids, group: category.rawValue))
+        }
+        knownPersistenceFile.save(knownPersistence)
+        newPersistenceItems.formUnion(fresh)
+        return candidates.filter { fresh.contains($0.id) }
+    }
+
+    func markPersistenceAsSeen() {
+        newPersistenceItems = []
     }
 
     /// The non-Apple paths among `paths`, looked up when the user asked for automatic lookups.
@@ -152,7 +183,7 @@ final class SecurityController {
         let (snapshot, throughHelper, flags) = await Task.detached(priority: .userInitiated) {
             var snapshot: ProcessSnapshot?
             if HelperClient.isInstalled, case .processes(let fromHelper)? = try? HelperClient.sendChecked(.processes, timeout: 10) {
-                snapshot = fromHelper
+                snapshot = fromHelper.fillingUsage()
             }
             let result = snapshot ?? ProcessCollector().snapshot()
             let flags = Dictionary(uniqueKeysWithValues: result.processes.map {

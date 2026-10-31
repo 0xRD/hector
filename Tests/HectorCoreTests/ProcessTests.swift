@@ -242,3 +242,82 @@ import Testing
         #expect(throws: ProcessControl.Refusal.exited) { try ProcessControl.verify(seen) }
     }
 }
+
+@Suite struct ProcessUsageTests {
+    @Test func convertsMachTicksAndComputesCPUShare() {
+        // Whatever the timebase, a tick count of zero is zero, and the conversion never shrinks
+        // ticks on Intel (1/1) or grows them less than 125/3 on Apple silicon.
+        #expect(ProcessCollector.nanoseconds(machTicks: 0) == 0)
+        let ticks: UInt64 = 3_000_000
+        let nanoseconds = ProcessCollector.nanoseconds(machTicks: ticks)
+        #expect(nanoseconds == ticks || nanoseconds == 125_000_000)
+        #expect(ProcessCollector.nanoseconds(machTicks: .max / 2) > 0)
+
+        #expect(ProcessCollector.cpuPercent(from: 0, to: 500_000_000, over: 1) == 50)
+        #expect(ProcessCollector.cpuPercent(from: 0, to: 2_000_000_000, over: 1) == 200)
+        // A reused PID restarts its counter: no figure rather than a wrong one.
+        #expect(ProcessCollector.cpuPercent(from: 10, to: 5, over: 1) == nil)
+        #expect(ProcessCollector.cpuPercent(from: 0, to: 5, over: 0) == nil)
+    }
+
+    @Test func snapshotMeasuresThisProcess() throws {
+        let snapshot = ProcessCollector().snapshot()
+        let me = try #require(snapshot.processes.first { $0.pid == getpid() })
+        #expect((me.memoryFootprint ?? 0) > 1_000_000)
+        #expect(me.cpuPercent != nil)
+    }
+
+    @Test func fillsUsageMissingFromAnOldHelper() throws {
+        let old = ProcessSnapshot(takenAt: Date(), processes: [
+            RunningProcess(pid: getpid(), parentPID: 1, userID: getuid(), name: "tests"),
+        ], ranAsRoot: true)
+        let filled = old.fillingUsage()
+        #expect((filled.processes[0].memoryFootprint ?? 0) > 0)
+        // A snapshot that already has figures is left alone.
+        var current = old
+        current.processes[0].memoryFootprint = 42
+        #expect(current.fillingUsage().processes[0].memoryFootprint == 42)
+    }
+
+    @Test func oldHelperAnswersStillDecode() throws {
+        let json = #"{"pid":12,"parentPID":1,"userID":501,"name":"old","arguments":[]}"#
+        let process = try JSONDecoder().decode(RunningProcess.self, from: Data(json.utf8))
+        #expect(process.cpuPercent == nil)
+        #expect(process.memoryFootprint == nil)
+    }
+}
+
+@Suite struct ListeningSocketTests {
+    private func tcp(_ local: String?, _ port: UInt16, state: String) -> SocketInfo {
+        SocketInfo(transport: .tcp, localAddress: local.flatMap(IPAddress.init), localPort: port,
+                   remoteAddress: nil, remotePort: 0, tcpState: state)
+    }
+
+    @Test func scopesListeningSockets() {
+        #expect(tcp(nil, 22, state: "LISTEN").listeningScope == .network)
+        #expect(tcp("192.168.1.20", 8080, state: "LISTEN").listeningScope == .network)
+        #expect(tcp("127.0.0.1", 5432, state: "LISTEN").listeningScope == .thisMac)
+        #expect(tcp("::1", 5432, state: "LISTEN").listeningScope == .thisMac)
+        #expect(tcp(nil, 51000, state: "ESTABLISHED").listeningScope == nil)
+        #expect(tcp("::1", 5432, state: "LISTEN").listeningLabel == "TCP [::1]:5432")
+        #expect(tcp(nil, 22, state: "LISTEN").listeningLabel == "TCP 22")
+    }
+
+    @Test func udpServersButNotClients() {
+        let server = SocketInfo(transport: .udp, localAddress: nil, localPort: 5353, remoteAddress: nil, remotePort: 0, tcpState: nil)
+        let client = SocketInfo(transport: .udp, localAddress: nil, localPort: 61000, remoteAddress: nil, remotePort: 0, tcpState: nil)
+        let connected = SocketInfo(transport: .udp, localAddress: nil, localPort: 5000,
+                                   remoteAddress: IPAddress("192.0.2.1"), remotePort: 443, tcpState: nil)
+        #expect(server.isListening)
+        #expect(!client.isListening)
+        #expect(!connected.isListening)
+    }
+
+    @Test func oneEntryPerPortAndProtocol() {
+        let twice = [tcp(nil, 22, state: "LISTEN"), tcp(nil, 22, state: "LISTEN"), tcp("127.0.0.1", 631, state: "LISTEN"),
+                     tcp(nil, 52000, state: "ESTABLISHED")]
+        #expect(ProcessCollector.listening(in: twice).map(\.listeningLabel) == ["TCP 22", "TCP 127.0.0.1:631"])
+        let process = RunningProcess(pid: 1, parentPID: 0, userID: 0, name: "sshd", listening: ProcessCollector.listening(in: twice))
+        #expect(process.listensOnNetwork)
+    }
+}

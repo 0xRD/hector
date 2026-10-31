@@ -28,7 +28,9 @@ extension CheckResult {
         case SecurityCheckup.CheckID.sip: "lock.shield"
         case SecurityCheckup.CheckID.gatekeeper: "checkmark.shield"
         case SecurityCheckup.CheckID.xprotect: "ladybug"
+        case SecurityCheckup.CheckID.kernelExtensions: "cpu"
         case SecurityCheckup.CheckID.fileVault: "internaldrive"
+        case SecurityCheckup.CheckID.screenLock: "lock.display"
         case SecurityCheckup.CheckID.firewall: "flame"
         case SecurityCheckup.CheckID.automaticUpdates: "arrow.down.circle"
         case SecurityCheckup.CheckID.macOSUpdates: "arrow.triangle.2.circlepath.circle"
@@ -36,15 +38,19 @@ extension CheckResult {
         case SecurityCheckup.CheckID.screenSharing: "rectangle.on.rectangle"
         case SecurityCheckup.CheckID.fileSharing: "folder"
         case SecurityCheckup.CheckID.remoteAppleEvents: "applescript"
+        case SecurityCheckup.CheckID.airDrop: "dot.radiowaves.left.and.right"
         case SecurityCheckup.CheckID.automaticLogin: "person.badge.key"
         case SecurityCheckup.CheckID.guestAccount: "person.crop.circle.badge.questionmark"
+        case SecurityCheckup.CheckID.findMy: "location.circle"
         case SecurityCheckup.CheckID.deviceManagement: "building.2"
+        case SecurityCheckup.CheckID.lockdownMode: "hand.raised"
         default: "checklist"
         }
     }
 }
 
-/// SIP, Gatekeeper, FileVault, the firewall, updates, sharing and MDM, each with how to fix it.
+/// SIP, Gatekeeper, FileVault, the screen lock, the firewall, updates, sharing, Find My and MDM,
+/// each with how to fix it.
 struct CheckupView: View {
     @Environment(CheckupController.self) private var checkup
 
@@ -90,7 +96,7 @@ struct CheckupView: View {
             CheckupReportView(report: report)
         } else {
             EmptyStateView("Checking…", systemImage: "checklist",
-                           message: "SIP, Gatekeeper, FileVault, firewall, updates, sharing and device management.",
+                           message: "SIP, Gatekeeper, FileVault, screen lock, firewall, updates, sharing, Find My and device management.",
                            compact: true)
                 .frame(maxWidth: .infinity)
                 .padding(.top, Spacing.xxl)
@@ -100,6 +106,7 @@ struct CheckupView: View {
 
 /// The results, grouped: what needs attention first, then what could not be read, then the rest.
 private struct CheckupReportView: View {
+    @Environment(CheckupController.self) private var checkup
     let report: CheckupReport
 
     var body: some View {
@@ -128,6 +135,12 @@ private struct CheckupReportView: View {
 
     @ViewBuilder
     private func banners(attention: [CheckResult], unknown: [CheckResult]) -> some View {
+        if checkup.changedCount > 0, let since = checkup.previous?.checkedAt {
+            let count = checkup.changedCount
+            Banner("\(count) change\(count == 1 ? "" : "s") since the last checkup",
+                   message: "Compared with \(Display.dateTime(since)). Each changed check says what it was before.",
+                   kind: .info, systemImage: "arrow.left.arrow.right")
+        }
         if attention.isEmpty && unknown.isEmpty {
             Banner("All quiet", message: "Every setting checked is where it should be.", kind: .ok)
         }
@@ -195,6 +208,7 @@ private struct PassingCard: View {
 }
 
 private struct CheckRow: View {
+    @Environment(CheckupController.self) private var checkup
     let result: CheckResult
 
     var body: some View {
@@ -209,7 +223,15 @@ private struct CheckRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: Spacing.md)
-            StatusPill(result.status.label, kind: result.status.kind, size: .small)
+            VStack(alignment: .trailing, spacing: Spacing.xxs) {
+                StatusPill(result.status.label, kind: result.status.kind, size: .small)
+                if let before = checkup.previousStatus(of: result) {
+                    Text("was \(before.label)")
+                        .font(.caption)
+                        .foregroundStyle(before.kind.color)
+                        .help("Its verdict in the previous checkup")
+                }
+            }
         }
         .accessibilityElement(children: .combine)
     }

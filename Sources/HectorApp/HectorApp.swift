@@ -17,6 +17,12 @@ struct HectorApp: App {
     private let checkup = CheckupController()
     private let privacy = PrivacyController()
     private let updates = UpdateChecker()
+    private let notifier = Notifier()
+    private let alerts = AlertWatcher()
+
+    private var alertWiring: AlertWiring {
+        AlertWiring(notifier: notifier, alerts: alerts, state: windowState, security: security, privacy: privacy, monitor: monitor)
+    }
 
     var body: some Scene {
         Window("Hector", id: "main") {
@@ -28,6 +34,8 @@ struct HectorApp: App {
                 .environment(checkup)
                 .environment(privacy)
                 .environment(updates)
+                .environment(notifier)
+                .modifier(alertWiring)
                 .tint(.hectorOK)
                 // English words in dates and numbers formatted by SwiftUI (see `Display`).
                 .environment(\.locale, Display.locale)
@@ -67,6 +75,7 @@ struct HectorApp: App {
             MenuBarLabel()
                 .environment(blocking)
                 .environment(privacy)
+                .modifier(alertWiring)
                 // The label lives as long as the icon, window or not: what must keep running
                 // starts here.
                 .task {
@@ -89,6 +98,7 @@ struct HectorApp: App {
                 .environment(windowState)
                 .environment(preferences)
                 .environment(updates)
+                .environment(notifier)
                 .tint(.hectorTint)
                 .environment(\.locale, Display.locale)
         }

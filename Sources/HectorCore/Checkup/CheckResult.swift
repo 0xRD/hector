@@ -82,6 +82,10 @@ public enum SettingsPane {
     public static let sharing = url("com.apple.Sharing-Settings.extension")
     public static let usersGroups = url("com.apple.Users-Groups-Settings.extension")
     public static let deviceManagement = url("com.apple.Profiles-Settings.extension")
+    public static let lockScreen = url("com.apple.Lock-Screen-Settings.extension")
+    public static let loginItems = url("com.apple.LoginItems-Settings.extension")
+    public static let airDrop = url("com.apple.AirDrop-Handoff-Settings.extension")
+    public static let appleAccount = url("com.apple.systempreferences.AppleIDSettings")
 
     /// True for the links above; anything else must not be opened.
     public static func isSettingsLink(_ url: URL) -> Bool { url.scheme == scheme }

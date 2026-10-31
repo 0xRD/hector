@@ -174,6 +174,8 @@ struct HectorMark: View {
     var crest: Color = .hectorCrest
     /// Forces the small details on or off; `nil` decides from the size.
     var detailed: Bool? = nil
+    /// Off when the eyes are drawn on their own layer, to move without redrawing the mark.
+    var showsEyes = true
 
     var body: some View {
         Canvas { context, size in
@@ -207,12 +209,14 @@ struct HectorMark: View {
         let shape = BrandGeometry.face()
         context.fill(shape, with: .color(face))
         context.stroke(shape, with: .color(ink), style: outline)
-        if detailed {
+        if detailed && showsEyes {
             if gaze == .resting {
                 context.stroke(BrandGeometry.eyes(gaze), with: .color(ink), style: StrokeStyle(lineWidth: lineWidth * 0.6, lineCap: .round))
             } else {
                 context.fill(BrandGeometry.eyes(gaze), with: .color(ink))
             }
+        }
+        if detailed {
             let mouth = StrokeStyle(lineWidth: lineWidth * 0.55, lineCap: .round)
             context.stroke(BrandGeometry.smile(), with: .color(ink), style: mouth)
         }
@@ -242,16 +246,68 @@ struct HectorPeek: View {
     var gaze: HectorGaze = .ahead
     /// How much of the mark shows, from the top (0.6: crest, helmet and eyes).
     var showing: CGFloat = 0.62
+    var showsEyes = true
 
     var body: some View {
         GeometryReader { proxy in
-            HectorMark(gaze: gaze, detailed: true)
+            HectorMark(gaze: gaze, detailed: true, showsEyes: showsEyes)
                 .frame(width: proxy.size.width, height: proxy.size.width)
                 .frame(height: proxy.size.height, alignment: .top)
                 .clipped()
         }
         .aspectRatio(1 / showing, contentMode: .fit)
         .accessibilityHidden(true)
+    }
+}
+
+/// Hector holding his round shield (an aspis) in front of him: what the app shows while it
+/// blocks. The shield takes the status color; Hector stands a little back, behind it.
+///
+///     HectorShield().frame(width: 30, height: 30)
+struct HectorShield: View {
+    var gaze: HectorGaze = .ahead
+    /// The face of the shield.
+    var tint: Color = .hectorOK
+    var ink: Color = .hectorInfo
+
+    var body: some View {
+        GeometryReader { proxy in
+            let side: CGFloat = min(proxy.size.width, proxy.size.height)
+            ZStack(alignment: .topLeading) {
+                HectorMark(gaze: gaze, ink: ink, detailed: side >= 24)
+                    .frame(width: side * 0.84, height: side * 0.84)
+                Canvas { context, size in
+                    let scale: CGFloat = min(size.width, size.height) / BrandGeometry.grid
+                    context.scaleBy(x: scale, y: scale)
+                    drawShield(in: context, detailed: side >= 24)
+                }
+                .frame(width: side, height: side)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityHidden(true)
+    }
+
+    private func drawShield(in context: GraphicsContext, detailed: Bool) {
+        let center = CGPoint(x: 17.9, y: 17.9)
+        let face = Path(ellipseIn: CGRect(x: center.x - 5.8, y: center.y - 5.8, width: 11.6, height: 11.6))
+        let shading = GraphicsContext.Shading.linearGradient(
+            Gradient(colors: [tint, tint.opacity(0.72)]),
+            startPoint: CGPoint(x: center.x, y: center.y - 5.8),
+            endPoint: CGPoint(x: center.x, y: center.y + 5.8)
+        )
+        context.fill(face, with: shading)
+        if detailed {
+            // The bronze rim of an aspis, and a light catching its top.
+            let rim = Path(ellipseIn: CGRect(x: center.x - 4.1, y: center.y - 4.1, width: 8.2, height: 8.2))
+            context.stroke(rim, with: .color(.white.opacity(0.4)), style: StrokeStyle(lineWidth: 0.7))
+            var shine = Path()
+            shine.addArc(center: center, radius: 4.95, startAngle: .degrees(-150), endAngle: .degrees(-100), clockwise: false)
+            context.stroke(shine, with: .color(.white.opacity(0.55)), style: StrokeStyle(lineWidth: 0.8, lineCap: .round))
+        }
+        let boss = Path(ellipseIn: CGRect(x: center.x - 1.3, y: center.y - 1.3, width: 2.6, height: 2.6))
+        context.fill(boss, with: .color(ink.opacity(0.85)))
+        context.stroke(face, with: .color(ink), style: StrokeStyle(lineWidth: 1.3))
     }
 }
 

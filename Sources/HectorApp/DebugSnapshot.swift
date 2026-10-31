@@ -18,6 +18,8 @@ import SwiftUI
 /// - `HECTOR_DEBUG_PROCESS=PID` selects that process on the Processes screen and shows its details.
 /// - `HECTOR_DEBUG_CLICK=X,Y` clicks the window at that point, in points from its top-left corner,
 ///   just before the snapshot; `X,Y;X,Y` clicks several points in turn.
+/// - `HECTOR_DEBUG_SCROLL=X,Y,LINES` scrolls the wheel that many lines with ⌘ held, at that
+///   point of the window, just before the snapshot (positive scrolls up: zooms the map in).
 /// - `HECTOR_APPEARANCE=light` or `dark` forces the appearance, whatever the system uses.
 /// - `HECTOR_DEMO=1` shows fixed sample data instead of this Mac's (see `DemoData`).
 @MainActor
@@ -72,6 +74,12 @@ enum DebugSnapshot {
                     await click(at: point)
                     try? await Task.sleep(for: .milliseconds(350))
                 }
+            }
+        }
+        if let values = environment["HECTOR_DEBUG_SCROLL"]?.split(separator: ",").compactMap({ Double($0) }), values.count == 3 {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(max(delay - 1.5, 0.5)))
+                await commandScroll(at: CGPoint(x: values[0], y: values[1]), lines: Int32(values[2]))
             }
         }
         guard let path = environment["HECTOR_SNAPSHOT"] else { return }
@@ -137,6 +145,27 @@ enum DebugSnapshot {
             // A person holds the button for a moment, and the view can update in between.
             try? await Task.sleep(for: .milliseconds(150))
         }
+    }
+
+    /// Through the event queue, not `sendEvent`: local event monitors only see queued events.
+    private static func commandScroll(at point: CGPoint, lines: Int32) async {
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentViewController != nil }),
+              let frameView = window.contentView?.superview,
+              let screenHeight = NSScreen.screens.first?.frame.height else { return }
+        // The map takes ⌘-scrolls only where its window is the one on screen.
+        for _ in 0..<20 where !window.isKeyWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        let inWindow = CGPoint(x: point.x, y: frameView.bounds.height - point.y)
+        let onScreen = window.convertPoint(toScreen: inWindow)
+        guard let cgEvent = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: lines, wheel2: 0, wheel3: 0) else { return }
+        cgEvent.location = CGPoint(x: onScreen.x, y: screenHeight - onScreen.y)
+        cgEvent.flags = .maskCommand
+        guard let event = NSEvent(cgEvent: cgEvent) else { return }
+        FileHandle.standardError.write(Data("hector: ⌘-scrolling \(lines) at \(point)\n".utf8))
+        NSApp.postEvent(event, atStart: false)
     }
 
     private static func savePNG(_ image: CGImage?, to url: URL) {

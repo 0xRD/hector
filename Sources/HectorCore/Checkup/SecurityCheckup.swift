@@ -1,9 +1,9 @@
 import Darwin
 import Foundation
 
-/// Reviews the Mac's main security settings: SIP, Gatekeeper, XProtect, FileVault, the firewall,
-/// automatic updates, pending macOS updates, sharing services, automatic login, the guest account
-/// and MDM enrollment.
+/// Reviews the Mac's main security settings: SIP, Gatekeeper, XProtect, kernel extensions,
+/// FileVault, the screen lock, the firewall, automatic updates, pending macOS updates, sharing
+/// services, AirDrop, automatic login, the guest account, Find My, MDM enrollment and Lockdown Mode.
 ///
 /// Read-only by design: it runs Apple's own tools by absolute path with fixed argument arrays
 /// (never through a shell, never a path found on disk) and reads world-readable preference files.
@@ -19,6 +19,8 @@ public struct SecurityCheckup: Sendable {
         case stealthMode
         case launchdOverrides
         case enrollment
+        case screenLock
+        case kernelExtensions
 
         var executable: String {
             switch self {
@@ -28,6 +30,8 @@ public struct SecurityCheckup: Sendable {
             case .firewall, .stealthMode: "/usr/libexec/ApplicationFirewall/socketfilterfw"
             case .launchdOverrides: "/bin/launchctl"
             case .enrollment: "/usr/bin/profiles"
+            case .screenLock: "/usr/sbin/sysadminctl"
+            case .kernelExtensions: "/usr/bin/kmutil"
             }
         }
 
@@ -42,6 +46,10 @@ public struct SecurityCheckup: Sendable {
             case .launchdOverrides: ["print-disabled", "system"]
             // `status` only reads local state; `show -type enrollment` would contact Apple.
             case .enrollment: ["status", "-type", "enrollment"]
+            // The current user's setting; no password is asked for `status`.
+            case .screenLock: ["-screenLock", "status"]
+            // Lists what is loaded; the variant only silences a note on standard error.
+            case .kernelExtensions: ["showloaded", "--list-only", "--variant-suffix", "release"]
             }
         }
 
@@ -53,6 +61,8 @@ public struct SecurityCheckup: Sendable {
             case .firewall, .stealthMode: "socketfilterfw"
             case .launchdOverrides: "launchctl"
             case .enrollment: "profiles"
+            case .screenLock: "sysadminctl"
+            case .kernelExtensions: "kmutil"
             }
         }
     }
@@ -62,7 +72,9 @@ public struct SecurityCheckup: Sendable {
         public static let sip = "sip"
         public static let gatekeeper = "gatekeeper"
         public static let xprotect = "xprotect"
+        public static let kernelExtensions = "kernel-extensions"
         public static let fileVault = "filevault"
+        public static let screenLock = "screen-lock"
         public static let firewall = "firewall"
         public static let automaticUpdates = "automatic-updates"
         public static let macOSUpdates = "macos-updates"
@@ -70,27 +82,43 @@ public struct SecurityCheckup: Sendable {
         public static let screenSharing = "screen-sharing"
         public static let fileSharing = "file-sharing"
         public static let remoteAppleEvents = "remote-apple-events"
+        public static let airDrop = "airdrop"
         public static let automaticLogin = "automatic-login"
         public static let guestAccount = "guest-account"
+        public static let findMy = "find-my"
         public static let deviceManagement = "device-management"
+        public static let lockdownMode = "lockdown-mode"
     }
 
     /// Prefix for system paths such as `/Library/Preferences`; `/` on a real Mac. Injectable so
     /// tests can use a folder of fixtures.
     public var root: URL
+    /// The home folder whose preferences are read (AirDrop, Lockdown Mode): the user's own,
+    /// or under `sudo` the one of the user who ran it. Injectable for tests.
+    public var home: URL
     public var tools: ToolRunner
     /// The macOS version the settings belong to. Injectable for tests.
     public var systemVersion: OperatingSystemVersion
     /// Whether a local user exists. Injectable for tests.
     public var userExists: @Sendable (String) -> Bool
 
-    public init(root: URL = URL(fileURLWithPath: "/"), tools: ToolRunner = .live,
+    public init(root: URL = URL(fileURLWithPath: "/"), home: URL = SecurityCheckup.userHome, tools: ToolRunner = .live,
                 systemVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion,
                 userExists: @escaping @Sendable (String) -> Bool = { getpwnam($0) != nil }) {
         self.root = root
+        self.home = home
         self.tools = tools
         self.systemVersion = systemVersion
         self.userExists = userExists
+    }
+
+    /// The logged-in user's home, also under `sudo` (whose own home is root's).
+    public static var userHome: URL {
+        if geteuid() == 0, let name = ProcessInfo.processInfo.environment["SUDO_USER"], let entry = getpwnam(name),
+           let directory = entry.pointee.pw_dir {
+            return URL(fileURLWithPath: String(cString: directory), isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
     }
 
     public func run() -> CheckupReport {
@@ -139,6 +167,12 @@ public struct SecurityCheckup: Sendable {
         var guestUserExists = true
         /// Contents of the Remote Management state file, when present.
         var remoteManagement: String?
+        /// /Library/Preferences/com.apple.FindMyMac.plist, world-readable.
+        var findMyMac: FileRead = .missing
+        /// The user's com.apple.sharingd (AirDrop).
+        var sharingd: FileRead = .missing
+        /// The user's global preferences (Lockdown Mode).
+        var globalPreferences: FileRead = .missing
     }
 
     func gatherInputs() -> Inputs {
@@ -164,6 +198,9 @@ public struct SecurityCheckup: Sendable {
         inputs.guestUserExists = userExists("Guest")
         let managementFile = path("Library/Application Support/Apple/Remote Desktop/RemoteManagement.launchd")
         inputs.remoteManagement = try? String(contentsOfFile: managementFile, encoding: .utf8)
+        inputs.findMyMac = readPlist("Library/Preferences/com.apple.FindMyMac.plist")
+        inputs.sharingd = readPlist(home.appending(path: "Library/Preferences/com.apple.sharingd.plist").path)
+        inputs.globalPreferences = readPlist(home.appending(path: "Library/Preferences/.GlobalPreferences.plist").path)
         return inputs
     }
 
@@ -185,8 +222,9 @@ public struct SecurityCheckup: Sendable {
         root.appending(path: relative).path
     }
 
+    /// Reads a property list under `root`, or at an absolute path.
     private func readPlist(_ relative: String) -> FileRead {
-        let file = path(relative)
+        let file = relative.hasPrefix("/") ? relative : path(relative)
         guard FileManager.default.fileExists(atPath: file) else { return .missing }
         guard let data = FileManager.default.contents(atPath: file),
               let dictionary = CheckupParsers.dictionary(data) else { return .unreadable }
@@ -219,7 +257,9 @@ public struct SecurityCheckup: Sendable {
             sip(inputs.outputs[.sip]),
             gatekeeper(inputs.outputs[.gatekeeper]),
             xprotect(inputs.xprotect, updates: inputs.updates),
+            kernelExtensions(inputs.outputs[.kernelExtensions]),
             fileVault(inputs.outputs[.fileVault]),
+            screenLock(inputs.outputs[.screenLock]),
             firewall(inputs.outputs[.firewall], stealth: inputs.outputs[.stealthMode]),
             automaticUpdates(inputs.updates),
             macOSUpdates(inputs.updateStatus, systemVersion: inputs.systemVersion, now: inputs.now),
@@ -229,9 +269,12 @@ public struct SecurityCheckup: Sendable {
                            whenOn: "On: folders of this Mac are shared over the network (SMB)."),
             sharingService(launchd, id: CheckID.remoteAppleEvents, title: "Remote Apple Events", label: "com.apple.AEServer",
                            whenOn: "On: apps on other Macs can send Apple events to this one."),
+            airDrop(inputs.sharingd),
             automaticLogin(inputs.loginWindow, kcpasswordExists: inputs.kcpasswordExists),
             guestAccount(inputs.loginWindow, guestUserExists: inputs.guestUserExists),
+            findMy(inputs.findMyMac),
             deviceManagement(inputs.outputs[.enrollment]),
+            lockdownMode(inputs.globalPreferences),
         ]
     }
 
@@ -324,6 +367,59 @@ public struct SecurityCheckup: Sendable {
         case nil:
             return result(.unknown, unexpected(.fileVault))
         }
+    }
+
+    /// Third-party kernel extensions run inside the kernel, with no sandbox: one bug or one
+    /// malicious update owns the Mac. System extensions and DriverKit replace most of them.
+    static func kernelExtensions(_ output: ToolOutput?) -> CheckResult {
+        let fix = "Remove the app that installed it if you no longer use it, or update it to a version that uses a system "
+            + "extension. Allowed extensions are listed in System Settings → General → Login Items & Extensions."
+        func result(_ status: CheckResult.Status, _ finding: String) -> CheckResult {
+            CheckResult(id: CheckID.kernelExtensions, title: "Kernel extensions", status: status, finding: finding,
+                        howToFix: fix, settingsURL: SettingsPane.loginItems)
+        }
+        if let issue = problem(output, .kernelExtensions) { return result(.unknown, issue) }
+        guard let found = CheckupParsers.thirdPartyKernelExtensions(text(output)) else {
+            return result(.unknown, unexpected(.kernelExtensions))
+        }
+        if found.isEmpty { return result(.pass, "None from other developers: only Apple's code runs in the kernel.") }
+        let shown = Display.list(Array(found.prefix(4)) + (found.count > 4 ? ["\(found.count - 4) more"] : []))
+        let one = found.count == 1
+        return result(.warning, "\(found.count) from other developers \(one ? "is" : "are") loaded (\(shown)): "
+            + "\(one ? "it runs" : "they run") with the kernel's full rights.")
+    }
+
+    /// How soon a password is asked once the screen saver starts or the display sleeps.
+    static func screenLock(_ output: ToolOutput?) -> CheckResult {
+        let fix = "System Settings → Lock Screen → “Require password after screen saver begins or display is turned off”: "
+            + "Immediately, or within 5 minutes."
+        func result(_ status: CheckResult.Status, _ finding: String) -> CheckResult {
+            CheckResult(id: CheckID.screenLock, title: "Screen lock", status: status, finding: finding, howToFix: fix,
+                        settingsURL: SettingsPane.lockScreen)
+        }
+        if let issue = problem(output, .screenLock) { return result(.unknown, issue) }
+        switch CheckupParsers.screenLock(text(output)) {
+        case .immediate?:
+            return result(.pass, "A password is asked as soon as the screen saver starts or the display sleeps.")
+        case .after(let seconds)?:
+            let delay = delayText(seconds)
+            return seconds <= 300
+                ? result(.pass, "A password is asked \(delay) after the screen saver starts or the display sleeps.")
+                : result(.warning, "A password is asked only \(delay) after the screen saver starts: anyone at the desk "
+                    + "meanwhile gets in.")
+        case .off?:
+            return result(.fail, "Off: waking this Mac from sleep or the screen saver needs no password.")
+        case nil:
+            return result(.unknown, unexpected(.screenLock))
+        }
+    }
+
+    /// "5 seconds", "1 minute", "8 hours": the choices System Settings offers.
+    static func delayText(_ seconds: Int) -> String {
+        func unit(_ count: Int, _ name: String) -> String { "\(count) \(name)\(count == 1 ? "" : "s")" }
+        if seconds >= 3600, seconds % 3600 == 0 { return unit(seconds / 3600, "hour") }
+        if seconds >= 60, seconds % 60 == 0 { return unit(seconds / 60, "minute") }
+        return unit(seconds, "second")
     }
 
     static func firewall(_ output: ToolOutput?, stealth: ToolOutput?) -> CheckResult {
@@ -466,6 +562,27 @@ public struct SecurityCheckup: Sendable {
         return isEnabled(label, in: services) ? result(.warning, whenOn) : result(.pass, "Off.")
     }
 
+    /// AirDrop open to everyone lets strangers nearby push files and pictures; recent macOS turns
+    /// "Everyone" back to "Contacts Only" after 10 minutes, older versions keep it.
+    static func airDrop(_ sharingd: FileRead) -> CheckResult {
+        let fix = "Control Center → AirDrop, or Finder → Go → AirDrop → “Allow me to be discovered by”: Contacts Only, "
+            + "or No One when you do not use it."
+        func result(_ status: CheckResult.Status, _ finding: String) -> CheckResult {
+            CheckResult(id: CheckID.airDrop, title: "AirDrop", status: status, finding: finding, howToFix: fix,
+                        settingsURL: SettingsPane.airDrop)
+        }
+        if case .unreadable = sharingd { return result(.unknown, "Unknown: AirDrop's settings could not be read.") }
+        let value = sharingd.values?["DiscoverableMode"]
+        // Missing means the default since macOS 14: contacts only.
+        guard value != nil else { return result(.pass, "Contacts Only: only people in your contacts can see this Mac.") }
+        switch CheckupParsers.airDropMode(value) {
+        case .off?: return result(.pass, "Off: this Mac cannot be seen with AirDrop.")
+        case .contactsOnly?: return result(.pass, "Contacts Only: only people in your contacts can see this Mac.")
+        case .everyone?: return result(.warning, "Everyone: anyone nearby can see this Mac and offer it files.")
+        case nil: return result(.unknown, "Unknown: unexpected AirDrop setting.")
+        }
+    }
+
     static func automaticLogin(_ loginWindow: FileRead, kcpasswordExists: Bool) -> CheckResult {
         let fix = "System Settings → Users & Groups → “Automatically log in as”: Off. Turning FileVault on also turns it off."
         func result(_ status: CheckResult.Status, _ finding: String) -> CheckResult {
@@ -499,6 +616,36 @@ public struct SecurityCheckup: Sendable {
         // The switch can outlive the account: without a Guest user, there is nobody to log in as.
         guard guestUserExists else { return result(.pass, "Off: there is no Guest user on this Mac.") }
         return result(.warning, "On: anyone can log in as Guest, without a password.")
+    }
+
+    /// Find My Mac also turns on Activation Lock: a stolen Mac cannot be erased and reused
+    /// without the owner's Apple Account.
+    static func findMy(_ findMyMac: FileRead) -> CheckResult {
+        let fix = "System Settings → your name → iCloud → Find My Mac: On. It also turns on Activation Lock."
+        func result(_ status: CheckResult.Status, _ finding: String) -> CheckResult {
+            CheckResult(id: CheckID.findMy, title: "Find My Mac", status: status, finding: finding, howToFix: fix,
+                        settingsURL: SettingsPane.appleAccount)
+        }
+        if case .unreadable = findMyMac { return result(.unknown, "Unknown: Find My's state could not be read.") }
+        if CheckupParsers.bool(findMyMac.values?["FMMEnabled"]) == true {
+            return result(.pass, "On: a lost Mac can be located, locked or erased, and Activation Lock stops a thief reusing it.")
+        }
+        return result(.warning, "Off: a lost or stolen Mac cannot be located, and anyone can erase and reuse it.")
+    }
+
+    /// Information only: Lockdown Mode is for people who may be personally targeted, so being
+    /// off is never a problem.
+    static func lockdownMode(_ globalPreferences: FileRead) -> CheckResult {
+        let fix = "System Settings → Privacy & Security → Lockdown Mode. Meant for people who may be personally targeted "
+            + "by sophisticated attacks; it turns off features that such attacks use."
+        func result(_ finding: String) -> CheckResult {
+            CheckResult(id: CheckID.lockdownMode, title: "Lockdown Mode", status: .pass, finding: finding, howToFix: fix,
+                        settingsURL: SettingsPane.privacySecurity)
+        }
+        if CheckupParsers.bool(globalPreferences.values?["LDMGlobalEnabled"]) == true {
+            return result("On: message attachments, web technologies and wired accessories are restricted.")
+        }
+        return result("Off, as on most Macs. Information only: worth turning on if you may be personally targeted.")
     }
 
     static func deviceManagement(_ output: ToolOutput?) -> CheckResult {

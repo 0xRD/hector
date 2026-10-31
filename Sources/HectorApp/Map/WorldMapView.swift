@@ -50,6 +50,7 @@ struct WorldMapView: View {
             let arcs = detailed ? placedArcs(geometry) : []
             let nodes = detailed ? [] : countryNodes(geometry)
             ZStack(alignment: .topLeading) {
+                ScrollZoomMonitor { factor, point in zoom(by: factor, around: point, size: size) }
                 Canvas { context, _ in
                     drawLand(in: &context, geometry: geometry)
                     if detailed {
@@ -215,6 +216,19 @@ struct WorldMapView: View {
                 state.mapViewport = next.clamped(to: size)
             }
             .onEnded { _ in state.mapGestureStart = nil }
+    }
+
+    /// Zooms keeping the canvas point under `point` (view coordinates) where it is.
+    private func zoom(by factor: CGFloat, around point: CGPoint, size: CGSize) {
+        let start = state.mapViewport
+        let anchor = MapGeometry(size: size, viewport: start).canvasPoint(point)
+        var next = start
+        next.zoom = min(max(start.zoom * factor, 1), MapViewport.maximumZoom)
+        guard next.zoom != start.zoom else { return }
+        let scale = MapGeometry.fitScale(size) * next.zoom
+        next.center = CGPoint(x: anchor.x - (point.x - size.width / 2) / scale,
+                              y: anchor.y - (point.y - size.height / 2) / scale)
+        state.mapViewport = next.clamped(to: size)
     }
 
     private func zoom(by factor: CGFloat, size: CGSize) {

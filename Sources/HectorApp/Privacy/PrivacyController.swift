@@ -30,6 +30,8 @@ final class PrivacyController {
     static let maximumEvents = 500
 
     @ObservationIgnored private var monitor: CaptureDeviceMonitor?
+    /// Called with each batch of new camera and microphone events, oldest first.
+    @ObservationIgnored var onEvents: (([CaptureEvent]) -> Void)?
 
     // MARK: - Keyboard taps
 
@@ -91,6 +93,7 @@ final class PrivacyController {
         if microphoneUsers != snapshot.microphoneUsers { microphoneUsers = snapshot.microphoneUsers }
         if cameraUsers != snapshot.cameraUsers { cameraUsers = snapshot.cameraUsers }
         guard !newEvents.isEmpty else { return }
+        onEvents?(newEvents)
         events.insert(contentsOf: newEvents.reversed(), at: 0)
         if events.count > Self.maximumEvents { events.removeLast(events.count - Self.maximumEvents) }
     }

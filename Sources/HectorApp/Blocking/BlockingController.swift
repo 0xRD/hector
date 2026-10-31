@@ -20,6 +20,9 @@ final class BlockingController {
 
     private(set) var helper: HelperState = .checking
     private(set) var isWorking = false
+    /// The installed helper lacks something this build of the app relies on, even at the same
+    /// version number (a development build, for instance).
+    private(set) var helperOutdated = false
     private(set) var lastError: String?
 
     var draft: Blocklist {
@@ -114,6 +117,8 @@ final class BlockingController {
         do {
             let response = try await Task.detached { try HelperClient.send(.status, timeout: 10) }.value
             handle(response)
+            let info = await Task.detached { try? HelperClient.info(timeout: 2) }.value
+            helperOutdated = info?.isOutdated ?? false
             // First run with the helper already set up elsewhere (CLI): start from what it enforces.
             if !FileManager.default.fileExists(atPath: Self.draftURL.path), let applied = helperStatus?.blocklist {
                 draft = applied
@@ -180,7 +185,7 @@ final class BlockingController {
         // refuses connections for a moment: wait until a helper of this version answers.
         for _ in 0..<40 {
             let info = await Task.detached { try? HelperClient.info(timeout: 1) }.value
-            if info?.version == HectorVersion.current { break }
+            if let info, info.version == HectorVersion.current, !info.isOutdated { break }
             try? await Task.sleep(for: .milliseconds(250))
         }
         await refresh()

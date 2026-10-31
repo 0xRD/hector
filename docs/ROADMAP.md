@@ -54,14 +54,25 @@ Every screen looked at with the owner's real data (about 60 connections, 59 pers
 - [x] Settings → General → Open Hector at login (`SMAppService.mainApp`, no Developer ID needed); shows when it was switched off in System Settings
 - [x] Menu bar mode: keeps running with the window closed (no Dock icon then), a template Hector in the menu bar (watching while blocking, resting otherwise; camera and mic symbols when in use), a panel with the blocking state, devices in use and the last camera and mic events; Settings → General → Keep running in the menu bar (on by default)
   - [ ] Check on a real login that "Open at login" starts Hector in the menu bar without a window (the launch event's login-item flag, untested with `SMAppService`)
-- [ ] Notifications: a camera or microphone turning on, a new keyboard tap that is active, a new persistence item, a new app making connections (each switchable)
-- [ ] Persistence watch (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
+- [x] Notifications: a camera or microphone turning on, a new keyboard tap that is active, a new persistence item, a new app making connections (each switchable in Settings → Notifications, all off by default; a click opens the screen)
+- [ ] Persistence watch, real-time alerts (in the spirit of BlockBlock): watch the launch agent and daemon folders and the background task list, and notify with the item's signature when something new appears; "new since last scan" badge
+  - [x] Launch folders watched with FSEvents while the notification is on, a rescan every hour for the rest (login items and background tasks through the helper, extensions, profiles); "New" label until marked as seen; what was seen is kept across launches, each category taken as known the first time it can be read
+  - [ ] Watch the background task database directly (root only: needs a helper event, not a poll)
 - [ ] Persistence actions (Reveal in Finder and Copy path exist): for user-scope items, disable or move to the Trash after confirmation (system items through the helper, with the authorization prompt)
-- [ ] Checkup: more checks: screen lock and password after sleep, Find My, firewall stealth mode advice, AirDrop set to Everyone, Bluetooth sharing, macOS version behind the latest, Startup Security policy (reduced security, kernel extensions allowed), Lockdown Mode status (information only), and the date of the last check so a change shows
+- [ ] Checkup: more checks
+  - [x] macOS version behind the latest: "macOS up to date", from what Software Update already found (0.4.9)
+  - [x] Screen lock and password after sleep (`sysadminctl -screenLock status`), Find My Mac (`FMMEnabled`), AirDrop set to Everyone, third-party kernel extensions loaded (`kmutil showloaded`), Lockdown Mode (information only)
+  - [x] Firewall stealth mode: shown in the firewall finding and its advice
+  - [x] What changed since the last checkup: kept across launches, a banner counts the changes and each changed check says what it was before
+  - [ ] Startup Security policy (reduced security, kernel extensions allowed): `bputil -d` needs root, so it waits for a helper request
+  - [ ] Bluetooth Sharing: no readable switch found on macOS 26 and 27
 - [x] Processes: a row menu (Reveal in Finder, Copy path, Copy PID, Open Activity Monitor) and "Quit" for the user's own processes, after confirmation; the PID is checked again (owner and start time) so a reused number is never signalled
-- [ ] Processes: CPU and memory columns
-- [ ] Connections: traffic per app (bytes in and out) if it can be read without private frameworks; research `nettop`'s source
+- [x] Processes: CPU and memory columns (CPU measured over the snapshot itself, memory as Activity Monitor's footprint; click a column header to sort by it; also in `hector processes`). Other users' processes need the updated helper; with an older one, only your own are measured
+- [ ] Connections: traffic per app (bytes in and out); see "Bytes per connection" in 0.5
 - [ ] First launch: a short onboarding (what each screen does, install the helper for blocking, optional VirusTotal key, open at login)
+  - [x] The first launch asks once whether to check for new versions (0.4.9); the rest is to do
+- [x] Updates: an opt-in check for new versions, off by default and asked at the first launch, at most once a week from `api.github.com`; tells how to update (Homebrew or the zip), never downloads anything (0.4.9)
+- [x] Processes: copy a value of the details panel by clicking it; block or unblock each connection's address; the Network column counts connections to blocked addresses (0.4.9)
 
 ## 0.1: core and CLI
 
@@ -124,9 +135,9 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
   - [x] Filter by country: the "N countries" figure opens a list of countries with their counts; picking one (or clicking a country on the map) filters the map and the list, like the app filter, with a removable chip; the search also matches country names
   - [x] One node per country, with a count bubble, lines thicker for more destinations, and a hover card listing the apps; individual destinations fan out only when zoomed in
   - [x] Zoom and pan: pinch and drag on the trackpad, buttons to zoom, fit what is shown and show the world (zoom stops at 6×: the land is a 3.6° dot grid)
-  - [ ] Zoom with ⌘ and the scroll wheel; keyboard shortcuts for the map buttons
+  - [x] Zoom with ⌘ and the scroll wheel; keyboard shortcuts for the map buttons
     - [x] Keyboard shortcuts: ⌘= zoom in, ⌘- zoom out, ⌘9 fit, ⌘0 whole world, shown in the buttons' tooltips (to try on a Mac)
-    - [ ] ⌘ and the scroll wheel (SwiftUI has no scroll-wheel event: needs an `NSEvent` monitor or an AppKit view under the map)
+    - [x] ⌘ and the scroll wheel, or two fingers on a trackpad: an AppKit view under the map with a local `NSEvent` monitor, zooming around the pointer; other scrolls are left alone
   - [ ] Later: city-level points would need a city database (DB-IP City Lite is about 130 MB); decide whether the gain is worth the size
 
 - [x] Rename the app, the bundle, the helper, the CLI and the docs to Hector, with migration from Netbite 0.3 (helper, blocklist, data, VirusTotal key)
@@ -147,7 +158,8 @@ Netbite grows into **Hector**, a small all-in-one security app for macOS. Netbit
 - [x] **Camera and microphone**: log when they turn on, and which app uses them when it can be determined (`hector devices --watch`, Privacy → Camera & mic)
   - [ ] Check on a real Mac (see [NEXT_STEPS.md](NEXT_STEPS.md)): built-in and USB cameras, headsets, AirPods, Continuity Camera, virtual devices
   - [x] Which app uses a camera: Control Center's `sensor-indicators` log names the bundle ID behind the green indicator, readable by a normal user; trusted only when the sender is Control Center's own executable
-  - [ ] Notifications when a device turns on, and a log kept across launches
+  - [x] Notifications when a device turns on (Settings → Notifications)
+  - [ ] A log kept across launches
 - [x] **Security checkup**: SIP, Gatekeeper, FileVault, firewall, automatic updates, XProtect version, Remote Login and sharing services, MDM profiles, each with how to fix it (`hector checkup`, Checkup screen)
 - [ ] Check the checkup's parsers and verdicts against real output on macOS 15 and 26/27 (see NEXT_STEPS.md)
 
@@ -176,12 +188,11 @@ Design, verified list URLs and a phased plan: [LOCAL_DNS.md](LOCAL_DNS.md). The 
 
 ## Later
 
-- [ ] **Hector in the app, a few small appearances** (detail, for personality): poses of the crested-helmet character drawn in code like the app icon (`HectorMark`, `AppIconArtwork`), no binary assets. Ideas: peering over the edge of the destination map; keeping watch beside Camera & mic (eyes open while monitoring, resting when paused); in the empty states ("All quiet", "Pick a destination"); a shield pose on the "Blocking on" footer. Small and calm, never in the way of the data; follow the tone in `docs/DESIGN.md`
-- [ ] Real-time alerts when a new launch agent, daemon or login item appears (in the spirit of BlockBlock)
-- [ ] Processes listening on the network, not just on this Mac
+- [x] **Hector in the app, a few small appearances** (detail, for personality): peering over the edge of the map, keeping watch in Camera & mic and the menu bar (eyes open while monitoring, resting when paused), the empty states, and his shield up on the "Blocking on" footer (`HectorShield`): poses of the crested-helmet character drawn in code like the app icon (`HectorMark`, `AppIconArtwork`), no binary assets. Ideas: peering over the edge of the destination map; keeping watch beside Camera & mic (eyes open while monitoring, resting when paused); in the empty states ("All quiet", "Pick a destination"); a shield pose on the "Blocking on" footer. Small and calm, never in the way of the data; follow the tone in `docs/DESIGN.md`
+- [x] Processes listening on the network, not just on this Mac: the ports of each process, network or loopback, a "Listening" filter in Processes and `hector processes --listening`
 - [ ] Exportable report (JSON or HTML) and an event timeline
-- [ ] Menu bar extra: live counters, pause blocking
-- [ ] Notification when an app contacts a new country
+- [ ] Menu bar extra: live counters (done: live connections in the menu bar panel), pause blocking
+- [ ] Notification when an app contacts a new country (the "new app" notification exists; per country is left)
 - [ ] Optional Network Extension module for contributors with a developer account, to block per app and prompt on new connections
 
 ## Out of scope

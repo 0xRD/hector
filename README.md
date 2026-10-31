@@ -43,7 +43,7 @@ Or download the zip from [Releases](../../releases); see [Install](#install) for
 Netbite is the network module: which app talks to which server, where that server is, and a way to cut it off.
 
 - **Live connections per app.** Apps and their destinations, refreshed every second. Helper processes are grouped under their app; with the helper installed, system daemons show up too. The data comes from libproc, the same source `lsof -i` uses.
-- **An interactive world map.** One line per destination, solid while live, dashed when recent, clay when blocked. Hover a line to see which app owns it, click a country to show only it, zoom and pan.
+- **An interactive world map.** One line per destination, solid while live, dashed when recent, clay when blocked. Hover a line to see which app owns it, click a country to show only it, zoom and pan (pinch, ⌘ and the scroll wheel, or ⌘= ⌘-).
 - **Country and network names, offline.** The country of every address from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database, and, if you want it, the network that owns it ("AS15169 Google LLC") from [DB-IP IP to ASN Lite](https://db-ip.com/db/download/ip-to-asn-lite). Lookups never leave your Mac. The details panel adds reverse DNS and the last minute of activity.
 - **Blocking, for the whole Mac.** "Block This Destination", "Block All of <country>", or your own rules for a domain, an address or a network. The `hectord` helper enforces them with pf (the macOS firewall) and `/etc/hosts`, and re-applies them at boot. Nothing changes until you press Apply. Country blocking is opt-in, networks wider than /8 (IPv4) or /16 (IPv6) are refused, and local networks are never blocked.
 - **Hosts lists.** Subscribe to [StevenBlack Unified](https://github.com/StevenBlack/hosts) (ads and malware), [EasyPrivacy](https://easylist.to) (trackers) or [HaGeZi Light](https://github.com/hagezi/dns-blocklists) (ads, trackers, telemetry, built not to break sites), off by default. The helper downloads them from fixed HTTPS addresses, validates every line, keeps them apart from your own rules, and checks for updates weekly.
@@ -58,10 +58,10 @@ Netbite is the network module: which app talks to which server, where that serve
 
 ### Security
 
-- **Persistence.** Everything set to start by itself: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions. Each with its code signature, and a note on anything odd.
-- **Processes.** What runs right now, as a tree or a flat list: user, arguments, signature, connections. Code running from a temporary, Downloads or hidden folder, or deleted after launch, is flagged; downloads show where they came from.
+- **Persistence.** Everything set to start by itself: launch agents and daemons, login items and background tasks (through the helper), cron and periodic jobs, system and kernel extensions, configuration profiles, browser extensions. Each with its code signature, and a note on anything odd. What appeared since an earlier scan is labeled "New".
+- **Processes.** What runs right now, as a tree or a flat list sorted by any column (click its header): user, CPU, memory, arguments, signature, connections, and the ports it listens on, marked when other machines can reach them ("Listening" shows only those). Code running from a temporary, Downloads or hidden folder, or deleted after launch, is flagged; downloads show where they came from.
 - **VirusTotal hash lookups.** For one item, all of them, or automatically after each scan if you switch it on, within the free tier (4 per minute, 500 per day), cached for 7 days. Only the SHA-256 leaves your Mac, never the file. The key is yours and stays in your Keychain (Settings, ⌘,).
-- **Security checkup.** SIP, Gatekeeper, XProtect, FileVault, the firewall, automatic updates, macOS updates waiting to be installed, Remote Login, Screen Sharing and Remote Management, File Sharing, Remote Apple Events, automatic login, the guest account and MDM enrollment. Each says what was found and how to fix it, with a button to the right System Settings pane. Read-only, no root, no password.
+- **Security checkup.** SIP, Gatekeeper, XProtect, third-party kernel extensions, FileVault, the screen lock, the firewall, automatic updates, macOS updates waiting to be installed, Remote Login, Screen Sharing and Remote Management, File Sharing, Remote Apple Events, AirDrop, automatic login, the guest account, Find My Mac, MDM enrollment and Lockdown Mode (information only). Each says what was found and how to fix it, with a button to the right System Settings pane, and what changed since the previous checkup. Read-only, no root, no password.
 
 <table>
   <tr>
@@ -95,6 +95,7 @@ Netbite is the network module: which app talks to which server, where that serve
 
 - **Keyboard taps.** Every app that intercepts keystrokes through an event tap: whether it can change them or only listen, whether it sees every app or one, and who signed it. Read from the public event tap list, with no permission.
 - **Camera and microphone.** A live "in use now" view, and a log of every time a camera or an audio input turns on or off, with the app recording from the microphone. Which app uses a camera is not shown: macOS has no public way to tell. Hector never opens a device, so no permission is asked.
+- **Notifications, if you want them** (Settings → Notifications, all off by default): a camera or microphone turning on, an app starting to read keystrokes with an active tap, something new set to start by itself (the launch folders are watched as they change), an app connecting for the first time. Made on this Mac; a click opens the screen it is about.
 
 ### The `hector` command line
 
@@ -284,6 +285,7 @@ Sources/HectorCore/   Library shared by the CLI, the app and the helper
   Rules/               Blocklist model, compiler, pf anchor and /etc/hosts rendering, hosts lists
                        (catalog, parser, downloader)
   Privacy/             Keyboard event taps, camera and microphone state and log
+  Watch/               What was already seen (for "new" alerts), launch folder watching (FSEvents)
 Sources/hector/       Command-line tool
 Sources/HectorApp/    SwiftUI app: live monitor, world map, details panel, blocklists
 Sources/hectord/      Privileged helper (root): enforces blocklists with pf and /etc/hosts

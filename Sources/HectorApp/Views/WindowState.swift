@@ -1,3 +1,4 @@
+import Foundation
 import HectorCore
 import CoreGraphics
 import Observation
@@ -31,6 +32,9 @@ final class WindowState {
     /// and switching screens cannot close another screen's panel (an inspector that goes away
     /// writes `false` to its binding).
     var showInspector = false
+    /// The destination whose panel the user closed: it stays closed for that one, even when
+    /// the live list writes the same selection again, and opens again for another pick.
+    var inspectorClosedFor: DestinationRef?
     var showPersistenceDetails = false
     var showProcessDetails = false
     var showTapDetails = false
@@ -47,9 +51,14 @@ final class WindowState {
     var selectedPersistenceItem: PersistenceItem.ID?
     var selectedProcess: RunningProcess.ID?
     var processesFlaggedOnly = false
+    /// Only processes other machines can connect to.
+    var processesListeningOnly = false
     var processesAsTree = true
     /// Apple's own processes are most of the list and rarely the question.
     var processesShowApple = false
+    /// Set by clicking a column header; empty keeps the tree (or the flat list by name). Any
+    /// sort shows a flat list: a tree has no single order.
+    var processesSortOrder: [KeyPathComparator<ProcessRow>] = []
     /// A switched-off tap receives nothing; apps such as DockDoor leave dozens of them.
     var tapsShowSwitchedOff = false
     // Settings

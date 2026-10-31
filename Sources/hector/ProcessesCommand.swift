@@ -2,14 +2,14 @@ import Darwin
 import Foundation
 import HectorCore
 
-/// `hector processes [--json] [--flagged] [--tree] [--socket PATH]`
+/// `hector processes [--json] [--flagged] [--listening] [--tree] [--socket PATH]`
 func processes(_ args: Arguments) throws {
     let socket = args.options["--socket"] ?? HelperPaths.socket
     var snapshot = ProcessCollector().snapshot()
     var throughHelper = false
     if geteuid() != 0, FileManager.default.fileExists(atPath: socket),
        case .processes(let fromHelper)? = try? HelperClient.sendChecked(.processes, socketPath: socket, timeout: 10) {
-        snapshot = fromHelper
+        snapshot = fromHelper.fillingUsage()
         throughHelper = true
     }
 
@@ -18,6 +18,7 @@ func processes(_ args: Arguments) throws {
     })
     var shown = snapshot.processes
     if args.flags.contains("--flagged") { shown = shown.filter { !(flags[$0.pid] ?? []).isEmpty } }
+    if args.flags.contains("--listening") { shown = shown.filter { $0.listensOnNetwork } }
 
     if args.flags.contains("--json") {
         print(String(decoding: try JSONEncoder.hector.encode(shown), as: UTF8.self))
@@ -30,15 +31,21 @@ func processes(_ args: Arguments) throws {
         shown = tree.map { $0.process }
         depth = Dictionary(uniqueKeysWithValues: tree.map { ($0.process.pid, $0.depth) })
     }
-    print(pad("PID", 7) + pad("PPID", 7) + pad("USER", 12) + pad("CONN", 5) + "PROCESS")
+    print(pad("PID", 7) + pad("PPID", 7) + pad("USER", 12) + pad("%CPU", 6) + pad("MEM MB", 8) + pad("CONN", 5) + "PROCESS")
     for process in shown {
         let indent = String(repeating: "  ", count: depth[process.pid] ?? 0)
         let connections = process.connections.map { String($0.count) } ?? "-"
         let command = process.arguments.isEmpty ? (process.executablePath ?? process.name) : process.arguments.joined(separator: " ")
+        let cpu = process.cpuPercent.map { String(format: "%.1f", $0) } ?? "-"
+        let memory = process.memoryFootprint.map { String($0 / 1_048_576) } ?? "-"
         print(pad(String(process.pid), 7) + pad(String(process.parentPID), 7) + pad(process.userName ?? String(process.userID), 12)
-              + pad(connections, 5) + indent + LogText.sanitized(command))
+              + pad(cpu, 6) + pad(memory, 8) + pad(connections, 5) + indent + LogText.sanitized(command))
+        let ports = (process.listening ?? []).filter { $0.listeningScope == .network }.map(\.listeningLabel)
+        if !ports.isEmpty {
+            print(String(repeating: " ", count: 45) + indent + "listening: " + ports.joined(separator: ", "))
+        }
         for flag in (flags[process.pid] ?? []).sorted() {
-            print(String(repeating: " ", count: 31) + indent + "! \(flag.label)")
+            print(String(repeating: " ", count: 45) + indent + "! \(flag.label)")
         }
     }
     let flagged = flags.values.filter { !$0.isEmpty }.count
