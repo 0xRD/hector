@@ -5,6 +5,7 @@
 - **Checkup:** five more checks (screen lock, Find My Mac, AirDrop, third-party kernel extensions, Lockdown Mode), and it now says what changed since the last run.
 - **Processes:** CPU, memory and listening ports, with who can reach them; click a column header to sort, and use the "Show" menu or `hector processes --listening` to keep only what listens on the network.
 - **Connections:** zoom the map with ⌘ and the scroll wheel; the details panel stays closed once hidden, and has its own close button (⌥⌘I).
+- **Fix: blocking a country** failed with "Operation not permitted" when the helper had to download the country database: its sandbox refused the download. Update the helper to get the fix.
 - **Hector** watches the lines again, at no measurable cost, and holds his shield while blocking is on.
 
 Update the helper from Blocklists after installing, to see CPU, memory and ports for every user's processes.

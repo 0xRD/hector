@@ -108,6 +108,11 @@ import Testing
         return directory.appending(path: "data.csv.gz")
     }
 
+    /// The helper's download child decompresses the country database under its sandbox.
+    @Test func helperSandboxAllowsGunzip() {
+        #expect(HelperSandboxProfile.allowedExecutables.contains("/usr/bin/gunzip"))
+    }
+
     @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: "/usr/bin/gzip")
                    && FileManager.default.isExecutableFile(atPath: "/usr/bin/gunzip")))
     func decompressesWithinTheLimit() throws {

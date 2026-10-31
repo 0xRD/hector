@@ -31,7 +31,7 @@ What the helper does with root, and nothing else:
 - lists processes and runs `/usr/bin/sfltool dumpbtm` for the read requests above;
 - installs and uninstalls itself (`/Library/PrivilegedHelperTools`, `/Library/LaunchDaemons`, `/Library/Logs/Hector`).
 
-It runs fixed executables (`/sbin/pfctl`, `/usr/bin/dscacheutil`, `/usr/bin/killall`, `/bin/launchctl`, `/usr/bin/sfltool`) by absolute path, with argument arrays and a fixed environment, never through a shell, and no argument comes from a client except values that were parsed and re-printed as addresses or networks. The helper and the CLI are signed with the hardened runtime (no injected libraries, no `DYLD_*` variables).
+It runs fixed executables (`/sbin/pfctl`, `/usr/bin/dscacheutil`, `/usr/bin/killall`, `/bin/launchctl`, `/usr/bin/sfltool`, `/usr/bin/gunzip`) by absolute path, with argument arrays and a fixed environment, never through a shell, and no argument comes from a client except values that were parsed and re-printed as addresses or networks. The helper and the CLI are signed with the hardened runtime (no injected libraries, no `DYLD_*` variables).
 
 ## Unprivileged downloads
 
@@ -61,7 +61,7 @@ Trust: subscribing to a list means trusting its maintainers to choose which name
 Since 0.4.2, `hectord serve` puts itself in a sandbox (`sandbox_init`, the Sandbox Profile Language, no entitlement needed) before it reads a file or a request. The profile cannot be lifted by the process and is inherited by every child, so it also covers pfctl, sfltool and the download children. `hectord sandbox-profile` prints it. Checked as root on macOS 26.6 (0.4.2): applying a blocklist with hosts lists and reading login items work inside it, with no denial in the system log. Under it, root can only:
 
 - write to the helper's data folder, `/etc/hosts` (and its temporary sibling), its socket, its log, `/dev/pf`, `/dev/null` and the download children's private folders;
-- start `/sbin/pfctl`, `/usr/bin/dscacheutil`, `/usr/bin/killall`, `/usr/bin/sfltool` and its own binary; no shell, no other program;
+- start `/sbin/pfctl`, `/usr/bin/dscacheutil`, `/usr/bin/killall`, `/usr/bin/sfltool`, `/usr/bin/gunzip` (only the unprivileged download child runs it, on the country database) and its own binary; no shell, no other program;
 - not set the setuid or setgid bit on anything.
 
 A flaw in the helper therefore cannot be used to install a LaunchDaemon, replace a binary, edit sudoers or start a shell as root. Reading stays allowed (listing processes and sockets is the helper's job), and so do network connections (the download children). If the system refuses the profile, the helper keeps enforcing the blocklist without it rather than leaving the Mac unprotected, logs a warning, and `hector helper status` says "not sandboxed".

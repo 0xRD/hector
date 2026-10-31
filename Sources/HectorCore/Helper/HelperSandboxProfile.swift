@@ -6,13 +6,14 @@ import Foundation
 /// Root can normally write anywhere and start anything. Under this profile the helper, and every
 /// child it starts (children inherit the sandbox), may only write to its own data folder,
 /// /etc/hosts, its socket and log, the private folders of its download children and /dev/pf, and
-/// may only start pfctl, dscacheutil, killall, sfltool and itself. A compromised helper can no
+/// may only start pfctl, dscacheutil, killall, sfltool, gunzip and itself. A compromised helper can no
 /// longer install a LaunchDaemon, replace a binary or edit sudoers. Reading stays allowed: listing
 /// processes and sockets is what the helper is for.
 public enum HelperSandboxProfile {
     /// The only executables the helper starts, by absolute path (see `Enforcer.run`,
     /// `respond(to:)` and `Unprivileged`).
-    public static let allowedExecutables = ["/sbin/pfctl", "/usr/bin/dscacheutil", "/usr/bin/killall", "/usr/bin/sfltool"]
+    public static let allowedExecutables = ["/sbin/pfctl", "/usr/bin/dscacheutil", "/usr/bin/killall", "/usr/bin/sfltool",
+                                            "/usr/bin/gunzip"]
 
     /// Prefix of the folders `Unprivileged` creates for its download children.
     public static let fetchFolderPrefix = "/private/var/tmp/hectord-fetch."

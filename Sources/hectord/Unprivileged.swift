@@ -111,8 +111,7 @@ enum Unprivileged {
         try dropPrivileges()
         let scratch = try makeScratch()
         defer { removeScratch(scratch) }
-        let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let destination = folder.appending(path: "countries-\(UUID().uuidString).csv")
+        let destination = URL(fileURLWithPath: scratch, isDirectory: true).appending(path: "countries-\(UUID().uuidString).csv")
         defer { try? FileManager.default.removeItem(at: destination) }
         try await GeoIPUpdater.update(to: destination)
         let handle = try FileHandle(forReadingFrom: destination)

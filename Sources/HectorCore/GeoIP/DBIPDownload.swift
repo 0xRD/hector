@@ -42,18 +42,22 @@ enum DBIPDownload {
         let session = URLSession(configuration: configuration, delegate: HTTPSOnly(), delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
         for source in candidates {
-            let (download, response) = try await session.download(from: source)
-            defer { try? FileManager.default.removeItem(at: download) }
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200, http.url?.scheme == "https" else { continue }
-
-            let size = (try? download.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-            guard size <= maximumCompressedBytes else {
-                throw GeoIPUpdater.UpdateError.tooLarge(bytes: size, limit: maximumCompressedBytes)
+            // Not `session.download`: it writes to the system's per-user temporary folder, which
+            // the helper's sandbox refuses ("Operation not permitted"). This stays in TMPDIR.
+            let (bytes, response) = try await session.bytes(from: source)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200, http.url?.scheme == "https" else {
+                bytes.task.cancel()
+                continue
             }
 
-            let gz = download.deletingLastPathComponent().appending(path: "hector-\(UUID().uuidString).csv.gz")
-            try FileManager.default.moveItem(at: download, to: gz)
+            let gz = temporaryFolder.appending(path: "hector-\(UUID().uuidString).csv.gz")
             defer { try? FileManager.default.removeItem(at: gz) }
+            do {
+                try await save(bytes, to: gz)
+            } catch {
+                bytes.task.cancel()
+                throw error
+            }
             let csv = gz.deletingPathExtension()
             defer { try? FileManager.default.removeItem(at: csv) }
 
@@ -72,13 +76,45 @@ enum DBIPDownload {
         throw GeoIPUpdater.UpdateError.notFound(candidates)
     }
 
+    /// `TMPDIR` when set: the helper's download child sets it to its private folder, the only
+    /// place the sandbox lets it write, and `NSTemporaryDirectory()` does not follow it.
+    static var temporaryFolder: URL {
+        let path = getenv("TMPDIR").map { String(cString: $0) } ?? NSTemporaryDirectory()
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    /// Creates a file with `open`: `FileManager.createFile` goes through the per-user temporary
+    /// folder too, and fails under the helper's sandbox.
+    private static func newFile(at url: URL) throws -> FileHandle {
+        let descriptor = open(url.path, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        return FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+    }
+
+    /// Writes a download to `destination`, failing past `maximumCompressedBytes`.
+    private static func save(_ bytes: URLSession.AsyncBytes, to destination: URL) async throws {
+        let output = try newFile(at: destination)
+        defer { try? output.close() }
+        var buffer = Data(capacity: 1 << 20)
+        var written = 0
+        for try await byte in bytes {
+            buffer.append(byte)
+            if buffer.count == 1 << 20 {
+                written += buffer.count
+                guard written <= maximumCompressedBytes else {
+                    throw GeoIPUpdater.UpdateError.tooLarge(bytes: written, limit: maximumCompressedBytes)
+                }
+                try output.write(contentsOf: buffer)
+                buffer.removeAll(keepingCapacity: true)
+            }
+        }
+        try output.write(contentsOf: buffer)
+    }
+
     /// Decompresses `source` into `destination` with `/usr/bin/gunzip -c`, stopping (and failing)
     /// once more than `maximumBytes` have come out.
     static func gunzip(_ source: URL, to destination: URL, maximumBytes: Int) throws {
-        guard FileManager.default.createFile(atPath: destination.path, contents: nil) else {
-            throw CocoaError(.fileWriteUnknown)
-        }
-        let output = try FileHandle(forWritingTo: destination)
+        let output = try newFile(at: destination)
         defer { try? output.close() }
 
         let pipe = Pipe()
