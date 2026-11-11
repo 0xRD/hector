@@ -20,9 +20,16 @@ final class PrivilegedScans: @unchecked Sendable {
     /// Set once by `serve`, before the first connection: `/`, or the folder of a dry run.
     nonisolated(unsafe) static var systemRoot = "/"
 
+    /// A scan older than this is given up on, and a new one may start.
+    static let abandonAfter: TimeInterval = 60
+    /// Scans given up on that may still be running. Each holds one thread, so no more than this.
+    static let maximumAbandoned = 3
+
     private let condition = NSCondition()
     private var reports: [uid_t: (madeAt: Date, report: PrivilegedPersistence)] = [:]
-    private var scanStartedAt: Date?
+    private var running: (id: Int, startedAt: Date)?
+    private var lastID = 0
+    private var abandoned = 0
 
     func report(for viewer: uid_t) throws -> PrivilegedPersistence {
         condition.lock()
@@ -31,9 +38,18 @@ final class PrivilegedScans: @unchecked Sendable {
         var started = false
         while true {
             if let cached = reports[viewer], Date().timeIntervalSince(cached.madeAt) < Self.freshness { return cached.report }
-            if let scanStartedAt {
+            if let scan = running {
+                let age = Date().timeIntervalSince(scan.startedAt)
+                if age >= Self.abandonAfter, abandoned < Self.maximumAbandoned {
+                    // Hung for good (a home folder on a dead volume): it must not stop every
+                    // later scan, and a few such threads at most are left behind.
+                    abandoned += 1
+                    running = nil
+                    log("warning: a scan of root-only persistence locations has not ended after \(Int(age)) s; starting another.")
+                    continue
+                }
                 // Not behind a scan that already outlived a client's patience.
-                guard Date().timeIntervalSince(scanStartedAt) < Self.patience, condition.wait(until: deadline) else {
+                guard age < Self.patience, condition.wait(until: deadline) else {
                     throw HelperError("The scan of root-only persistence locations is taking too long; try again later.")
                 }
                 continue
@@ -41,7 +57,9 @@ final class PrivilegedScans: @unchecked Sendable {
             // The scan this call started ended and its report is gone: only if the clock jumped.
             guard !started else { throw HelperError("The scan of root-only persistence locations failed.") }
             started = true
-            scanStartedAt = Date()
+            lastID += 1
+            let id = lastID
+            running = (id, Date())
             let root = Self.systemRoot
             // Its own thread: the client's thread must be free to give up.
             Thread.detachNewThread { [self] in
@@ -50,7 +68,7 @@ final class PrivilegedScans: @unchecked Sendable {
                 let now = Date()
                 reports = reports.filter { now.timeIntervalSince($0.value.madeAt) < Self.freshness }
                 reports[viewer] = (now, report)
-                scanStartedAt = nil
+                if running?.id == id { running = nil } else { abandoned -= 1 }
                 condition.broadcast()
                 condition.unlock()
             }

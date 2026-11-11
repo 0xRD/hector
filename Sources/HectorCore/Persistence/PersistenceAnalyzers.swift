@@ -182,7 +182,10 @@ extension PersistenceParsers {
             let first = words[0]
             if first.hasPrefix("#include") || first.hasPrefix("@include") {
                 let target = words.dropFirst().joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-                if !allowedIncludePrefixes.contains(where: { target == $0 || target.hasPrefix($0 + "/") }) {
+                // Compared as written, so anything that could lead elsewhere counts as elsewhere:
+                // a relative path, a ".." component, or a % escape (sudo expands %h and others).
+                let plain = target.hasPrefix("/") && !target.contains("%") && !target.split(separator: "/").contains("..")
+                if !plain || !allowedIncludePrefixes.contains(where: { target == $0 || target.hasPrefix($0 + "/") }) {
                     note("includes rules from outside /etc/sudoers.d")
                 }
                 continue

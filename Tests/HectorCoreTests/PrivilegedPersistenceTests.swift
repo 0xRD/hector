@@ -187,6 +187,11 @@ private let sampleFingerprint = "SHA256:E3pr2pQMavA5IHmO9NiFqGAHkV5wCz4KB9F2NtNR
         @include /tmp/more
         Cmnd_Alias X = /bin/ls
         """.utf8))
+        // An include that only looks like it stays in /etc/sudoers.d.
+        for sneaky in ["#include /etc/sudoers.d/../../tmp/x", "@includedir /private/etc/sudoers.d/%h", "#include sudoers.d/x"] {
+            let facts = PersistenceParsers.sudoers(Data("root ALL = (ALL) ALL\n%admin ALL = (ALL) ALL\n\(sneaky)\n".utf8))
+            #expect(facts.notes == ["includes rules from outside /etc/sudoers.d"] && !facts.isStock, "\(sneaky)")
+        }
         #expect(weakened.ruleCount == 0)
         #expect(weakened.notes == ["turns off the password (!authenticate)", "keeps library-loading variables (env_keep)",
                                    "never asks for the password again (timestamp_timeout)", "includes rules from outside /etc/sudoers.d"])
