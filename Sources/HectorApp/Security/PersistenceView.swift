@@ -10,6 +10,13 @@ extension PersistenceItem.Category {
         case .backgroundTask: "clock.arrow.circlepath"
         case .cronJob: "calendar.badge.clock"
         case .periodicScript: "calendar"
+        case .atJob: "alarm"
+        case .loginHook: "arrow.right.to.line.circle"
+        case .shellStartup: "terminal"
+        case .sshKey: "key"
+        case .sudoRule: "lock.open"
+        case .pamService: "person.badge.key"
+        case .authorizationPlugin: "lock.shield"
         case .systemExtension: "puzzlepiece.extension"
         case .kernelExtension: "cpu"
         case .configurationProfile: "doc.badge.gearshape"
@@ -144,9 +151,9 @@ struct PersistenceView: View {
     /// An empty category has no section, and without root only some crontabs can be read: says
     /// what was covered, so a missing section does not read as "no cron jobs on this Mac".
     private func cronCoverageNote(_ items: [PersistenceItem]) -> String? {
-        guard state.search.isEmpty, security.persistence?.ranAsRoot == false else { return nil }
+        guard state.search.isEmpty, let report = security.persistence, !report.ranAsRoot, !security.persistenceThroughHelper else { return nil }
         let found = items.contains { $0.category == .cronJob } ? "" : "No cron jobs in your crontab or /etc/crontab. "
-        return found + "The crontabs of root and other users cannot be read from here."
+        return found + "Without the helper, the crontabs, SSH keys and shell startup files of root and other users, sudoers and root's login hooks are not read."
     }
 
     private var visibleItems: [PersistenceItem] {

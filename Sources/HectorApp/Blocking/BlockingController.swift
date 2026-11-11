@@ -168,7 +168,7 @@ final class BlockingController {
         switch response {
         case .status(let status): helper = .ready(status)
         case .failure(let message): lastError = message
-        case .snapshot, .processes, .toolOutput, .hello: break
+        case .snapshot, .processes, .toolOutput, .hello, .rootPersistence: break
         }
     }
 

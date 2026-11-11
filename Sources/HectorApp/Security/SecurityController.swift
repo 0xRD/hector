@@ -27,6 +27,8 @@ final class SecurityController {
     private(set) var isScanningPersistence = false
     /// Why login items are missing, when the helper could not list them.
     private(set) var persistenceHelperIssue: String?
+    /// The last scan had the helper's report of root-only locations.
+    private(set) var persistenceThroughHelper = false
     /// Items that appeared since an earlier scan (this launch or a previous one), until the user
     /// marks them as seen.
     private(set) var newPersistenceItems: Set<PersistenceItem.ID> = []
@@ -110,14 +112,16 @@ final class SecurityController {
         isScanningPersistence = true
         defer { isScanningPersistence = false }
         let includeApple = includeAppleItems
-        let (report, issue, readBackgroundTasks) = await Task.detached(priority: .userInitiated) {
+        let (report, issue, readBackgroundTasks, readPrivileged) = await Task.detached(priority: .userInitiated) {
             let (output, issue) = Self.backgroundTasksFromHelper()
-            let options = PersistenceScanner.Options(includeApple: includeApple, backgroundTaskOutput: output)
-            return (PersistenceScanner().scan(options: options), issue, output != nil)
+            let (privileged, privilegedIssue) = Self.rootPersistenceFromHelper()
+            let options = PersistenceScanner.Options(includeApple: includeApple, backgroundTaskOutput: output, privileged: privileged)
+            return (PersistenceScanner().scan(options: options), issue ?? privilegedIssue, output != nil, privileged != nil)
         }.value
         persistence = report
         persistenceHelperIssue = issue
-        let fresh = admitPersistence(report.items, readBackgroundTasks: readBackgroundTasks)
+        persistenceThroughHelper = readPrivileged
+        let fresh = admitPersistence(report.items, readBackgroundTasks: readBackgroundTasks, readPrivileged: readPrivileged)
         let paths = report.items.filter { !$0.isInert }.compactMap(Self.codePath(of:))
         await analyzeSignatures(of: paths)
         if !fresh.isEmpty { onNewPersistenceItems?(fresh) }
@@ -128,13 +132,17 @@ final class SecurityController {
     /// its own group, so the first scan that can read one (login items need the helper) takes
     /// what is there as known instead of announcing it. Apple's items are left out: the "Apple"
     /// switch would otherwise make them all look new.
-    private func admitPersistence(_ items: [PersistenceItem], readBackgroundTasks: Bool) -> [PersistenceItem] {
+    private func admitPersistence(_ items: [PersistenceItem], readBackgroundTasks: Bool, readPrivileged: Bool) -> [PersistenceItem] {
         let candidates = items.filter { $0.scope != .apple && !$0.isInert }
         var fresh: Set<PersistenceItem.ID> = []
         for category in PersistenceItem.Category.allCases {
             if (category == .loginItem || category == .backgroundTask) && !readBackgroundTasks { continue }
             let ids = candidates.filter { $0.category == category }.map(\.id)
-            fresh.formUnion(knownPersistence.admit(ids, group: category.rawValue))
+            // With the helper these categories also hold root's and other users' entries: a
+            // group of its own, so the first such scan does not announce them all, and a scan
+            // without the helper later does not either.
+            let widened = readPrivileged && PrivilegedPersistence.categories.contains(category)
+            fresh.formUnion(knownPersistence.admit(ids, group: category.rawValue + (widened ? "+root" : "")))
         }
         knownPersistenceFile.save(knownPersistence)
         newPersistenceItems.formUnion(fresh)
@@ -162,6 +170,20 @@ final class SecurityController {
                 return (nil, message)
             default:
                 return (nil, "Unexpected reply from the helper.")
+            }
+        } catch {
+            return (nil, String(describing: error))
+        }
+    }
+
+    /// What only root can read (crontabs, sudoers, other users' keys and shell files).
+    nonisolated private static func rootPersistenceFromHelper() -> (PrivilegedPersistence?, String?) {
+        guard HelperClient.isInstalled else { return (nil, nil) }
+        do {
+            switch try HelperClient.sendChecked(.rootPersistence, timeout: 30) {
+            case .rootPersistence(let report): return (report, nil)
+            case .failure(let message): return (nil, message)
+            default: return (nil, "Unexpected reply from the helper.")
             }
         } catch {
             return (nil, String(describing: error))

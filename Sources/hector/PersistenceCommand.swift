@@ -10,7 +10,8 @@ func persistence(_ args: Arguments) throws {
     }
     let report = PersistenceScanner().scan(options: .init(includeApple: args.flags.contains("--include-apple"),
                                                            categories: categories,
-                                                           backgroundTaskOutput: backgroundTasksFromHelper(args)))
+                                                           backgroundTaskOutput: backgroundTasksFromHelper(args),
+                                                           privileged: rootPersistenceFromHelper(args)))
 
     if args.flags.contains("--json") {
         print(String(decoding: try JSONEncoder.hector.encode(report), as: UTF8.self))
@@ -54,6 +55,16 @@ private func backgroundTasksFromHelper(_ args: Arguments) -> ToolOutput? {
           case .toolOutput(let text, let truncated)? = try? HelperClient.sendChecked(.backgroundTasks, socketPath: socket, timeout: 30)
     else { return nil }
     return ToolOutput(output: text, truncated: truncated)
+}
+
+/// What only root can read, from the helper when it runs and we are not root (as root the scanner
+/// reads those places itself). `nil` lets the scanner say what is missing.
+private func rootPersistenceFromHelper(_ args: Arguments) -> PrivilegedPersistence? {
+    let socket = args.options["--socket"] ?? HelperPaths.socket
+    guard geteuid() != 0, FileManager.default.fileExists(atPath: socket),
+          case .rootPersistence(let report)? = try? HelperClient.sendChecked(.rootPersistence, socketPath: socket, timeout: 30)
+    else { return nil }
+    return report
 }
 
 /// "launch-agents", "LaunchAgent" and "launchagent" all name `.launchAgent`.

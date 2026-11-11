@@ -49,11 +49,17 @@ public struct PersistenceScanner: Sendable {
         /// set, the scanner parses it instead of running the tool.
         public var backgroundTaskOutput: ToolOutput?
 
+        /// What only root can read, obtained from the helper (`HelperRequest.rootPersistence`).
+        /// When `nil`, a scanner that runs as root reads those places itself, and one that does
+        /// not covers the current user's own files and notes what is missing.
+        public var privileged: PrivilegedPersistence?
+
         public init(includeApple: Bool = false, categories: Set<PersistenceItem.Category>? = nil,
-                    backgroundTaskOutput: ToolOutput? = nil) {
+                    backgroundTaskOutput: ToolOutput? = nil, privileged: PrivilegedPersistence? = nil) {
             self.includeApple = includeApple
             self.categories = categories
             self.backgroundTaskOutput = backgroundTaskOutput
+            self.privileged = privileged
         }
 
         func wants(_ category: PersistenceItem.Category) -> Bool { categories?.contains(category) ?? true }
@@ -128,8 +134,33 @@ public struct PersistenceScanner: Sendable {
             let provided = options.backgroundTaskOutput
             sources.append(Source(name: "Login items and background tasks") { backgroundTasks(provided: provided) })
         }
-        if options.wants(.cronJob) { sources.append(Source(name: "cron") { cronJobs() }) }
+        let wantsPrivileged = !PrivilegedPersistence.categories.filter(options.wants).isEmpty
+        let privileged = options.privileged ?? (wantsPrivileged && geteuid() == 0
+            ? PrivilegedPersistenceScanner(system: roots.system.path).scan(viewer: 0) : nil)
+        if options.wants(.cronJob) {
+            let tables = privileged?.source(PrivilegedPersistence.cronTables)
+            sources.append(Source(name: "cron") { cronJobs(tables: tables) })
+        }
         if options.wants(.periodicScript) { sources.append(Source(name: "periodic") { periodicScripts() }) }
+        if options.wants(.atJob) { sources.append(Source(name: "at jobs") { atJobs() }) }
+        if options.wants(.loginHook) {
+            let root = privileged?.source(PrivilegedPersistence.rootLoginHooks)
+            sources.append(Source(name: "Login hooks") { loginHooks(root: root) })
+        }
+        if options.wants(.shellStartup) {
+            let users = privileged?.source(PrivilegedPersistence.shellStartup)
+            sources.append(Source(name: "Shell startup files") { shellStartupFiles(users: users) })
+        }
+        if options.wants(.sshKey) {
+            let users = privileged?.source(PrivilegedPersistence.authorizedKeys)
+            sources.append(Source(name: "SSH authorized keys") { authorizedKeys(users: users) })
+        }
+        if options.wants(.sudoRule) {
+            let rules = privileged?.source(PrivilegedPersistence.sudoers)
+            sources.append(Source(name: "sudoers") { sudoRules(rules) })
+        }
+        if options.wants(.pamService) { sources.append(Source(name: "PAM") { pamServices() }) }
+        if options.wants(.authorizationPlugin) { sources.append(Source(name: "Authorization plugins") { authorizationPlugins() }) }
         if options.wants(.systemExtension) { sources.append(Source(name: "System extensions") { systemExtensions() }) }
         if options.wants(.kernelExtension) { sources.append(Source(name: "Kernel extensions") { kernelExtensions() }) }
         if options.wants(.configurationProfile) {
@@ -285,6 +316,11 @@ public struct PersistenceScanner: Sendable {
         if plist["StartCalendarInterval"] != nil { item.details["calendar"] = "yes" }
         if let paths = plist["WatchPaths"] as? [String] { item.details["watchPaths"] = paths.joined(separator: ", ") }
         if let user = plist["UserName"] as? String { item.details["userName"] = user }
+        let injected = PersistenceParsers.libraryInjection(environment: plist["EnvironmentVariables"])
+        if !injected.isEmpty {
+            item.details["injects"] = injected.joined(separator: "; ")
+            item.notes.append("sets \(injected.map { String($0.prefix { $0 != "=" }) }.joined(separator: ", ")): loads a library into the program")
+        }
 
         item.notes += Self.executableNotes(item.executablePath, arguments: arguments, roots: roots)
         return item
@@ -358,36 +394,6 @@ public struct PersistenceScanner: Sendable {
         var notes: [String] = []
         if result.truncated { notes.append("sfltool output was truncated") }
         return SourceResult(items: PersistenceParsers.backgroundTaskItems(result.output), notes: notes)
-    }
-
-    // MARK: - cron
-
-    func cronJobs() -> SourceResult {
-        var result = SourceResult()
-        let tabs = roots.system("usr/lib/cron/tabs")
-        if let users = try? FileManager.default.contentsOfDirectory(atPath: tabs.path) {
-            // Readable only as root; then it covers every user, the current one included.
-            for user in users.sorted() where !user.hasPrefix(".") {
-                let file = tabs.appending(path: user)
-                guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
-                result.items += PersistenceParsers.crontab(text, owner: user, path: file.path,
-                                                           scope: user == "root" ? .system : .user)
-            }
-        } else if let output = tools.run("/usr/bin/crontab", ["-l"]) {
-            if output.succeeded {
-                result.items += PersistenceParsers.crontab(output.output, owner: roots.userName, path: nil, scope: .user)
-            } else if !output.errorOutput.contains("no crontab") {
-                result.notes.append("crontab -l failed")
-            }
-        } else {
-            result.notes.append("crontab is not available")
-        }
-        let systemTab = roots.system("etc/crontab")
-        if let text = try? String(contentsOf: systemTab, encoding: .utf8) {
-            // /etc/crontab has a sixth "user" column; the parser keeps it as part of the command.
-            result.items += PersistenceParsers.crontab(text, owner: "system", path: systemTab.path, scope: .system)
-        }
-        return result
     }
 
     // MARK: - periodic

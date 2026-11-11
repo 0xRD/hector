@@ -19,7 +19,7 @@ func lists(_ args: Arguments) async throws {
             status.warnings.forEach { print("warning: \($0)") }
         case .failure(let message):
             throw CLIError(message)
-        case .snapshot, .processes, .toolOutput, .hello:
+        case .snapshot, .processes, .toolOutput, .hello, .rootPersistence:
             throw CLIError("Unexpected reply.")
         }
     case "parse":

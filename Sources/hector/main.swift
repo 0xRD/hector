@@ -414,7 +414,7 @@ func helper(_ args: Arguments) throws {
             let sandbox = info.sandboxed.map { $0 ? " · sandboxed" : " · not sandboxed (see the helper log)" } ?? ""
             print("Protocol \(info.protocolVersion)" + sandbox + (info.isOutdated ? " · older than this CLI: update the helper from Hector → Blocklists" : ""))
         }
-    case .snapshot, .processes, .toolOutput, .hello:
+    case .snapshot, .processes, .toolOutput, .hello, .rootPersistence:
         print("Unexpected reply.")
     case .failure(let message):
         throw CLIError(message)
