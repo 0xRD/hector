@@ -47,8 +47,10 @@ import Testing
         }
         // Two rights, two names: the password for one is not the password for the other.
         #expect(Set(HelperAuthorization.Right.all.map(\.name)).count == 2)
-        // Nothing was typed in this process: no dialog, and no authorization to send.
-        #expect(HelperAuthorization.heldExternalForm(for: .readRootPersistence) == nil)
+        // `heldExternalForm` is not asserted here: without the helper the right is not in the
+        // authorization database, and what the system's default rule then grants depends on the
+        // machine (a CI runner's administrator gets it without a password). The helper defines
+        // the right before it checks one.
     }
 
     // MARK: Input validation
