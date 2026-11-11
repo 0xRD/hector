@@ -79,7 +79,13 @@ extension PersistenceParsers {
         return key
     }
 
+    /// A known key type, made of the characters key types are made of: the field is shown as
+    /// it is, and anything else (an escape sequence after a valid prefix) is not a key.
     private static func isKeyType(_ field: String) -> Bool {
+        guard field.utf8.count <= 64, field.utf8.allSatisfy({ byte in
+            (UInt8(ascii: "a")...UInt8(ascii: "z")).contains(byte) || (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte)
+                || byte == UInt8(ascii: "-") || byte == UInt8(ascii: "@") || byte == UInt8(ascii: ".")
+        }) else { return false }
         let known = ["ssh-rsa", "ssh-dss", "ssh-ed25519", "ecdsa-sha2-", "sk-ssh-ed25519@", "sk-ecdsa-sha2-",
                      "ssh-rsa-cert-", "ssh-ed25519-cert-", "ssh-dss-cert-"]
         return known.contains { field == $0 || ($0.hasSuffix("-") || $0.hasSuffix("@")) && field.hasPrefix($0) }

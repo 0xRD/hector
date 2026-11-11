@@ -226,14 +226,11 @@ func authorizedPeer(_ client: Int32) -> uid_t? {
     if uid == 0 || uid == geteuid() { return uid }
     // The reentrant lookup: connections are served on several threads, and the answer of
     // `getpwuid` lives in storage another lookup may overwrite before the groups are read.
-    var record = passwd()
-    var found: UnsafeMutablePointer<passwd>?
-    var buffer = [CChar](repeating: 0, count: 4096)
-    guard getpwuid_r(uid, &record, &buffer, buffer.count, &found) == 0, found != nil, let name = record.pw_name else { return nil }
+    guard let (name, primaryGroup) = LocalAccount.lookup(userID: uid) else { return nil }
     var groups = [Int32](repeating: 0, count: 256)
     var count = Int32(groups.count)
     // -1 means the user has more groups than fit: what was written is still valid, `count` is not.
-    if getgrouplist(name, Int32(bitPattern: record.pw_gid), &groups, &count) != 0 { count = Int32(groups.count) }
+    if getgrouplist(name, Int32(bitPattern: primaryGroup), &groups, &count) != 0 { count = Int32(groups.count) }
     return groups.prefix(Int(max(count, 0))).contains(Int32(adminGroupID)) ? uid : nil
 }
 

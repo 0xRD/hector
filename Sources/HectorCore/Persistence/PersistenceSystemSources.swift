@@ -68,13 +68,8 @@ extension PersistenceScanner {
     }
 
     static func userName(_ userID: uid_t) -> String {
-        var record = passwd()
-        var found: UnsafeMutablePointer<passwd>?
-        var buffer = [CChar](repeating: 0, count: 4_096)
-        guard getpwuid_r(userID, &record, &buffer, buffer.count, &found) == 0, found != nil, let name = record.pw_name else {
-            return "user \(userID)"
-        }
-        return PersistenceParsers.displayable(String(cString: name), maximumLength: 64)
+        guard let name = LocalAccount.lookup(userID: userID)?.name else { return "user \(userID)" }
+        return PersistenceParsers.displayable(name, maximumLength: 64)
     }
 
     // MARK: - Login hooks

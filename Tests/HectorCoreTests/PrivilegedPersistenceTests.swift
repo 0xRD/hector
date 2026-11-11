@@ -122,6 +122,14 @@ private let sampleFingerprint = "SHA256:E3pr2pQMavA5IHmO9NiFqGAHkV5wCz4KB9F2NtNR
         let hostile = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOy9+oReM60bYUUV0b579j1lRmqAdueT7NfIeW5JUPWP \u{1B}[31mred\u{202E}"
         let comment = PersistenceParsers.authorizedKeys(Data(hostile.utf8)).keys[0].comment
         #expect(!comment.contains("\u{1B}") && !comment.contains("\u{202E}"))
+        // A key type is shown as written: one that carries anything but the characters of a
+        // key type (escape sequences after a valid prefix, or a megabyte of text) is no key.
+        let blob = "AAAAC3NzaC1lZDI1NTE5AAAAIOy9+oReM60bYUUV0b579j1lRmqAdueT7NfIeW5JUPWP"
+        for type in ["ecdsa-sha2-\u{1B}[1A\u{1B}[2K", "sk-ssh-ed25519@\u{202E}x", "ecdsa-sha2-" + String(repeating: "a", count: 100), "ecdsa-sha2-A"] {
+            let parsed = PersistenceParsers.authorizedKeys(Data("\(type) \(blob) c\n".utf8))
+            #expect(parsed.keys.isEmpty && parsed.invalid == 1, "\(type.debugDescription)")
+        }
+        #expect(PersistenceParsers.authorizedKeys(Data("sk-ssh-ed25519@openssh.com \(blob)\necdsa-sha2-nistp256 \(blob)\n".utf8)).keys.count == 2)
     }
 
     @Test func flagsWhatMalwareAddsToShellFiles() {
@@ -250,6 +258,7 @@ private let sampleFingerprint = "SHA256:E3pr2pQMavA5IHmO9NiFqGAHkV5wCz4KB9F2NtNR
         #expect(cron.items.map(\.label).sorted() == ["/usr/local/bin/mine", "/var/root/.hidden/beacon --quiet", "Cron job of bob (command hidden)"])
         let roots = try #require(cron.items.first { $0.details["user"] == "root" })
         #expect(roots.scope == .system && roots.notes.contains("runs as root") && roots.configurationPath == "/usr/lib/cron/tabs/root")
+        #expect(roots.id == "cronJob:/usr/lib/cron/tabs/root:*/5 * * * * /var/root/.hidden/beacon --quiet")
         let bobs = try #require(cron.items.first { $0.details["user"] == "bob" })
         #expect(bobs.details["schedule"] == "0 3 * * *" && bobs.arguments.isEmpty && bobs.executablePath == nil)
         // Nothing of bob's command line crosses the socket.

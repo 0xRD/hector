@@ -15,6 +15,29 @@ public struct LocalAccount: Hashable, Sendable {
 
     private static let lock = NSLock()
 
+    /// The name and primary group of `userID`, copied out while the lookup's buffer is alive.
+    public static func lookup(userID: uid_t) -> (name: String, groupID: gid_t)? {
+        var record = passwd()
+        var found: UnsafeMutablePointer<passwd>?
+        var buffer = [CChar](repeating: 0, count: 4_096)
+        return buffer.withUnsafeMutableBufferPointer { storage -> (String, gid_t)? in
+            guard getpwuid_r(userID, &record, storage.baseAddress, storage.count, &found) == 0, found != nil,
+                  let name = record.pw_name else { return nil }
+            return (String(cString: name), record.pw_gid)
+        }
+    }
+
+    /// The user ID of the account called `name`.
+    public static func userID(named name: String) -> uid_t? {
+        var record = passwd()
+        var found: UnsafeMutablePointer<passwd>?
+        var buffer = [CChar](repeating: 0, count: 4_096)
+        return buffer.withUnsafeMutableBufferPointer { storage -> uid_t? in
+            guard getpwnam_r(name, &record, storage.baseAddress, storage.count, &found) == 0, found != nil else { return nil }
+            return record.pw_uid
+        }
+    }
+
     /// Every account with a home folder of its own, root first, at most `limit`. Service accounts
     /// that live in /var/empty are left out; accounts with a low user ID are not, since a hidden
     /// account is given one on purpose. Accounts sharing a home folder count once.
@@ -154,7 +177,9 @@ public struct PrivilegedPersistenceScanner: Sendable {
                 continue
             }
             if contents.truncated { source.notes.append("\(path) is larger than 1 MB: only its beginning was read") }
-            let ownerID = accounts.first { $0.name == name }?.userID
+            // The account list counts a shared home folder once and stops at a limit: on a real
+            // system ask the user database, so a reader's own table is never taken for a stranger's.
+            let ownerID = accounts.first { $0.name == name }?.userID ?? (system == "/" ? LocalAccount.userID(named: name) : nil)
             let scope: PersistenceItem.Scope = name == "root" ? .system : .user
             var jobs = PersistenceParsers.crontab(String(decoding: contents.data, as: UTF8.self), owner: owner, path: path, scope: scope)
             if jobs.count > Self.maximumJobsPerCrontab {
@@ -170,6 +195,9 @@ public struct PrivilegedPersistenceScanner: Sendable {
                     item.arguments = item.arguments.prefix(64).map { PersistenceParsers.displayable($0) }
                     item.executablePath = item.executablePath.map { PersistenceParsers.displayable($0) }
                     item.details = item.details.mapValues { PersistenceParsers.displayable($0, maximumLength: 200) }
+                    // The parser's identifier holds the raw line: rebuild it from what is shown.
+                    item.id = PersistenceItem.makeID(category: .cronJob, configurationPath: path,
+                                                     label: "\(item.details["schedule"] ?? "") \(item.label)")
                 } else {
                     // A command line can hold a password or a token: another user's is never
                     // given, root's only to a reader who typed the password.

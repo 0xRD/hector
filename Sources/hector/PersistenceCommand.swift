@@ -22,12 +22,15 @@ func persistence(_ args: Arguments) throws {
         let items = report.items(in: category)
         guard !items.isEmpty else { continue }
         print("\(category.title) (\(items.count))")
+        // Labels, paths and notes come from files anyone may have written: no control character
+        // reaches the terminal, where it could erase or rewrite the lines above.
+        let shown = PersistenceParsers.displayable
         for item in items {
-            print("  " + pad(item.scope.rawValue, 7) + pad(clipped(item.label, 43), 44) + " " + pad(flags(item), 18)
-                  + (item.executablePath ?? item.configurationPath ?? ""))
-            if let inert = item.details["inert"] { print("  " + String(repeating: " ", count: 7) + "  inert: \(inert)") }
-            if let launcher = item.details["launcher"] { print("  " + String(repeating: " ", count: 7) + "  started through \(launcher)") }
-            for note in item.notes { print("  " + String(repeating: " ", count: 7) + "! \(note)") }
+            print("  " + pad(item.scope.rawValue, 7) + pad(clipped(shown(item.label, 1_000), 43), 44) + " " + pad(flags(item), 18)
+                  + shown(item.executablePath ?? item.configurationPath ?? "", 1_000))
+            if let inert = item.details["inert"] { print("  " + String(repeating: " ", count: 7) + "  inert: \(shown(inert, 1_000))") }
+            if let launcher = item.details["launcher"] { print("  " + String(repeating: " ", count: 7) + "  started through \(shown(launcher, 1_000))") }
+            for note in item.notes { print("  " + String(repeating: " ", count: 7) + "! \(shown(note, 1_000))") }
         }
         print("")
     }
@@ -40,7 +43,7 @@ func persistence(_ args: Arguments) throws {
     print("\(report.items.count) items" + (counts.isEmpty ? "" : ": " + counts.joined(separator: ", ")) + ".")
     print("\(flagged) with notes. Scanned in \(String(format: "%.1f", report.duration)) s.")
     for source in report.sources {
-        for note in source.notes { print("\(source.name): \(note)") }
+        for note in source.notes { print("\(source.name): \(PersistenceParsers.displayable(note))") }
     }
     if !args.flags.contains("--include-apple") {
         print("Apple's own items are hidden; add --include-apple to list them.")
