@@ -351,6 +351,30 @@ private let sampleFingerprint = "SHA256:E3pr2pQMavA5IHmO9NiFqGAHkV5wCz4KB9F2NtNR
         #expect(startup.notes.count == 1 && startup.notes[0].hasPrefix("home folder of trent was not read"))
     }
 
+    @Test func refusedFoldersOfSystemAccountsAreNotWarnings() throws {
+        guard getuid() != 0 else { return }
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        for home in ["private/var/db/lockdown", "Users/bob"] {
+            try fixture.write("", to: "\(home)/.zshrc")
+            #expect(chmod(fixture.root.appending(path: home).path, 0) == 0)
+        }
+        defer { for home in ["private/var/db/lockdown", "Users/bob"] { chmod(fixture.root.appending(path: home).path, 0o700) } }
+        let accounts = [LocalAccount(name: "_usbmuxd", userID: 213, home: "/var/db/lockdown"), LocalAccount(name: "bob", userID: 502, home: "/Users/bob")]
+        let startup = try #require(fixture.scanner(accounts).scan(viewer: 501).source(PrivilegedPersistence.shellStartup))
+        // macOS keeps root out of some of its own accounts' folders; a person's folder is another matter.
+        #expect(startup.notes.count == 1 && startup.notes[0].hasPrefix("home folder of bob was not read"))
+
+        // What a 0.5.1 helper still sends is dropped by the app.
+        let old = PrivilegedPersistence(sources: [.init(name: PrivilegedPersistence.shellStartup, notes: [
+            "home folder of _biome was not read: macOS refused to read /private/var/db/biome (Operation not permitted)",
+            "home folder of bob was not read: macOS refused to read /Users/bob (Operation not permitted)",
+        ])])
+        let scanner = PersistenceScanner(roots: .init(home: fixture.root.appending(path: "Users/alex"), system: fixture.root, userID: 501, userName: "alex"), tools: .none)
+        let notes = scanner.scan(options: .init(categories: [.shellStartup], privileged: old)).sources.flatMap(\.notes)
+        #expect(notes == ["home folder of bob was not read: macOS refused to read /Users/bob (Operation not permitted)"])
+    }
+
     @Test func aFileItsUserDoesNotOwnIsNotRead() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
