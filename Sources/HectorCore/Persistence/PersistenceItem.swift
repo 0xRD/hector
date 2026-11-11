@@ -13,6 +13,13 @@ public struct PersistenceItem: Codable, Hashable, Identifiable, Sendable {
         case backgroundTask
         case cronJob
         case periodicScript
+        case atJob
+        case loginHook
+        case shellStartup
+        case sshKey
+        case sudoRule
+        case pamService
+        case authorizationPlugin
         case systemExtension
         case kernelExtension
         case configurationProfile
@@ -27,6 +34,13 @@ public struct PersistenceItem: Codable, Hashable, Identifiable, Sendable {
             case .backgroundTask: "Background tasks"
             case .cronJob: "Cron jobs"
             case .periodicScript: "Periodic scripts"
+            case .atJob: "at jobs"
+            case .loginHook: "Login and logout hooks"
+            case .shellStartup: "Shell startup files"
+            case .sshKey: "SSH authorized keys"
+            case .sudoRule: "Sudo rules"
+            case .pamService: "PAM services and modules"
+            case .authorizationPlugin: "Authorization plugins"
             case .systemExtension: "System extensions"
             case .kernelExtension: "Kernel extensions"
             case .configurationProfile: "Configuration profiles"

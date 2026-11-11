@@ -4,9 +4,9 @@ Hand-off notes for the next working session. The roadmap ([ROADMAP.md](ROADMAP.m
 
 ## Where things stand
 
-- `main` is 0.5.0, not released yet; 0.4.9 is the latest release (also as a Homebrew cask: `0xrd/tap/hector`). Before tagging: notifications end to end, "Update helper…" with a real root helper, the CI zip with `scripts/smoke-test.sh`. `swift build` has no warnings; `scripts/test.sh` runs about 300 tests, all passing.
+- `main` is 0.5.1: the root-only persistence scan (`rootPersistence`), root's details behind the password, the helper review and the log cap. Written and tested without root (341 tests, a dry-run helper, the installer's copy on the real binary); still to check with the installed root helper: see ROADMAP.md, first item. `swift build` has no warnings.
 - Every commit on `main` has the GitHub noreply address as author and committer; this repository's git identity is set to it (`git config --local user.email`).
-- Still open, by priority: the hands-on checks below (they need a Mac, some need root), root's crontab in Persistence (important, next release; see ROADMAP.md), notifications and the persistence watch, the local DNS resolver. ROADMAP.md has the full list.
+- Still open, by priority: the hands-on checks below (they need a Mac, some need root), the root checks of the persistence scan (ROADMAP.md), notifications and the persistence watch, the local DNS resolver. ROADMAP.md has the full list.
 
 ## In order
 

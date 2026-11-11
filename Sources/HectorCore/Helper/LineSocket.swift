@@ -49,12 +49,14 @@ public enum LineSocket {
         return fd
     }
 
-    public static func write(_ data: Data, to fd: Int32) throws {
+    /// `deadline` bounds the whole write, not each `write()`: see `readLine`.
+    public static func write(_ data: Data, to fd: Int32, deadline: Date? = nil) throws {
         var payload = data
         payload.append(UInt8(ascii: "\n"))
         try payload.withUnsafeBytes { raw in
             var offset = 0
             while offset < raw.count {
+                if let deadline, Date() >= deadline { throw SocketError("Timed out writing the message", errno: 0) }
                 let written = Darwin.write(fd, raw.baseAddress! + offset, raw.count - offset)
                 guard written > 0 else { throw SocketError("write") }
                 offset += written

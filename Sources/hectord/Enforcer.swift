@@ -483,9 +483,3 @@ final class BackgroundFetch: @unchecked Sendable {
         lock.withLock { finished ? collected : nil }
     }
 }
-
-/// Every log line goes through `LogText.sanitized`: messages can carry text sent by a client.
-func log(_ message: String) {
-    let line = "\(Date().formatted(.iso8601)) \(LogText.sanitized(message))\n"
-    FileHandle.standardError.write(Data(line.utf8))
-}

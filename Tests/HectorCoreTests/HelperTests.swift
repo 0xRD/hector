@@ -89,7 +89,7 @@ import Testing
 @Suite struct HelperHandshakeTests {
     @Test func everyRequestMapsToACapabilityTheHelperAnnounces() {
         let requests: [HelperRequest] = [
-            .hello, .status, .snapshot, .processes, .backgroundTasks,
+            .hello, .status, .snapshot, .processes, .backgroundTasks, .rootPersistence(authorization: nil),
             .apply(Blocklist(), authorization: Data()), .flush(authorization: Data()),
             .refreshHostsLists(authorization: Data()),
         ]
@@ -111,6 +111,7 @@ import Testing
         #expect(legacy.isOutdated)
         #expect(legacy.supports(.status) && legacy.supports(.snapshot) && legacy.supports(.apply) && legacy.supports(.flush))
         #expect(!legacy.supports(.processes) && !legacy.supports(.backgroundTasks) && !legacy.supports(.refreshHostsLists))
+        #expect(!legacy.supports(.rootPersistence))
     }
 
     @Test func helloRoundTripsAndToleratesUnknownCapabilities() throws {

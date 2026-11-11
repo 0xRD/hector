@@ -32,6 +32,8 @@ struct HelperError: Error, CustomStringConvertible {
 
 func serve(dryRunRoot: URL?, socketPath: String) async throws -> Never {
     signal(SIGPIPE, SIG_IGN)
+    // Before the first line is logged: it is the one that looks at the log's size.
+    if let dryRunRoot { HelperLog.path = dryRunRoot.appending(path: "hectord.log").path }
     // Before anything reads a request or a file: from here on the helper can only write its own
     // files and start its own tools (see Sandbox.swift). A profile the system refuses must not
     // leave the Mac unprotected, so the helper keeps going and says so in its log.
@@ -41,9 +43,10 @@ func serve(dryRunRoot: URL?, socketPath: String) async throws -> Never {
     } catch {
         log("warning: \(error); running without a sandbox.")
     }
+    PrivilegedScans.systemRoot = dryRunRoot?.path ?? "/"
     let enforcer = try Enforcer(root: dryRunRoot)
     if dryRunRoot == nil {
-        do { try HelperAuthorization.defineRight() } catch { log("Could not define the authorization right: \(error)") }
+        do { try HelperAuthorization.defineRights() } catch { log("Could not define the authorization rights: \(error)") }
     }
     enforcer.restoreAtLaunch()
 
@@ -142,14 +145,16 @@ func handle(client: Int32, gate: EnforcerGate, dryRun: Bool) {
             }
             response = try respond(to: request, peer: peer, gate: gate, dryRun: dryRun)
         } catch {
-            log("Request failed: \(error)")
+            HelperLog.failure("Request failed: \(error)")
             response = .failure(String(describing: error))
         }
     } else {
         response = .failure("Only administrators can talk to the Hector helper.")
     }
     if let data = try? JSONEncoder.hectorWire.encode(response) {
-        try? LineSocket.write(data, to: client)
+        // Bounded like the request: a client that reads its answer a few bytes at a time would
+        // otherwise hold one of the few client slots for as long as it likes.
+        try? LineSocket.write(data, to: client, deadline: Date().addingTimeInterval(HelperLimits.responseDeadline))
     }
 }
 
@@ -169,6 +174,21 @@ func respond(to request: HelperRequest, peer: uid_t, gate: EnforcerGate, dryRun:
             throw HelperError("sfltool dumpbtm failed.")
         }
         return .toolOutput(output.output, truncated: output.truncated)
+    case .rootPersistence(let authorization):
+        // No path and no name comes in: the paths are constants and the user database, and the
+        // answer is made for this peer (see `PrivilegedPersistence`). Without an authorization
+        // it holds facts about root's and other users' files, never their text; root's text
+        // needs the password, like changing the firewall. The right has its own name and its
+        // own dialog text, but is no weaker or stronger than the firewall's: see `clientReferences`.
+        var rootText = peer == 0 || dryRun
+        if let authorization, !rootText {
+            guard HelperAuthorization.verify(authorization, right: .readRootPersistence) else {
+                throw HelperError("Not authorized: reading root's entries needs an administrator's approval.")
+            }
+            log("Root's persistence entries read by uid \(peer).")
+            rootText = true
+        }
+        return .rootPersistence(try PrivilegedScans.shared.report(for: peer, rootText: rootText))
     case .status:
         return .status(gate.sync { $0.status() })
     case .apply(let blocklist, let authorization):
@@ -204,10 +224,13 @@ func authorizedPeer(_ client: Int32) -> uid_t? {
     var gid: gid_t = 0
     guard getpeereid(client, &uid, &gid) == 0 else { return nil }
     if uid == 0 || uid == geteuid() { return uid }
-    guard let user = getpwuid(uid) else { return nil }
+    // The reentrant lookup: connections are served on several threads, and the answer of
+    // `getpwuid` lives in storage another lookup may overwrite before the groups are read.
+    guard let (name, primaryGroup) = LocalAccount.lookup(userID: uid) else { return nil }
     var groups = [Int32](repeating: 0, count: 256)
     var count = Int32(groups.count)
-    getgrouplist(user.pointee.pw_name, Int32(bitPattern: user.pointee.pw_gid), &groups, &count)
+    // -1 means the user has more groups than fit: what was written is still valid, `count` is not.
+    if getgrouplist(name, Int32(bitPattern: primaryGroup), &groups, &count) != 0 { count = Int32(groups.count) }
     return groups.prefix(Int(max(count, 0))).contains(Int32(adminGroupID)) ? uid : nil
 }
 
@@ -243,14 +266,13 @@ func install() throws {
     if source.path != destination {
         // Copy next to the destination, fix owner and mode, then rename: the daemon path never
         // holds a half-written or user-owned file.
-        let staging = destination + ".new"
-        unlink(staging)
-        try FileManager.default.copyItem(atPath: source.path, toPath: staging)
-        removexattr(staging, "com.apple.quarantine", XATTR_NOFOLLOW)
-        guard chown(staging, 0, 0) == 0, chmod(staging, 0o755) == 0, rename(staging, destination) == 0 else {
-            unlink(staging)
-            throw HelperError("Cannot install \(destination): \(String(cString: strerror(errno)))")
-        }
+        // Only the bytes are copied, into a file root creates: `FileManager.copyItem` would also
+        // carry over the source's access control list and extended attributes, and an ACL entry
+        // on the copy in the app bundle (which the user owns) would leave root's binary writable
+        // by whoever that entry names, whatever its owner and mode say.
+        unlink(destination + ".new") // Left behind by an earlier installer that failed.
+        let binary = try SecureFiles.readRegularFile(source.path, maximumSize: 64 << 20)
+        try SecureFiles.write(binary, to: destination, mode: 0o755)
     }
 
     // launchd opens the log as root: create it ourselves, never through a symlink.
@@ -267,7 +289,7 @@ func install() throws {
     let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     try SecureFiles.write(data, to: HelperPaths.launchDaemonPlist, mode: 0o644)
 
-    try HelperAuthorization.defineRight()
+    try HelperAuthorization.defineRights()
     guard launchctl("bootstrap", "system", HelperPaths.launchDaemonPlist) == 0 else {
         throw HelperError("launchctl bootstrap failed; see \(HelperPaths.logFile)")
     }
@@ -303,7 +325,7 @@ func uninstall(purge: Bool) throws {
     // Remove the rules even if the daemon is not running.
     _ = try? Enforcer(root: nil).flush()
     launchctl("bootout", "system/\(HelperPaths.label)")
-    HelperAuthorization.removeRight()
+    HelperAuthorization.removeRights()
     var paths = [HelperPaths.launchDaemonPlist, HelperPaths.installedBinary, HelperPaths.socket, HelperPaths.dataDirectory]
     if purge { paths.append((HelperPaths.logFile as NSString).deletingLastPathComponent) }
     for path in paths {

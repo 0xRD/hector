@@ -27,6 +27,10 @@ final class SecurityController {
     private(set) var isScanningPersistence = false
     /// Why login items are missing, when the helper could not list them.
     private(set) var persistenceHelperIssue: String?
+    /// The last scan had the helper's report of root-only locations.
+    private(set) var persistenceThroughHelper = false
+    /// The helper's report lists root's cron jobs, login hooks and keys without their text.
+    private(set) var rootDetailsHidden = false
     /// Items that appeared since an earlier scan (this launch or a previous one), until the user
     /// marks them as seen.
     private(set) var newPersistenceItems: Set<PersistenceItem.ID> = []
@@ -105,19 +109,25 @@ final class SecurityController {
 
     // MARK: - Persistence
 
-    func scanPersistence() async {
+    /// `askingForRootDetails` shows the password dialog to include what root's cron jobs, login
+    /// hooks and SSH keys say; without it they are listed with their text hidden, unless the
+    /// password was typed in the last five minutes.
+    func scanPersistence(askingForRootDetails: Bool = false) async {
         guard !isScanningPersistence, !isDemo else { return }
         isScanningPersistence = true
         defer { isScanningPersistence = false }
         let includeApple = includeAppleItems
-        let (report, issue, readBackgroundTasks) = await Task.detached(priority: .userInitiated) {
+        let (report, issue, readBackgroundTasks, readPrivileged) = await Task.detached(priority: .userInitiated) {
             let (output, issue) = Self.backgroundTasksFromHelper()
-            let options = PersistenceScanner.Options(includeApple: includeApple, backgroundTaskOutput: output)
-            return (PersistenceScanner().scan(options: options), issue, output != nil)
+            let (privileged, privilegedIssue) = Self.rootPersistenceFromHelper(asking: askingForRootDetails)
+            let options = PersistenceScanner.Options(includeApple: includeApple, backgroundTaskOutput: output, privileged: privileged)
+            return (PersistenceScanner().scan(options: options), issue ?? privilegedIssue, output != nil, privileged?.includesRootText)
         }.value
         persistence = report
         persistenceHelperIssue = issue
-        let fresh = admitPersistence(report.items, readBackgroundTasks: readBackgroundTasks)
+        persistenceThroughHelper = readPrivileged != nil
+        rootDetailsHidden = readPrivileged == false
+        let fresh = admitPersistence(report.items, readBackgroundTasks: readBackgroundTasks, readPrivileged: readPrivileged)
         let paths = report.items.filter { !$0.isInert }.compactMap(Self.codePath(of:))
         await analyzeSignatures(of: paths)
         if !fresh.isEmpty { onNewPersistenceItems?(fresh) }
@@ -128,13 +138,19 @@ final class SecurityController {
     /// its own group, so the first scan that can read one (login items need the helper) takes
     /// what is there as known instead of announcing it. Apple's items are left out: the "Apple"
     /// switch would otherwise make them all look new.
-    private func admitPersistence(_ items: [PersistenceItem], readBackgroundTasks: Bool) -> [PersistenceItem] {
+    /// `readPrivileged`: `nil` without the helper's report, else whether it had root's text.
+    private func admitPersistence(_ items: [PersistenceItem], readBackgroundTasks: Bool, readPrivileged: Bool?) -> [PersistenceItem] {
         let candidates = items.filter { $0.scope != .apple && !$0.isInert }
         var fresh: Set<PersistenceItem.ID> = []
         for category in PersistenceItem.Category.allCases {
             if (category == .loginItem || category == .backgroundTask) && !readBackgroundTasks { continue }
             let ids = candidates.filter { $0.category == category }.map(\.id)
-            fresh.formUnion(knownPersistence.admit(ids, group: category.rawValue))
+            // With the helper these categories also hold root's and other users' entries: a
+            // group of its own, so the first such scan does not announce them all, and a scan
+            // without the helper later does not either. Root's entries change name when their
+            // text is shown or hidden: one more group, for the same reason.
+            let suffix = PrivilegedPersistence.categories.contains(category) ? readPrivileged.map { $0 ? "+root-text" : "+root" } ?? "" : ""
+            fresh.formUnion(knownPersistence.admit(ids, group: category.rawValue + suffix))
         }
         knownPersistenceFile.save(knownPersistence)
         newPersistenceItems.formUnion(fresh)
@@ -162,6 +178,23 @@ final class SecurityController {
                 return (nil, message)
             default:
                 return (nil, "Unexpected reply from the helper.")
+            }
+        } catch {
+            return (nil, String(describing: error))
+        }
+    }
+
+    /// What only root can read (crontabs, sudoers, other users' keys and shell files).
+    nonisolated private static func rootPersistenceFromHelper(asking: Bool) -> (PrivilegedPersistence?, String?) {
+        guard HelperClient.isInstalled else { return (nil, nil) }
+        // A cancelled dialog still gets the report, without root's text.
+        let authorization = asking ? try? HelperAuthorization.externalForm(for: .readRootPersistence)
+                                   : HelperAuthorization.heldExternalForm(for: .readRootPersistence)
+        do {
+            switch try HelperClient.sendChecked(.rootPersistence(authorization: authorization), timeout: 30) {
+            case .rootPersistence(let report): return (report, nil)
+            case .failure(let message): return (nil, message)
+            default: return (nil, "Unexpected reply from the helper.")
             }
         } catch {
             return (nil, String(describing: error))

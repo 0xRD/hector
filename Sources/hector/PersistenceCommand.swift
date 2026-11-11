@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import HectorCore
 
-/// `hector persistence [--json] [--include-apple] [--category NAME[,NAME…]]`
+/// `hector persistence [--json] [--include-apple] [--root-details] [--category NAME[,NAME…]]`
 func persistence(_ args: Arguments) throws {
     var categories: Set<PersistenceItem.Category>?
     if let names = args.options["--category"] {
@@ -10,7 +10,8 @@ func persistence(_ args: Arguments) throws {
     }
     let report = PersistenceScanner().scan(options: .init(includeApple: args.flags.contains("--include-apple"),
                                                            categories: categories,
-                                                           backgroundTaskOutput: backgroundTasksFromHelper(args)))
+                                                           backgroundTaskOutput: backgroundTasksFromHelper(args),
+                                                           privileged: rootPersistenceFromHelper(args)))
 
     if args.flags.contains("--json") {
         print(String(decoding: try JSONEncoder.hector.encode(report), as: UTF8.self))
@@ -21,12 +22,15 @@ func persistence(_ args: Arguments) throws {
         let items = report.items(in: category)
         guard !items.isEmpty else { continue }
         print("\(category.title) (\(items.count))")
+        // Labels, paths and notes come from files anyone may have written: no control character
+        // reaches the terminal, where it could erase or rewrite the lines above.
+        let shown = PersistenceParsers.displayable
         for item in items {
-            print("  " + pad(item.scope.rawValue, 7) + pad(clipped(item.label, 43), 44) + " " + pad(flags(item), 18)
-                  + (item.executablePath ?? item.configurationPath ?? ""))
-            if let inert = item.details["inert"] { print("  " + String(repeating: " ", count: 7) + "  inert: \(inert)") }
-            if let launcher = item.details["launcher"] { print("  " + String(repeating: " ", count: 7) + "  started through \(launcher)") }
-            for note in item.notes { print("  " + String(repeating: " ", count: 7) + "! \(note)") }
+            print("  " + pad(item.scope.rawValue, 7) + pad(clipped(shown(item.label, 1_000), 43), 44) + " " + pad(flags(item), 18)
+                  + shown(item.executablePath ?? item.configurationPath ?? "", 1_000))
+            if let inert = item.details["inert"] { print("  " + String(repeating: " ", count: 7) + "  inert: \(shown(inert, 1_000))") }
+            if let launcher = item.details["launcher"] { print("  " + String(repeating: " ", count: 7) + "  started through \(shown(launcher, 1_000))") }
+            for note in item.notes { print("  " + String(repeating: " ", count: 7) + "! \(shown(note, 1_000))") }
         }
         print("")
     }
@@ -39,7 +43,7 @@ func persistence(_ args: Arguments) throws {
     print("\(report.items.count) items" + (counts.isEmpty ? "" : ": " + counts.joined(separator: ", ")) + ".")
     print("\(flagged) with notes. Scanned in \(String(format: "%.1f", report.duration)) s.")
     for source in report.sources {
-        for note in source.notes { print("\(source.name): \(note)") }
+        for note in source.notes { print("\(source.name): \(PersistenceParsers.displayable(note))") }
     }
     if !args.flags.contains("--include-apple") {
         print("Apple's own items are hidden; add --include-apple to list them.")
@@ -54,6 +58,18 @@ private func backgroundTasksFromHelper(_ args: Arguments) -> ToolOutput? {
           case .toolOutput(let text, let truncated)? = try? HelperClient.sendChecked(.backgroundTasks, socketPath: socket, timeout: 30)
     else { return nil }
     return ToolOutput(output: text, truncated: truncated)
+}
+
+/// What only root can read, from the helper when it runs and we are not root (as root the scanner
+/// reads those places itself). `nil` lets the scanner say what is missing.
+private func rootPersistenceFromHelper(_ args: Arguments) -> PrivilegedPersistence? {
+    let socket = args.options["--socket"] ?? HelperPaths.socket
+    guard geteuid() != 0, FileManager.default.fileExists(atPath: socket) else { return nil }
+    // Root's cron commands, login hooks and key comments need the password dialog.
+    let authorization = args.flags.contains("--root-details") ? try? HelperAuthorization.externalForm(for: .readRootPersistence) : nil
+    guard case .rootPersistence(let report)? = try? HelperClient.sendChecked(.rootPersistence(authorization: authorization),
+                                                                            socketPath: socket, timeout: 30) else { return nil }
+    return report
 }
 
 /// "launch-agents", "LaunchAgent" and "launchagent" all name `.launchAgent`.

@@ -7,8 +7,9 @@
 - **Connections:** zoom the map with ⌘ and the scroll wheel; the details panel stays closed once hidden, and has its own close button (⌥⌘I).
 - **Fix: blocking a country** failed with "Operation not permitted" when the helper had to download the country database: its sandbox refused the download. Update the helper to get the fix.
 - **Hector** watches the lines again, at no measurable cost, and holds his shield while blocking is on.
+- **0.5.1:** Persistence covers what a forensic review looks at first: the crontabs of root and every user, `at` jobs, sudoers, authorized SSH keys and shell startup files of every account, login and logout hooks, PAM services and modules, authorization plugins, and `DYLD_*` variables in launchd jobs. What only root can read comes from the helper, cut down to what is safe to give: facts and red flags for shell files and sudoers, never their text. What root's cron jobs, login hooks and SSH keys say is shown after "Show Root's Details…" and your password, for five minutes. The helper was reviewed again: installing it no longer carries over access control lists from the app bundle, a client that reads its answer too slowly is dropped, and its log stays under 8 MB (see SECURITY.md).
 
-Update the helper from Blocklists after installing, to see CPU, memory and ports for every user's processes.
+Update the helper from Blocklists after installing: the new Persistence sections and the helper fixes need it.
 
 ## What's new in 0.4
 

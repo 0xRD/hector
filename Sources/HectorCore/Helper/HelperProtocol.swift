@@ -2,7 +2,7 @@ import Foundation
 
 public enum HectorVersion {
     /// The single version string of the app, the CLI and the helper. `scripts/bundle-app.sh` reads it.
-    public static let current = "0.5.0"
+    public static let current = "0.5.1"
 }
 
 /// Where the privileged helper lives once installed, and how to reach it.
@@ -57,6 +57,12 @@ public enum HelperRequest: Codable, Sendable {
     /// The output of `sfltool dumpbtm`, the login items and background tasks of every user. The
     /// tool asks for a password unless it runs as root.
     case backgroundTasks
+    /// The persistence locations only root can read: every user's crontab, sudoers, authorized
+    /// SSH keys and shell startup files of every user, root's login hooks (`PrivilegedPersistence`).
+    /// Carries no path and no user name. Without an authorization, root's entries come like
+    /// another user's: facts, with the text hidden. With one that holds
+    /// `HelperAuthorization.Right.readRootPersistence` (the password dialog), their text is included.
+    case rootPersistence(authorization: Data?)
     /// Who the helper is and what it can do (`HelperInfo`). Send it first: a helper older than
     /// this case cannot decode it and answers with a failure, which tells the client it faces a
     /// helper from before the handshake (`HelperInfo.legacy`).
@@ -72,6 +78,7 @@ public enum HelperRequest: Codable, Sendable {
         case .snapshot: .snapshot
         case .processes: .processes
         case .backgroundTasks: .backgroundTasks
+        case .rootPersistence: .rootPersistence
         case .hello: .hello
         }
     }
@@ -81,7 +88,7 @@ public enum HelperRequest: Codable, Sendable {
     public var touchesRules: Bool {
         switch self {
         case .status, .apply, .flush, .refreshHostsLists: true
-        case .snapshot, .processes, .backgroundTasks, .hello: false
+        case .snapshot, .processes, .backgroundTasks, .rootPersistence, .hello: false
         }
     }
 }
@@ -89,6 +96,7 @@ public enum HelperRequest: Codable, Sendable {
 /// One kind of request a helper understands.
 public enum HelperCapability: String, Codable, CaseIterable, Sendable {
     case hello, status, snapshot, apply, flush, processes, backgroundTasks, refreshHostsLists
+    case rootPersistence
     /// `processes` replies carry each process's CPU, memory and listening ports.
     case processUsage
 
@@ -152,6 +160,9 @@ public enum HelperLimits {
     /// The whole request must arrive within this many seconds, so a slow client cannot stall the
     /// helper, which serves one request at a time.
     public static let requestDeadline: TimeInterval = 5
+    /// The client must have read the whole answer within this many seconds. With the 2 s limit on
+    /// each write, a client that stops reading, or reads a trickle, frees its slot after that.
+    public static let responseDeadline: TimeInterval = 15
     public static let maximumRules = 5_000
     /// Connections the helper serves at the same time; the next ones wait in the listen backlog.
     public static let maximumConcurrentClients = 8
@@ -246,6 +257,7 @@ public enum HelperResponse: Codable, Sendable {
     /// Text printed by a system tool, as the app parses it itself.
     case toolOutput(String, truncated: Bool)
     case hello(HelperInfo)
+    case rootPersistence(PrivilegedPersistence)
     case failure(String)
 }
 

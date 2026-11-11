@@ -34,6 +34,10 @@ public enum HelperSandboxProfile {
                 "(prefix \"/private/etc/hosts.hector-\")",
                 "(literal \(quoted(socket)))",
                 "(literal \(quoted(HelperPaths.logFile)))",
+                // The previous log, written when the log is cut to size (`HelperLog`), and the
+                // temporary sibling `SecureFiles.write` renames over it.
+                "(literal \(quoted(HelperPaths.logFile + ".1")))",
+                "(prefix \(quoted(HelperPaths.logFile + ".1.hector-")))",
                 "(literal \"/dev/pf\")",
             ]
         }

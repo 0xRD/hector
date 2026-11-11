@@ -52,6 +52,30 @@ enum SecureFiles {
         }
     }
 
+    /// The bytes of a regular file, at most `maximumSize`. Refuses a symlink, a pipe or a device
+    /// at `path` (its last component), and never blocks on one.
+    static func readRegularFile(_ path: String, maximumSize: Int) throws -> Data {
+        let fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        guard fd >= 0 else { throw InsecurePath(description: "Cannot open \(path).") }
+        defer { close(fd) }
+        var info = stat()
+        guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFREG, info.st_size > 0, info.st_size <= maximumSize else {
+            throw InsecurePath(description: "\(path) is not a regular file of a plausible size.")
+        }
+        var data = Data(count: Int(info.st_size))
+        let count = data.withUnsafeMutableBytes { raw -> Int in
+            var offset = 0
+            while offset < raw.count {
+                let got = Darwin.read(fd, raw.baseAddress! + offset, raw.count - offset)
+                if got <= 0 { break }
+                offset += got
+            }
+            return offset
+        }
+        guard count == data.count else { throw InsecurePath(description: "Cannot read \(path).") }
+        return data
+    }
+
     /// Writes `data` to a temporary file in the same directory, then renames it over `path`.
     /// `rename` replaces a symlink instead of following it.
     static func write(_ data: Data, to path: String, mode: mode_t) throws {

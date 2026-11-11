@@ -24,7 +24,12 @@ Hector is meant to run all the time and its helper runs as root, so these come b
   - [x] Update SECURITY.md with the result
   - [ ] Make the repository public
 
-- [ ] **Important, next release: root's crontab in Persistence.** The app reads only the user's own crontab and `/etc/crontab`; root's and other users' tabs in `/usr/lib/cron/tabs` need root, and root's crontab is a common place for malware to persist. Add a helper request for them. Keep the rule of `ProcessSnapshot.visible(to:)`: only the caller's and root's tabs, since cron lines can hold secrets. Check first that the helper can read that folder: macOS may refuse it even as root.
+- [x] **Root-only persistence through the helper** (0.5.1): one request, `rootPersistence`, for every user's crontab, sudoers, every account's authorized SSH keys and shell startup files, and root's login hooks, cut down to facts for what is not the caller's; root's text needs the password dialog (see SECURITY.md, "Root-only persistence"). Read as the user, without the helper: `at` jobs, authorization plugins, PAM services and modules, the shell files of /etc, login hooks in /Library/Preferences, `DYLD_*` in launchd plists.
+  - [ ] Check with a real root helper: that macOS lets it read `/usr/lib/cron/tabs` (it may refuse even root; the app then falls back to `crontab -l`), root's `.ssh` and `/var/root/Library/Preferences`, and that nothing is denied in the system log
+  - [ ] Look at the Persistence screen with the new sections (only the CLI and the tests were run)
+  - [ ] Not followed yet: `ZDOTDIR`, `AuthorizedKeysFile`/`AuthorizedKeysCommand` in `sshd_config`, `/etc/periodic.conf`, plugins referenced by the authorization database
+  - [x] Cap the helper's log (4 MB, one previous copy, failed requests rate-limited)
+  - [ ] Check with a real root helper: "Show Root's Details…" and its password dialog, and that the log is trimmed at 4 MB
 
 ## Review of every screen on real data (2026-10-04)
 

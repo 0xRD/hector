@@ -14,6 +14,8 @@ import Testing
         #expect(profile.contains("(literal \"/private/etc/hosts\")"))
         #expect(profile.contains("(literal \"/private/var/run/io.github.0xrd.hectord.sock\")"))
         #expect(profile.contains("(literal \"/Library/PrivilegedHelperTools/io.github.0xrd.hectord\")"))
+        #expect(profile.contains("(literal \"/Library/Logs/Hector/hectord.log.1\")"))
+        #expect(!profile.contains("(subpath \"/Library/Logs"))
         #expect(!profile.contains("/Library/LaunchDaemons"))
         #expect(!profile.contains("(subpath \"/private/etc\")"))
         #expect(!profile.contains("/bin/sh"))

@@ -209,7 +209,10 @@ enum Unprivileged {
         for name in names where name.hasPrefix(prefix) {
             let path = parent + "/" + name
             var info = stat()
+            // /private/var/tmp is open to everyone: as root, only remove what a child made (it is
+            // `nobody` by then), never a folder some other user gave this name.
             guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR,
+                  geteuid() != 0 || info.st_uid == nobodyUser,
                   Date().timeIntervalSince1970 - Double(info.st_mtimespec.tv_sec) > 3600 else { continue }
             try? files.removeItem(atPath: path)
         }
