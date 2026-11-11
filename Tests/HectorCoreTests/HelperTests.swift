@@ -89,7 +89,7 @@ import Testing
 @Suite struct HelperHandshakeTests {
     @Test func everyRequestMapsToACapabilityTheHelperAnnounces() {
         let requests: [HelperRequest] = [
-            .hello, .status, .snapshot, .processes, .backgroundTasks, .rootPersistence,
+            .hello, .status, .snapshot, .processes, .backgroundTasks, .rootPersistence(authorization: nil),
             .apply(Blocklist(), authorization: Data()), .flush(authorization: Data()),
             .refreshHostsLists(authorization: Data()),
         ]

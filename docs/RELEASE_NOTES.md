@@ -1,7 +1,7 @@
 ## What's next (branch `root-persistence-scan`, not released)
 
-- **Persistence** now covers what a forensic review looks at first: the crontabs of root and every user, `at` jobs, sudoers, authorized SSH keys and shell startup files of every account, login and logout hooks, PAM services and modules, authorization plugins, and `DYLD_*` variables in launchd jobs. What only root can read comes from the helper, cut down to what is safe to give (facts and red flags for shell files and sudoers, never their text). Update the helper to get it.
-- **Helper hardening:** installing the helper no longer carries over access control lists from the app bundle; a client that reads its answer too slowly is dropped. See SECURITY.md, "Review before 0.5.1".
+- **Persistence** now covers what a forensic review looks at first: the crontabs of root and every user, `at` jobs, sudoers, authorized SSH keys and shell startup files of every account, login and logout hooks, PAM services and modules, authorization plugins, and `DYLD_*` variables in launchd jobs. What only root can read comes from the helper, cut down to what is safe to give (facts and red flags for shell files and sudoers, never their text); what root's cron jobs, login hooks and SSH keys say is shown after "Show Root's Details…" and your password, for five minutes. Update the helper to get it.
+- **Helper hardening:** installing the helper no longer carries over access control lists from the app bundle; a client that reads its answer too slowly is dropped; the helper's log is kept under 8 MB. See SECURITY.md, "Review before 0.5.1".
 
 ## What's new in 0.5
 

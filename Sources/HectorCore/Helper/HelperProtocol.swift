@@ -59,8 +59,10 @@ public enum HelperRequest: Codable, Sendable {
     case backgroundTasks
     /// The persistence locations only root can read: every user's crontab, sudoers, authorized
     /// SSH keys and shell startup files of every user, root's login hooks (`PrivilegedPersistence`).
-    /// Carries nothing: no path and no user name crosses the socket.
-    case rootPersistence
+    /// Carries no path and no user name. Without an authorization, root's entries come like
+    /// another user's: facts, with the text hidden. With one that holds
+    /// `HelperAuthorization.Right.readRootPersistence` (the password dialog), their text is included.
+    case rootPersistence(authorization: Data?)
     /// Who the helper is and what it can do (`HelperInfo`). Send it first: a helper older than
     /// this case cannot decode it and answers with a failure, which tells the client it faces a
     /// helper from before the handshake (`HelperInfo.legacy`).

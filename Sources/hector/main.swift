@@ -52,11 +52,14 @@ USAGE
   hector vt key set                     Store your VirusTotal API key in the Keychain (read from stdin)
   hector vt key delete                  Remove it
 
-  hector persistence [--json] [--include-apple] [--category NAME[,NAME]]
+  hector persistence [--json] [--include-apple] [--root-details] [--category NAME[,NAME]]
       List what is configured to run automatically: launch agents and daemons, login items,
-      cron, periodic scripts, system and kernel extensions, profiles, browser extensions.
-      Nothing found is executed. Login items need root: they are read through the helper when it
-      is installed.
+      cron and at jobs, periodic scripts, login hooks, shell startup files, authorized SSH keys,
+      sudo rules, PAM, authorization plugins, system and kernel extensions, profiles, browser
+      extensions. Nothing found is executed. Login items and what only root can read (other
+      users' crontabs, keys and shell files, sudoers) come from the helper when it is installed.
+      Root's cron commands, login hooks and key comments are hidden unless --root-details is
+      given, which asks for an administrator's password (or run with sudo).
 
   hector processes [--json] [--flagged] [--listening] [--tree]
       Running processes with their parent, user, CPU, memory, path and connections. Through the

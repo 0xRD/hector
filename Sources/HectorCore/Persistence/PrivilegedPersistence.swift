@@ -41,10 +41,10 @@ public struct LocalAccount: Hashable, Sendable {
 
 /// What only root can read about persistence: the helper's answer to `rootPersistence`.
 ///
-/// It is made for one reader (`viewer`), with the rule of `ProcessSnapshot.visible(to:)`: text
-/// that can hold a secret (a cron command, the comment of a key) is given for the reader's own
-/// files and for root's, never for another user's. Shell startup files and sudoers are described
-/// by facts and red flags only, whoever they belong to.
+/// It is made for one reader (`viewer`): text that can hold a secret (a cron command, the comment
+/// of a key, a login hook) is given for the reader's own files, never for another user's, and for
+/// root's only to a reader who typed an administrator's password (`includesRootText`). Shell
+/// startup files and sudoers are described by facts and red flags only, whoever they belong to.
 public struct PrivilegedPersistence: Codable, Sendable {
     public struct Source: Codable, Sendable {
         public var name: String
@@ -72,8 +72,13 @@ public struct PrivilegedPersistence: Codable, Sendable {
     public static let categories: Set<PersistenceItem.Category> = [.cronJob, .sudoRule, .sshKey, .shellStartup, .loginHook]
 
     public var sources: [Source]
+    /// The text of root's entries is in the report; when false they read "command hidden".
+    public var includesRootText: Bool
 
-    public init(sources: [Source]) { self.sources = sources }
+    public init(sources: [Source], includesRootText: Bool = false) {
+        self.sources = sources
+        self.includesRootText = includesRootText
+    }
 
     public func source(_ name: String) -> Source? { sources.first { $0.name == name } }
 }
@@ -101,26 +106,29 @@ public struct PrivilegedPersistenceScanner: Sendable {
     /// entries; it keeps the answer, and the helper's memory, bounded whatever is on disk.
     static let maximumItemsPerSource = 5_000
 
-    public func scan(viewer: uid_t) -> PrivilegedPersistence {
+    /// `includesRootText`: the reader proved an administrator's password (or is root).
+    public func scan(viewer: uid_t, includesRootText: Bool = false) -> PrivilegedPersistence {
+        let rootText = includesRootText || viewer == 0
         let root: GuardedDirectory
         do {
             root = try GuardedDirectory(trusted: system)
         } catch {
-            return PrivilegedPersistence(sources: [.init(name: PrivilegedPersistence.cronTables, notes: [String(describing: error)], complete: false)])
+            return PrivilegedPersistence(sources: [.init(name: PrivilegedPersistence.cronTables, notes: [String(describing: error)], complete: false)],
+                                         includesRootText: rootText)
         }
-        let users = UserFiles.scan(accounts: accounts, root: root, viewer: viewer)
+        let users = UserFiles.scan(accounts: accounts, root: root, viewer: viewer, rootText: rootText)
         return PrivilegedPersistence(sources: [
-            cronTables(root, viewer: viewer),
+            cronTables(root, viewer: viewer, rootText: rootText),
             sudoers(root),
             .init(name: PrivilegedPersistence.authorizedKeys, items: users.keys),
             .init(name: PrivilegedPersistence.shellStartup, items: users.startup, notes: users.notes),
-            rootLoginHooks(root),
-        ])
+            rootLoginHooks(root, rootText: rootText),
+        ], includesRootText: rootText)
     }
 
     // MARK: - cron
 
-    func cronTables(_ root: GuardedDirectory, viewer: uid_t) -> PrivilegedPersistence.Source {
+    func cronTables(_ root: GuardedDirectory, viewer: uid_t, rootText: Bool) -> PrivilegedPersistence.Source {
         var source = PrivilegedPersistence.Source(name: PrivilegedPersistence.cronTables)
         let tabs: GuardedDirectory
         let listing: (names: [String], complete: Bool)
@@ -153,7 +161,7 @@ public struct PrivilegedPersistenceScanner: Sendable {
                 jobs.removeLast(jobs.count - Self.maximumJobsPerCrontab)
                 source.notes.append("\(path) has more than \(Self.maximumJobsPerCrontab) jobs: the rest are not listed")
             }
-            let visible = viewer == 0 || name == "root" || (ownerID != nil && ownerID == viewer)
+            let visible = viewer == 0 || (name == "root" && rootText) || (ownerID != nil && ownerID == viewer)
             for (index, job) in jobs.enumerated() {
                 var item = job
                 item.modifiedAt = contents.facts.modified
@@ -162,15 +170,16 @@ public struct PrivilegedPersistenceScanner: Sendable {
                     item.arguments = item.arguments.prefix(64).map { PersistenceParsers.displayable($0) }
                     item.executablePath = item.executablePath.map { PersistenceParsers.displayable($0) }
                     item.details = item.details.mapValues { PersistenceParsers.displayable($0, maximumLength: 200) }
-                    if name == "root" { item.notes.append("runs as root") }
                 } else {
-                    // Another user's command line can hold a password or a token.
+                    // A command line can hold a password or a token: another user's is never
+                    // given, root's only to a reader who typed the password.
                     item = PersistenceItem(category: .cronJob, scope: scope, label: "Cron job of \(owner) (command hidden)",
                                            configurationPath: path, modifiedAt: contents.facts.modified,
                                            details: ["schedule": PersistenceParsers.displayable(job.details["schedule"] ?? "", maximumLength: 200),
                                                      "user": owner],
                                            id: PersistenceItem.makeID(category: .cronJob, configurationPath: path, label: "hidden \(index + 1)"))
                 }
+                if name == "root" { item.notes.append("runs as root") }
                 source.items.append(item)
             }
         }
@@ -228,11 +237,12 @@ public struct PrivilegedPersistenceScanner: Sendable {
 
     // MARK: - Login hooks
 
-    func rootLoginHooks(_ root: GuardedDirectory) -> PrivilegedPersistence.Source {
+    func rootLoginHooks(_ root: GuardedDirectory, rootText: Bool) -> PrivilegedPersistence.Source {
         var source = PrivilegedPersistence.Source(name: PrivilegedPersistence.rootLoginHooks)
         do {
             let preferences = try root.descend("private/var/root/Library/Preferences")
-            source.items = LoginHooks.items(in: preferences, displayPath: "/var/root/Library/Preferences/" + LoginHooks.fileName)
+            source.items = LoginHooks.items(in: preferences, displayPath: "/var/root/Library/Preferences/" + LoginHooks.fileName,
+                                            showsCommand: rootText)
         } catch {
             source.complete = error.isMissing
             if !error.isMissing { source.notes.append("\(error)") }
@@ -247,18 +257,20 @@ public struct PrivilegedPersistenceScanner: Sendable {
 enum LoginHooks {
     static let fileName = "com.apple.loginwindow.plist"
 
-    static func items(in preferences: GuardedDirectory, displayPath: String) -> [PersistenceItem] {
+    /// `showsCommand` false: that a hook is set, without what it runs.
+    static func items(in preferences: GuardedDirectory, displayPath: String, showsCommand: Bool = true) -> [PersistenceItem] {
         guard let contents = try? preferences.read(fileName, maximumSize: 1 << 20), !contents.truncated,
               let plist = (try? PropertyListSerialization.propertyList(from: contents.data, format: nil)) as? [String: Any] else { return [] }
         var items: [PersistenceItem] = []
         for key in ["LoginHook", "LogoutHook"] {
             guard let value = plist[key] as? String, !value.isEmpty else { continue }
-            let command = PersistenceParsers.displayable(value)
-            let arguments = command.split(separator: " ").map(String.init)
+            let command = showsCommand ? PersistenceParsers.displayable(value) : "(command hidden)"
+            let arguments = showsCommand ? command.split(separator: " ").map(String.init) : []
             var notes = ["runs as root at every \(key == "LoginHook" ? "login" : "logout")"]
             if contents.facts.owner != 0 { notes.append("configuration is not owned by root") }
             if contents.facts.permissions & 0o002 != 0 { notes.append("configuration is world-writable") }
-            items.append(PersistenceItem(category: .loginHook, scope: .system, label: "\(key): \(command)", configurationPath: displayPath,
+            items.append(PersistenceItem(category: .loginHook, scope: .system, label: showsCommand ? "\(key): \(command)" : "\(key) \(command)",
+                                         configurationPath: displayPath,
                                          executablePath: arguments.first.flatMap { $0.hasPrefix("/") ? $0 : nil }, arguments: arguments,
                                          modifiedAt: contents.facts.modified, details: ["hook": key], notes: notes,
                                          id: PersistenceItem.makeID(category: .loginHook, configurationPath: displayPath, label: key)))
@@ -295,7 +307,7 @@ enum UserFiles {
         return path.split(separator: "/").map(String.init)
     }
 
-    static func scan(accounts: [LocalAccount], root: GuardedDirectory, viewer: uid_t) -> Result {
+    static func scan(accounts: [LocalAccount], root: GuardedDirectory, viewer: uid_t, rootText: Bool) -> Result {
         var result = Result()
         for account in accounts {
             guard result.keys.count < PrivilegedPersistenceScanner.maximumItemsPerSource else {
@@ -311,7 +323,7 @@ enum UserFiles {
                 }
                 continue
             }
-            let showsText = viewer == 0 || account.userID == viewer || account.userID == 0
+            let showsText = viewer == 0 || account.userID == viewer || (account.userID == 0 && rootText)
             let one = scan(account: account, home: home, showsText: showsText)
             result.keys += one.keys
             result.startup += one.startup

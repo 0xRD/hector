@@ -24,11 +24,12 @@ Hector is meant to run all the time and its helper runs as root, so these come b
   - [x] Update SECURITY.md with the result
   - [ ] Make the repository public
 
-- [x] **Root-only persistence through the helper** (branch `root-persistence-scan`): one request, `rootPersistence`, for every user's crontab, sudoers, every account's authorized SSH keys and shell startup files, and root's login hooks, with the rule of `ProcessSnapshot.visible(to:)` (see SECURITY.md, "Root-only persistence"). Read as the user, without the helper: `at` jobs, authorization plugins, PAM services and modules, the shell files of /etc, login hooks in /Library/Preferences, `DYLD_*` in launchd plists.
+- [x] **Root-only persistence through the helper** (branch `root-persistence-scan`): one request, `rootPersistence`, for every user's crontab, sudoers, every account's authorized SSH keys and shell startup files, and root's login hooks, cut down to facts for what is not the caller's; root's text needs the password dialog (see SECURITY.md, "Root-only persistence"). Read as the user, without the helper: `at` jobs, authorization plugins, PAM services and modules, the shell files of /etc, login hooks in /Library/Preferences, `DYLD_*` in launchd plists.
   - [ ] Check with a real root helper: that macOS lets it read `/usr/lib/cron/tabs` (it may refuse even root; the app then falls back to `crontab -l`), root's `.ssh` and `/var/root/Library/Preferences`, and that nothing is denied in the system log
   - [ ] Look at the Persistence screen with the new sections (only the CLI and the tests were run)
   - [ ] Not followed yet: `ZDOTDIR`, `AuthorizedKeysFile`/`AuthorizedKeysCommand` in `sshd_config`, `/etc/periodic.conf`, plugins referenced by the authorization database
-  - [ ] Rotate or cap the helper's log
+  - [x] Cap the helper's log (4 MB, one previous copy, failed requests rate-limited)
+  - [ ] Check with a real root helper: "Show Root's Details…" and its password dialog, and that the log is trimmed at 4 MB
 
 ## Review of every screen on real data (2026-10-04)
 

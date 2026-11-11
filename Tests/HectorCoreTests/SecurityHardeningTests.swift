@@ -22,6 +22,19 @@ import Testing
         #expect(clean.count <= LogText.maximumLength + 1)
     }
 
+    @Test func aClientCannotFloodTheLog() {
+        var budget = LogBudget(limit: 3, window: 60)
+        let start = Date(timeIntervalSince1970: 1_000)
+        let first = (0..<10).map { budget.take(at: start.addingTimeInterval(Double($0))).allowed }
+        #expect(first == [true, true, true] + Array(repeating: false, count: 7))
+        // The next minute starts by saying how much was left out, once.
+        let next = budget.take(at: start.addingTimeInterval(61))
+        #expect(next.allowed && next.droppedBefore == 7)
+        #expect(budget.take(at: start.addingTimeInterval(62)).droppedBefore == 0)
+        // A clock set back does not close the log for good.
+        #expect(budget.take(at: start.addingTimeInterval(-3_600)).allowed)
+    }
+
     // MARK: Authorization
 
     @Test func forgedAuthorizationsAreRejected() {
@@ -29,6 +42,13 @@ import Testing
         #expect(!HelperAuthorization.verify(Data(repeating: 0, count: 32)))
         #expect(!HelperAuthorization.verify(Data((0..<32).map { _ in UInt8.random(in: 0...255) })))
         #expect(!HelperAuthorization.verify(Data(repeating: 1, count: 64)))
+        for forged in [Data(), Data(repeating: 0, count: 32), Data((0..<32).map { _ in UInt8.random(in: 0...255) })] {
+            #expect(!HelperAuthorization.verify(forged, right: .readRootPersistence))
+        }
+        // Two rights, two names: the password for one is not the password for the other.
+        #expect(Set(HelperAuthorization.Right.all.map(\.name)).count == 2)
+        // Nothing was typed in this process: no dialog, and no authorization to send.
+        #expect(HelperAuthorization.heldExternalForm(for: .readRootPersistence) == nil)
     }
 
     // MARK: Input validation

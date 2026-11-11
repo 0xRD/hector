@@ -233,7 +233,18 @@ private let sampleFingerprint = "SHA256:E3pr2pQMavA5IHmO9NiFqGAHkV5wCz4KB9F2NtNR
         let accounts = [LocalAccount(name: "root", userID: 0, home: "/var/root"), LocalAccount(name: "alex", userID: 501, home: "/Users/alex"),
                         LocalAccount(name: "bob", userID: 502, home: "/Users/bob")]
 
-        let forAlex = fixture.scanner(accounts).scan(viewer: 501)
+        // Without the password: root's job is there, its command is not.
+        let unapproved = fixture.scanner(accounts).scan(viewer: 501)
+        #expect(!unapproved.includesRootText)
+        let hidden = try #require(unapproved.source(PrivilegedPersistence.cronTables))
+        #expect(hidden.items.map(\.label).sorted() == ["/usr/local/bin/mine", "Cron job of bob (command hidden)", "Cron job of root (command hidden)"])
+        let hiddenRoot = try #require(hidden.items.first { $0.details["user"] == "root" })
+        #expect(hiddenRoot.details["schedule"] == "*/5 * * * *" && hiddenRoot.notes == ["runs as root"] && hiddenRoot.arguments.isEmpty)
+        #expect(!(try fixture.encoded(unapproved)).contains("beacon"))
+
+        // With it: root's command, still not bob's.
+        let forAlex = fixture.scanner(accounts).scan(viewer: 501, includesRootText: true)
+        #expect(forAlex.includesRootText)
         let cron = try #require(forAlex.source(PrivilegedPersistence.cronTables))
         #expect(cron.complete)
         #expect(cron.items.map(\.label).sorted() == ["/usr/local/bin/mine", "/var/root/.hidden/beacon --quiet", "Cron job of bob (command hidden)"])
@@ -246,6 +257,7 @@ private let sampleFingerprint = "SHA256:E3pr2pQMavA5IHmO9NiFqGAHkV5wCz4KB9F2NtNR
 
         // Root sees everything; so does bob for his own.
         #expect(try fixture.encoded(fixture.scanner(accounts).scan(viewer: 0)).contains("hunter2"))
+        #expect(fixture.scanner(accounts).scan(viewer: 0).includesRootText)
         #expect(try fixture.encoded(fixture.scanner(accounts).scan(viewer: 502)).contains("hunter2"))
         #expect(!(try fixture.encoded(fixture.scanner(accounts).scan(viewer: 502))).contains("/usr/local/bin/mine"))
     }
@@ -356,11 +368,34 @@ private let sampleFingerprint = "SHA256:E3pr2pQMavA5IHmO9NiFqGAHkV5wCz4KB9F2NtNR
         try plist.write(to: fixture.root.appending(path: "private/var/root/Library/Preferences/com.apple.loginwindow.plist"))
 
         // The account is root's name with the test user's ID, so the file counts as its own.
-        let report = fixture.scanner([LocalAccount(name: "root", userID: fixture.me, home: "/var/root")]).scan(viewer: 501)
+        let scanner = fixture.scanner([LocalAccount(name: "root", userID: fixture.me, home: "/var/root")])
+        let report = scanner.scan(viewer: 501, includesRootText: true)
         #expect(report.source(PrivilegedPersistence.authorizedKeys)?.items.first?.configurationPath == "/var/root/.ssh/authorized_keys")
         let hooks = try #require(report.source(PrivilegedPersistence.rootLoginHooks)).items
         #expect(hooks.map(\.label) == ["LoginHook: /var/root/.hook.sh --now"])
         #expect(hooks[0].executablePath == "/var/root/.hook.sh" && hooks[0].notes.contains("runs as root at every login"))
+
+        // Without the password the hook is reported, not what it runs.
+        let unapproved = scanner.scan(viewer: 501)
+        let hiddenHooks = try #require(unapproved.source(PrivilegedPersistence.rootLoginHooks)).items
+        #expect(hiddenHooks.map(\.label) == ["LoginHook (command hidden)"])
+        #expect(hiddenHooks[0].executablePath == nil && hiddenHooks[0].arguments.isEmpty && hiddenHooks[0].id == hooks[0].id)
+        #expect(!(try fixture.encoded(unapproved)).contains(".hook.sh"))
+    }
+
+    @Test func rootsKeyDetailsNeedThePassword() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        // Really owned by user 0 in the account list; the file is the test user's, so it is
+        // "not owned by root" and not read. What matters here is the rule, tested on the flag.
+        try fixture.write("command=\"/root-forced\" \(sampleKey)\n", to: "private/var/root/.ssh/authorized_keys")
+        guard let home = try? GuardedDirectory(trusted: fixture.root.path).descend("private/var/root") else { Issue.record("no home"); return }
+        let root = LocalAccount(name: "root", userID: fixture.me, home: "/var/root")
+        let hidden = UserFiles.scan(account: root, home: home, showsText: false).keys
+        #expect(hidden.count == 1 && hidden[0].details["command"] == nil && hidden[0].label == "ssh-ed25519 key of root")
+        #expect(hidden[0].details["fingerprint"] == sampleFingerprint && hidden[0].notes.contains("runs a command at login (command=)"))
+        let shown = UserFiles.scan(account: root, home: home, showsText: true).keys
+        #expect(shown[0].details["command"] == "/root-forced" && shown[0].label == "test@example" && shown[0].id == hidden[0].id)
     }
 
     @Test func sudoersAreDescribedByFlags() throws {
@@ -501,7 +536,11 @@ private let sampleFingerprint = "SHA256:E3pr2pQMavA5IHmO9NiFqGAHkV5wCz4KB9F2NtNR
         }
         #expect(decoded.sources.first?.items.first?.category == .sudoRule && decoded.sources.first?.complete == false)
         // The request carries nothing a client could aim at a path.
-        #expect(String(decoding: try JSONEncoder.hectorWire.encode(HelperRequest.rootPersistence), as: UTF8.self) == #"{"rootPersistence":{}}"#)
+        #expect(String(decoding: try JSONEncoder.hectorWire.encode(HelperRequest.rootPersistence(authorization: nil)), as: UTF8.self)
+                == #"{"rootPersistence":{}}"#)
+        // A reply from before `includesRootText` could not exist (the request is new), but a
+        // missing flag must never read as "included".
+        #expect(!PrivilegedPersistence(sources: []).includesRootText)
     }
 }
 

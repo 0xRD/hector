@@ -26,18 +26,25 @@ final class PrivilegedScans: @unchecked Sendable {
     static let maximumAbandoned = 3
 
     private let condition = NSCondition()
-    private var reports: [uid_t: (madeAt: Date, report: PrivilegedPersistence)] = [:]
+    /// A report is made for one reader, with or without root's text.
+    private struct Reader: Hashable {
+        var viewer: uid_t
+        var rootText: Bool
+    }
+
+    private var reports: [Reader: (madeAt: Date, report: PrivilegedPersistence)] = [:]
     private var running: (id: Int, startedAt: Date)?
     private var lastID = 0
     private var abandoned = 0
 
-    func report(for viewer: uid_t) throws -> PrivilegedPersistence {
+    func report(for viewer: uid_t, rootText: Bool) throws -> PrivilegedPersistence {
+        let reader = Reader(viewer: viewer, rootText: rootText)
         condition.lock()
         defer { condition.unlock() }
         let deadline = Date().addingTimeInterval(Self.patience)
         var started = false
         while true {
-            if let cached = reports[viewer], Date().timeIntervalSince(cached.madeAt) < Self.freshness { return cached.report }
+            if let cached = reports[reader], Date().timeIntervalSince(cached.madeAt) < Self.freshness { return cached.report }
             if let scan = running {
                 let age = Date().timeIntervalSince(scan.startedAt)
                 if age >= Self.abandonAfter, abandoned < Self.maximumAbandoned {
@@ -63,11 +70,11 @@ final class PrivilegedScans: @unchecked Sendable {
             let root = Self.systemRoot
             // Its own thread: the client's thread must be free to give up.
             Thread.detachNewThread { [self] in
-                let report = PrivilegedPersistenceScanner(system: root).scan(viewer: viewer)
+                let report = PrivilegedPersistenceScanner(system: root).scan(viewer: viewer, includesRootText: rootText)
                 condition.lock()
                 let now = Date()
                 reports = reports.filter { now.timeIntervalSince($0.value.madeAt) < Self.freshness }
-                reports[viewer] = (now, report)
+                reports[reader] = (now, report)
                 if running?.id == id { running = nil } else { abandoned -= 1 }
                 condition.broadcast()
                 condition.unlock()

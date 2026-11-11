@@ -88,6 +88,12 @@ struct PersistenceView: View {
                     .toggleStyle(.checkbox)
                     .onChange(of: security.includeAppleItems) { Task { await security.scanPersistence() } }
                 checkAllButton(items)
+                if security.rootDetailsHidden {
+                    Button("Show Root's Details…") { Task { await security.scanPersistence(askingForRootDetails: true) } }
+                        .fixedSize()
+                        .disabled(security.isScanningPersistence)
+                        .help("Asks for an administrator's password, then shows what root's cron jobs, login hooks and SSH keys say. They are hidden again after five minutes.")
+                }
                 if !security.newPersistenceItems.isEmpty {
                     Button("Mark as Seen") { security.markPersistenceAsSeen() }
                         .fixedSize()

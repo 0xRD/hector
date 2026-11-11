@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import HectorCore
 
-/// `hector persistence [--json] [--include-apple] [--category NAME[,NAME…]]`
+/// `hector persistence [--json] [--include-apple] [--root-details] [--category NAME[,NAME…]]`
 func persistence(_ args: Arguments) throws {
     var categories: Set<PersistenceItem.Category>?
     if let names = args.options["--category"] {
@@ -61,9 +61,11 @@ private func backgroundTasksFromHelper(_ args: Arguments) -> ToolOutput? {
 /// reads those places itself). `nil` lets the scanner say what is missing.
 private func rootPersistenceFromHelper(_ args: Arguments) -> PrivilegedPersistence? {
     let socket = args.options["--socket"] ?? HelperPaths.socket
-    guard geteuid() != 0, FileManager.default.fileExists(atPath: socket),
-          case .rootPersistence(let report)? = try? HelperClient.sendChecked(.rootPersistence, socketPath: socket, timeout: 30)
-    else { return nil }
+    guard geteuid() != 0, FileManager.default.fileExists(atPath: socket) else { return nil }
+    // Root's cron commands, login hooks and key comments need the password dialog.
+    let authorization = args.flags.contains("--root-details") ? try? HelperAuthorization.externalForm(for: .readRootPersistence) : nil
+    guard case .rootPersistence(let report)? = try? HelperClient.sendChecked(.rootPersistence(authorization: authorization),
+                                                                            socketPath: socket, timeout: 30) else { return nil }
     return report
 }
 
