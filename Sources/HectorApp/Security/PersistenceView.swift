@@ -184,18 +184,28 @@ struct PersistenceView: View {
         var kind: StatusKind
     }
 
+    /// One banner for everything that waits on the helper, however many sources say so: after
+    /// an update of the app every root-only source does, until the helper is updated too.
     private var sourceNotes: [SourceNote] {
-        var notes = (security.persistence?.sources ?? []).flatMap { source in
-            source.notes.map { note in
-                note.hasPrefix("needs the helper")
-                    ? SourceNote(title: "\(source.name) need the helper",
-                                 message: "Install it from Blocklists: listing them needs root.", kind: .info)
-                    : SourceNote(title: source.name, message: note, kind: .warning)
+        var notes: [SourceNote] = []
+        var waiting: [String] = []
+        for source in security.persistence?.sources ?? [] {
+            for note in source.notes {
+                if note.contains("need the helper") || note.hasPrefix("needs the helper") {
+                    if !waiting.contains(source.name) { waiting.append(source.name) }
+                } else {
+                    notes.append(SourceNote(title: source.name, message: note, kind: .warning))
+                }
             }
         }
         if let issue = security.persistenceHelperIssue {
-            notes.append(SourceNote(title: "The helper could not list login items",
-                                    message: "\(issue) Updating the helper from Blocklists fixes an older one.", kind: .warning))
+            let missing = waiting.isEmpty ? "" : " Not read in full until then: \(waiting.joined(separator: ", "))."
+            notes.insert(SourceNote(title: "The helper did not answer everything",
+                                    message: "\(issue)\(missing)", kind: .warning), at: 0)
+        } else if !waiting.isEmpty {
+            notes.insert(SourceNote(title: "Some places need the helper",
+                                    message: "Not read in full: \(waiting.joined(separator: ", ")). Only root can read them: install the helper from Blocklists.",
+                                    kind: .info), at: 0)
         }
         return notes
     }
