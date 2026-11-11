@@ -346,7 +346,7 @@ enum UserFiles {
             do {
                 home = try root.descend(components(ofHome: account.home))
             } catch {
-                if !error.isMissing {
+                if !error.isMissing, !isProtectedSystemHome(account, error) {
                     result.notes.append("home folder of \(PersistenceParsers.displayable(account.name, maximumLength: 64)) was not read: \(error)")
                 }
                 continue
@@ -357,6 +357,14 @@ enum UserFiles {
             result.startup += one.startup
         }
         return result
+    }
+
+    /// macOS keeps even root out of the folders of some of its own service accounts
+    /// (`_usbmuxd` in /var/db/lockdown, `_biome`…). Nobody can plant a file there either, so a
+    /// refusal for an account whose name starts with an underscore is not worth a warning; for
+    /// any other account it is.
+    static func isProtectedSystemHome(_ account: LocalAccount, _ error: GuardedDirectory.Failure) -> Bool {
+        account.name.hasPrefix("_") && (error.code == EPERM || error.code == EACCES)
     }
 
     static func scan(account: LocalAccount, home: GuardedDirectory, showsText: Bool) -> Result {

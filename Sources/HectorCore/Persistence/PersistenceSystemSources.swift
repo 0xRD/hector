@@ -115,7 +115,8 @@ extension PersistenceScanner {
         }
         if let users {
             result.items += users.items
-            result.notes += users.notes
+            // The 0.5.1 helper reports each service account whose folder macOS keeps from root.
+            result.notes += users.notes.filter { !($0.hasPrefix("home folder of _") && $0.hasSuffix("(Operation not permitted)")) }
         } else {
             result.items += ownFiles().startup
             result.notes.append("the shell startup files of root and other users need the helper")

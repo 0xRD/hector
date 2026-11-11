@@ -25,7 +25,7 @@ Hector is meant to run all the time and its helper runs as root, so these come b
   - [ ] Make the repository public
 
 - [x] **Root-only persistence through the helper** (0.5.1): one request, `rootPersistence`, for every user's crontab, sudoers, every account's authorized SSH keys and shell startup files, and root's login hooks, cut down to facts for what is not the caller's; root's text needs the password dialog (see SECURITY.md, "Root-only persistence"). Read as the user, without the helper: `at` jobs, authorization plugins, PAM services and modules, the shell files of /etc, login hooks in /Library/Preferences, `DYLD_*` in launchd plists.
-  - [ ] Check with a real root helper: that macOS lets it read `/usr/lib/cron/tabs` (it may refuse even root; the app then falls back to `crontab -l`), root's `.ssh` and `/var/root/Library/Preferences`, and that nothing is denied in the system log
+  - [x] Checked with the installed 0.5.1 helper (macOS 26.6, 2026-11-11): the install (root-owned, no ACL), `/usr/lib/cron/tabs` and sudoers are read, the password dialog of "Show Root's Details…" works. macOS keeps root out of the folders of four of its service accounts (`/var/db/lockdown`, `appinstalld`, `installcoordinationd`, `biome`): no longer reported
   - [ ] Look at the Persistence screen with the new sections (only the CLI and the tests were run)
   - [ ] Not followed yet: `ZDOTDIR`, `AuthorizedKeysFile`/`AuthorizedKeysCommand` in `sshd_config`, `/etc/periodic.conf`, plugins referenced by the authorization database
   - [x] Cap the helper's log (4 MB, one previous copy, failed requests rate-limited)
