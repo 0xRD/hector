@@ -4,7 +4,7 @@ Hand-off notes for the next working session. The roadmap ([ROADMAP.md](ROADMAP.m
 
 ## Where things stand
 
-- `main` is 0.5.1: the root-only persistence scan (`rootPersistence`), root's details behind the password, the helper review and the log cap. Written and tested without root (341 tests, a dry-run helper, the installer's copy on the real binary); still to check with the installed root helper: see ROADMAP.md, first item. `swift build` has no warnings.
+- `main` is 0.5.2 (0.5.1 plus the fix for the service-account warnings; 0.5.1 was checked with the installed root helper on 2026-11-11): the root-only persistence scan (`rootPersistence`), root's details behind the password, the helper review and the log cap. Written and tested without root (341 tests, a dry-run helper, the installer's copy on the real binary); still to check with the installed root helper: see ROADMAP.md, first item. `swift build` has no warnings.
 - Every commit on `main` has the GitHub noreply address as author and committer; this repository's git identity is set to it (`git config --local user.email`).
 - Still open, by priority: the hands-on checks below (they need a Mac, some need root), the root checks of the persistence scan (ROADMAP.md), notifications and the persistence watch, the local DNS resolver. ROADMAP.md has the full list.
 
