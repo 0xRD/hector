@@ -54,8 +54,11 @@ public enum HelperAuthorization {
 
     // MARK: - Client side
 
-    /// One authorization per right: the password typed to read root's entries must not also
-    /// let this process change the firewall for five minutes, and the other way round.
+    /// One authorization per right, so that this process does not send, with a request to read,
+    /// an authorization that could also change the firewall. This is tidiness on the client's
+    /// side, not a boundary: both rights ask for the same thing (an administrator's password),
+    /// and macOS may let an authorization that obtained one extend to the other within the five
+    /// minutes. A process the user typed their password for is trusted with both.
     nonisolated(unsafe) private static var clientReferences: [String: AuthorizationRef] = [:]
     private static let lock = NSLock()
 

@@ -178,7 +178,8 @@ func respond(to request: HelperRequest, peer: uid_t, gate: EnforcerGate, dryRun:
         // No path and no name comes in: the paths are constants and the user database, and the
         // answer is made for this peer (see `PrivilegedPersistence`). Without an authorization
         // it holds facts about root's and other users' files, never their text; root's text
-        // needs the password, like changing the firewall, under a right of its own.
+        // needs the password, like changing the firewall. The right has its own name and its
+        // own dialog text, but is no weaker or stronger than the firewall's: see `clientReferences`.
         var rootText = peer == 0 || dryRun
         if let authorization, !rootText {
             guard HelperAuthorization.verify(authorization, right: .readRootPersistence) else {
