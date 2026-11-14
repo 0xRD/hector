@@ -64,6 +64,12 @@ struct ProtectionStatusFooter: View {
         case .unreachable:
             return Verdict(title: "Helper not answering", detail: "Open Blocklists to retry", symbol: "exclamationmark.shield", kind: .danger)
         case .ready(let status):
+            // Easy to miss otherwise: after an upgrade of the app the old helper keeps running,
+            // and only Blocklists said so.
+            if blocking.helperNeedsUpdate {
+                return Verdict(title: "Update the helper", detail: "Helper \(status.version) · app \(HectorVersion.current)",
+                               symbol: "arrow.triangle.2.circlepath", kind: .warning)
+            }
             guard status.pfEnabled && status.anchorLoaded else {
                 return Verdict(title: "Helper ready", detail: "Nothing is blocked yet", symbol: "shield", kind: .info)
             }

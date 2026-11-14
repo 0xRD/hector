@@ -96,22 +96,23 @@ private struct HelperCard: View {
             HStack {
                 Button("Retry") { Task { await blocking.refresh() } }
                 Button("Reinstall…") { Task { await blocking.installHelper() } }
+                    .disabled(blocking.isWorking)
             }
             .padding(.top, 4)
         case .ready(let status):
             Text(status.pfEnabled && status.anchorLoaded ? "Blocking is on" : "Helper ready, nothing enforced yet")
                 .font(.headline)
             Text(summary(status)).foregroundStyle(.secondary)
-            if status.version != HectorVersion.current || blocking.helperOutdated {
+            if let mismatch = blocking.helperMismatch {
                 HStack {
-                    Label(status.version != HectorVersion.current
-                          ? "The helper is version \(status.version); this app is \(HectorVersion.current). Update it to get every feature and the latest security fixes."
-                          : "The helper lacks features of this build of Hector (such as CPU, memory and ports of every process). Update it.",
-                          systemImage: "arrow.triangle.2.circlepath")
+                    Label(Self.text(for: mismatch), systemImage: "arrow.triangle.2.circlepath")
                         .font(.caption)
                         .foregroundStyle(.orange)
-                    Button("Update helper…") { Task { await blocking.installHelper() } }
-                        .disabled(blocking.isWorking)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if blocking.helperNeedsUpdate {
+                        Button("Update helper…") { Task { await blocking.installHelper() } }
+                            .disabled(blocking.isWorking)
+                    }
                 }
             }
             ForEach(status.warnings, id: \.self) { warning in
@@ -127,6 +128,17 @@ private struct HelperCard: View {
                     .help("Removes Hector and everything it created on this Mac.")
             }
             .padding(.top, 4)
+        }
+    }
+
+    private static func text(for mismatch: HelperMismatch) -> String {
+        switch mismatch {
+        case .older(let version):
+            "The helper is version \(version); this app is \(HectorVersion.current). Update it to get every feature and the latest security fixes."
+        case .lacksFeatures:
+            "The helper lacks features of this build of Hector (such as CPU, memory and ports of every process). Update it."
+        case .newer(let version):
+            "The helper is version \(version), newer than this app (\(HectorVersion.current)): this is an old copy of Hector. Open the latest one, or update Hector."
         }
     }
 

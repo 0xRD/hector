@@ -48,8 +48,6 @@ func serve(dryRunRoot: URL?, socketPath: String) async throws -> Never {
     if dryRunRoot == nil {
         do { try HelperAuthorization.defineRights() } catch { log("Could not define the authorization rights: \(error)") }
     }
-    enforcer.restoreAtLaunch()
-
     unlink(socketPath)
     let server = socket(AF_UNIX, SOCK_STREAM, 0)
     guard server >= 0 else { throw HelperError("socket") }
@@ -75,7 +73,14 @@ func serve(dryRunRoot: URL?, socketPath: String) async throws -> Never {
     // changes the rules goes through `gate`, one at a time. Between connections, and at least
     // every few minutes when nobody talks to the helper, subscribed hosts lists that are due are
     // downloaded again.
-    acceptForever(server: server, gate: EnforcerGate(enforcer), dryRun: dryRunRoot != nil)
+    //
+    // The stored blocklist is restored first on that same queue, after the socket is open: with
+    // large lists or countries it takes seconds, and a client that connects meanwhile (the app
+    // right after an update) gets `hello` at once and waits for `status` instead of finding a
+    // socket nobody listens on.
+    let gate = EnforcerGate(enforcer)
+    gate.async { $0.restoreAtLaunch() }
+    acceptForever(server: server, gate: gate, dryRun: dryRunRoot != nil)
 }
 
 /// The accept loop. Synchronous on purpose: it blocks on poll() and on the client slots, which an
@@ -87,7 +92,9 @@ func acceptForever(server: Int32, gate: EnforcerGate, dryRun: Bool) -> Never {
     while true {
         var descriptor = pollfd(fd: server, events: Int16(POLLIN), revents: 0)
         // While a scheduled download runs in the background, wake up often to collect it.
-        let refreshing = gate.sync { $0.isRefreshingInBackground }
+        // Asked without the rules queue: waiting for it here would stop the loop from accepting
+        // anyone for as long as an apply runs (minutes, when it downloads).
+        let refreshing = gate.isRefreshingInBackground
         if poll(&descriptor, 1, refreshing ? 1_000 : waitMilliseconds) > 0 {
             slots.wait()
             let client = accept(server, nil, nil)
@@ -112,6 +119,9 @@ final class EnforcerGate: @unchecked Sendable {
     private let queue = DispatchQueue(label: "io.github.0xrd.hectord.rules")
 
     init(_ enforcer: Enforcer) { self.enforcer = enforcer }
+
+    /// Safe from any thread: see `Enforcer.refreshing`.
+    var isRefreshingInBackground: Bool { enforcer.refreshing.value }
 
     func sync<T>(_ body: (Enforcer) throws -> T) rethrows -> T {
         try queue.sync { try body(enforcer) }
@@ -252,13 +262,29 @@ func launchctl(_ arguments: String...) -> Int32 {
     return process.terminationStatus
 }
 
+func isServiceLoaded(_ label: String) -> Bool {
+    launchctl("print", "system/\(label)") == 0
+}
+
+/// Unloads a LaunchDaemon and waits until launchd has let go of it. `bootout` can return while
+/// the process is still exiting ("Operation now in progress"); a `bootstrap` sent too early then
+/// fails, which left an update with no helper running until the next try.
+func stopService(_ label: String) {
+    launchctl("bootout", "system/\(label)")
+    var waits = 0
+    while waits < 50, isServiceLoaded(label) {
+        usleep(200_000)
+        waits += 1
+    }
+}
+
 func install() throws {
     try requireRoot()
     let source = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
     let destination = HelperPaths.installedBinary
     let logDirectory = (HelperPaths.logFile as NSString).deletingLastPathComponent
 
-    launchctl("bootout", "system/\(HelperPaths.label)")
+    stopService(HelperPaths.label)
     replaceLegacyHelper(keepingData: true)
     try SecureFiles.ensureDirectory((destination as NSString).deletingLastPathComponent, mode: 0o755)
     try SecureFiles.ensureDirectory(logDirectory, mode: 0o755)
@@ -290,8 +316,18 @@ func install() throws {
     try SecureFiles.write(data, to: HelperPaths.launchDaemonPlist, mode: 0o644)
 
     try HelperAuthorization.defineRights()
-    guard launchctl("bootstrap", "system", HelperPaths.launchDaemonPlist) == 0 else {
-        throw HelperError("launchctl bootstrap failed; see \(HelperPaths.logFile)")
+    // launchd may still be tearing the old service down even after `stopService` saw it gone;
+    // bootstrap then fails with "Input/output error" and works a moment later.
+    var status = launchctl("bootstrap", "system", HelperPaths.launchDaemonPlist)
+    var attempts = 1
+    while status != 0, attempts < 5, !isServiceLoaded(HelperPaths.label) {
+        usleep(500_000)
+        status = launchctl("bootstrap", "system", HelperPaths.launchDaemonPlist)
+        attempts += 1
+    }
+    // A service that is loaded is what was asked for, whatever a racing attempt answered.
+    guard status == 0 || isServiceLoaded(HelperPaths.label) else {
+        throw HelperError("launchctl bootstrap failed (\(status)); see \(HelperPaths.logFile)")
     }
     print("Installed \(HelperPaths.label).")
 }
@@ -304,7 +340,7 @@ func replaceLegacyHelper(keepingData: Bool) {
     let files = FileManager.default
     guard files.fileExists(atPath: LegacyPaths.launchDaemonPlist) || files.fileExists(atPath: LegacyPaths.installedBinary)
             || files.fileExists(atPath: LegacyPaths.dataDirectory) else { return }
-    launchctl("bootout", "system/\(LegacyPaths.helperLabel)")
+    stopService(LegacyPaths.helperLabel)
     if keepingData, !files.fileExists(atPath: HelperPaths.dataDirectory), files.fileExists(atPath: LegacyPaths.dataDirectory) {
         // Same volume, root-owned on both sides: rename() is atomic and keeps the 0700 mode.
         if rename(LegacyPaths.dataDirectory, HelperPaths.dataDirectory) != 0 {

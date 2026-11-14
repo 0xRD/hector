@@ -134,3 +134,36 @@ import Testing
         #expect(throws: DecodingError.self) { try JSONDecoder.hector.decode(OldRequest.self, from: data) }
     }
 }
+
+@Suite struct HelperMismatchTests {
+    @Test func matchingHelperNeedsNothing() {
+        #expect(HelperMismatch.between(helperVersion: "0.5.3", appVersion: "0.5.3", lacksFeatures: false) == nil)
+    }
+
+    @Test func olderHelperNeedsAnUpdate() {
+        let mismatch = HelperMismatch.between(helperVersion: "0.5.1", appVersion: "0.5.3", lacksFeatures: true)
+        #expect(mismatch == .older(version: "0.5.1"))
+        #expect(mismatch?.needsHelperUpdate == true)
+        // Numbers, not text: 0.4.10 is newer than 0.4.9.
+        #expect(HelperMismatch.between(helperVersion: "0.4.9", appVersion: "0.4.10", lacksFeatures: false) == .older(version: "0.4.9"))
+    }
+
+    @Test func helperFromBeforeTheHandshakeIsOlder() {
+        let mismatch = HelperMismatch.between(helperVersion: HelperInfo.legacy.version, appVersion: "0.5.3", lacksFeatures: true)
+        #expect(mismatch == .older(version: HelperInfo.legacy.version))
+    }
+
+    @Test func sameVersionWithoutAFeatureNeedsAnUpdate() {
+        let mismatch = HelperMismatch.between(helperVersion: "0.5.3", appVersion: "0.5.3", lacksFeatures: true)
+        #expect(mismatch == .lacksFeatures)
+        #expect(mismatch?.needsHelperUpdate == true)
+    }
+
+    /// An old copy of the app must not offer to "update" a newer helper: that would downgrade it.
+    @Test func newerHelperIsNeverDowngraded() {
+        let mismatch = HelperMismatch.between(helperVersion: "0.6.0", appVersion: "0.5.3", lacksFeatures: false)
+        #expect(mismatch == .newer(version: "0.6.0"))
+        #expect(mismatch?.needsHelperUpdate == false)
+        #expect(HelperMismatch.between(helperVersion: "0.4.10", appVersion: "0.4.9", lacksFeatures: false) == .newer(version: "0.4.10"))
+    }
+}

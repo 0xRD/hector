@@ -129,6 +129,8 @@ At the first launch Hector asks whether it may check for new versions; the check
 
 To block, install the helper from the Blocklists screen; macOS asks for an administrator password once. Without it, Hector observes your own apps and blocks nothing.
 
+Upgrading the app does not replace the helper, which keeps running with your rules. When the installed helper is older than the app, the bottom of the sidebar says **Update the helper**: click it, then **Update helper…** in Blocklists (administrator password). Rules stay in force during the update.
+
 ## Requirements
 
 - macOS 15 or later on Apple silicon (Intel Macs: build from source with `scripts/bundle-app.sh --universal`)

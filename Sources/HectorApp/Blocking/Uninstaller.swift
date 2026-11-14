@@ -65,7 +65,8 @@ enum Uninstaller {
             // know --purge leaves nothing behind either.
             let logDirectories = [(HelperPaths.logFile as NSString).deletingLastPathComponent, LegacyPaths.logDirectory]
                 .map(AdministratorScript.shellQuoted).joined(separator: " ")
-            switch AdministratorScript.run("\(AdministratorScript.shellQuoted(helper)) uninstall --purge; /bin/rm -rf \(logDirectories)") {
+            switch await AdministratorScript.run("\(AdministratorScript.shellQuoted(helper)) uninstall --purge; /bin/rm -rf \(logDirectories)",
+                                                 prompt: "Hector wants to remove its helper and every rule it enforces.") {
             case .success: break
             case .cancelled: return .cancelled
             case .failure(let message): return .failed(message)
@@ -126,21 +127,48 @@ enum Uninstaller {
 }
 
 /// `do shell script … with administrator privileges`: macOS shows its own password dialog.
-@MainActor
+///
+/// Run by `/usr/bin/osascript` in a child process and awaited, not by `NSAppleScript` in this one:
+/// that must run on the main thread, which then stood still (window, menu bar icon, live view)
+/// for as long as the password dialog was open and the command ran.
 enum AdministratorScript {
-    enum Result {
+    enum Result: Equatable, Sendable {
         case success
         case cancelled
         case failure(String)
     }
 
-    static func run(_ command: String) -> Result {
-        let escaped = command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        var error: NSDictionary?
-        NSAppleScript(source: "do shell script \"\(escaped)\" with administrator privileges")?.executeAndReturnError(&error)
-        guard let error else { return .success }
-        if (error[NSAppleScript.errorNumber] as? Int) == -128 { return .cancelled }
-        return .failure((error[NSAppleScript.errorMessage] as? String) ?? "The command failed.")
+    /// `prompt` is the sentence in the password dialog.
+    static func run(_ command: String, prompt: String) async -> Result {
+        let source = "do shell script \(appleScriptQuoted(command)) with prompt \(appleScriptQuoted(prompt)) with administrator privileges"
+        return await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-e", source]
+            process.standardInput = FileHandle.nullDevice
+            process.standardOutput = FileHandle.nullDevice
+            let errors = Pipe()
+            process.standardError = errors
+            do { try process.run() } catch { return Result.failure("Could not start osascript: \(error.localizedDescription)") }
+            // The command's own messages are short; read to the end so the child never blocks.
+            let output = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            process.waitUntilExit()
+            return result(status: process.terminationStatus, errorOutput: output)
+        }.value
+    }
+
+    /// osascript prints "0:39: execution error: <message> (<number>)" and exits with 1.
+    static func result(status: Int32, errorOutput: String) -> Result {
+        guard status != 0 else { return .success }
+        var message = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if message.hasSuffix("(-128)") { return .cancelled }
+        if let marker = message.range(of: "execution error: ") { message = String(message[marker.upperBound...]) }
+        return .failure(message.isEmpty ? "The command failed." : message)
+    }
+
+    /// An AppleScript string literal.
+    static func appleScriptQuoted(_ text: String) -> String {
+        "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
     /// Single quotes for the shell, with embedded quotes closed, escaped and reopened.
