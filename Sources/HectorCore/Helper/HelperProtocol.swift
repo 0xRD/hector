@@ -2,7 +2,7 @@ import Foundation
 
 public enum HectorVersion {
     /// The single version string of the app, the CLI and the helper. `scripts/bundle-app.sh` reads it.
-    public static let current = "0.5.2"
+    public static let current = "0.5.3"
 }
 
 /// Where the privileged helper lives once installed, and how to reach it.
@@ -150,6 +150,34 @@ public struct HelperInfo: Codable, Equatable, Sendable {
         protocolVersion < Self.currentProtocol || !HelperCapability.allCases.allSatisfy(supports)
             // A newer app may also carry a safer helper with the same requests.
             || version.compare(HectorVersion.current, options: .numeric) == .orderedAscending
+    }
+}
+
+/// How an installed helper compares with the app that talks to it.
+public enum HelperMismatch: Equatable, Sendable {
+    /// An older helper: update it from the app.
+    case older(version: String)
+    /// The same version number without something this build relies on (a development build).
+    case lacksFeatures
+    /// A newer helper than the app, which is then an old copy of Hector: installing its helper
+    /// would downgrade the one that runs, so the app is what needs replacing.
+    case newer(version: String)
+
+    /// `nil` when they match. `lacksFeatures` is `HelperInfo.isOutdated`.
+    public static func between(helperVersion: String, appVersion: String, lacksFeatures: Bool) -> HelperMismatch? {
+        if ReleaseCheck.isNewer(helperVersion, than: appVersion) { return .newer(version: helperVersion) }
+        // Anything else that differs counts as older, a version that cannot be read included
+        // ("0.3 or older" from before the handshake).
+        if helperVersion != appVersion { return .older(version: helperVersion) }
+        return lacksFeatures ? .lacksFeatures : nil
+    }
+
+    /// Whether installing the app's helper is the fix.
+    public var needsHelperUpdate: Bool {
+        switch self {
+        case .older, .lacksFeatures: true
+        case .newer: false
+        }
     }
 }
 

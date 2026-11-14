@@ -29,7 +29,12 @@ final class Enforcer {
     private var listStates: [String: HostsListState] = [:]
     /// The first scheduled check waits a while after launch: at boot the network may not be up.
     private var nextListCheck = Date().addingTimeInterval(HostsListCatalog.checkInterval)
-    private var backgroundFetch: BackgroundFetch?
+    private var backgroundFetch: BackgroundFetch? {
+        didSet { refreshing.value = backgroundFetch != nil }
+    }
+    /// Whether a scheduled download runs in the background, readable from any thread: the accept
+    /// loop asks without going through the rules queue.
+    let refreshing = SharedFlag()
 
     init(root: URL?) throws {
         dryRun = root != nil
@@ -69,7 +74,18 @@ final class Enforcer {
     /// `downloadMissingLists`: download subscribed lists that have no copy yet (an apply from the
     /// user); a failed download is reported in the list's state and the rest is applied.
     func apply(_ blocklist: Blocklist, downloadMissingLists: Bool = true) throws -> HelperStatus {
-        let geo = blocklist.blockedCountries.isEmpty ? nil : try loadGeo()
+        // Nothing is downloaded at launch (the network may not be up, and the wait would hold
+        // back every other rule): without the country database the rest is still restored, and
+        // the countries come back with the next apply.
+        let geo: GeoIPDatabase?
+        if blocklist.blockedCountries.isEmpty {
+            geo = nil
+        } else if downloadMissingLists {
+            geo = try loadGeo()
+        } else {
+            geo = try? loadGeo(download: false)
+            if geo == nil { log("warning: the country database is missing or unreadable; countries are not blocked until the next apply.") }
+        }
         let lists = availableLists(blocklist.hostsLists, downloadMissing: downloadMissingLists)
         let compiled = RuleCompiler.compile(blocklist, geo: geo, lists: lists)
         let networks = compiled.blockTable.count + compiled.geoTable.count
@@ -167,10 +183,6 @@ final class Enforcer {
         if changed { _ = try apply(blocklist, downloadMissingLists: false) }
         return status()
     }
-
-    /// Whether a scheduled download runs in the background; the server loop then wakes up often
-    /// to collect it.
-    var isRefreshingInBackground: Bool { backgroundFetch != nil }
 
     /// Called by the server loop between requests and when it wakes up. Scheduled downloads (lists
     /// due weekly, or `retryInterval` after a failure) run in the background so the helper keeps
@@ -445,6 +457,17 @@ final class Enforcer {
             throw CommandError(description: "\(([executable] + arguments).joined(separator: " ")) failed: \((stdout + stderr).trimmingCharacters(in: .whitespacesAndNewlines))")
         }
         return stdoutOnly ? stdout : stdout + stderr
+    }
+}
+
+/// A boolean several threads may read and write.
+final class SharedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored = false
+
+    var value: Bool {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
     }
 }
 

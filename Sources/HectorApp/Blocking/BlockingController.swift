@@ -20,9 +20,8 @@ final class BlockingController {
 
     private(set) var helper: HelperState = .checking
     private(set) var isWorking = false
-    /// The installed helper lacks something this build of the app relies on, even at the same
-    /// version number (a development build, for instance).
-    private(set) var helperOutdated = false
+    /// The installed helper's answer to `hello`, `nil` until it gave one.
+    private(set) var helperInfo: HelperInfo?
     private(set) var lastError: String?
 
     var draft: Blocklist {
@@ -61,6 +60,16 @@ final class BlockingController {
     }
 
     var isHelperReady: Bool { helperStatus != nil }
+
+    /// How the installed helper compares with the one inside this app, `nil` when they match.
+    var helperMismatch: HelperMismatch? {
+        guard let status = helperStatus else { return nil }
+        return HelperMismatch.between(helperVersion: status.version, appVersion: HectorVersion.current,
+                                      lacksFeatures: helperInfo?.isOutdated == true)
+    }
+
+    /// The helper should be updated from this app.
+    var helperNeedsUpdate: Bool { helperMismatch?.needsHelperUpdate ?? false }
 
     /// What pf enforces right now.
     var applied: Blocklist { helperStatus?.blocklist ?? Blocklist() }
@@ -108,17 +117,17 @@ final class BlockingController {
 
     // MARK: - Helper
 
-    func refresh() async {
+    func refresh(statusTimeout: TimeInterval = 10) async {
         guard !Self.isDemo else { return }
         guard HelperClient.isInstalled else {
             helper = .notInstalled
+            helperInfo = nil
             return
         }
         do {
-            let response = try await Task.detached { try HelperClient.send(.status, timeout: 10) }.value
+            let response = try await Task.detached { try HelperClient.send(.status, timeout: statusTimeout) }.value
             handle(response)
-            let info = await Task.detached { try? HelperClient.info(timeout: 2) }.value
-            helperOutdated = info?.isOutdated ?? false
+            helperInfo = await Task.detached { try? HelperClient.info(timeout: 2) }.value
             // First run with the helper already set up elsewhere (CLI): start from what it enforces.
             if !FileManager.default.fileExists(atPath: Self.draftURL.path), let applied = helperStatus?.blocklist {
                 draft = applied
@@ -180,30 +189,54 @@ final class BlockingController {
             lastError = "hectord was not found next to the app."
             return
         }
-        await runAsAdministrator("\(AdministratorScript.shellQuoted(binary.path)) install")
-        // The old helper's socket file may still be there while launchd starts the new one, which
-        // refuses connections for a moment: wait until a helper of this version answers.
-        for _ in 0..<40 {
-            let info = await Task.detached { try? HelperClient.info(timeout: 1) }.value
-            if let info, info.version == HectorVersion.current, !info.isOutdated { break }
-            try? await Task.sleep(for: .milliseconds(250))
-        }
-        await refresh()
-    }
-
-    func uninstallHelper() async {
-        await runAsAdministrator("\(AdministratorScript.shellQuoted(HelperPaths.installedBinary)) uninstall")
-        await refresh()
-    }
-
-    private func runAsAdministrator(_ command: String) async {
-        guard !Self.isDemo else { return }
+        guard !Self.isDemo, !isWorking else { return }
         isWorking = true
         lastError = nil
         defer { isWorking = false }
-        if case .failure(let message) = AdministratorScript.run(command) {
+        let updating = HelperClient.isInstalled
+        switch await AdministratorScript.run("\(AdministratorScript.shellQuoted(binary.path)) install",
+                                             prompt: updating ? "Hector wants to update its helper." : "Hector wants to install its helper.") {
+        case .cancelled:
+            // Nothing changed: no wait, and what was installed is still what answers.
+            return
+        case .failure(let message):
+            await refresh()
             lastError = message
+            return
+        case .success:
+            break
         }
+        // launchd starts the new helper a moment after the installer returns, and the old one's
+        // socket file may still be there meanwhile: wait until a helper of this version answers.
+        var answered = false
+        var attempts = 0
+        while !answered, attempts < 60 {
+            attempts += 1
+            let info = await Task.detached { try? HelperClient.info(timeout: 1) }.value
+            if let info, info.version == HectorVersion.current, !info.isOutdated {
+                answered = true
+            } else {
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+        // The new helper restores the blocklist before it answers `status`: with large lists or
+        // countries that takes a while, so this first status waits longer than the usual one.
+        await refresh(statusTimeout: 60)
+        if !answered, lastError == nil {
+            lastError = "The helper was installed but has not answered yet. See \(HelperPaths.logFile), then press Retry."
+        }
+    }
+
+    func uninstallHelper() async {
+        guard !Self.isDemo, !isWorking else { return }
+        isWorking = true
+        lastError = nil
+        defer { isWorking = false }
+        let result = await AdministratorScript.run(
+            "\(AdministratorScript.shellQuoted(HelperPaths.installedBinary)) uninstall",
+            prompt: "Hector wants to remove its helper and every rule it enforces.")
+        await refresh()
+        if case .failure(let message) = result { lastError = message }
     }
 
     /// `Hector.app/Contents/Helpers/hectord`, or next to the executable when run with `swift run`.
